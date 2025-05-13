@@ -56,6 +56,33 @@ func GetOrders(c *gin.Context) {
 	})
 }
 
+func GetOrdersBySearch(c *gin.Context) {
+	search := c.Query("search")
+
+	var orders []models.Order
+	query := initializers.DB.Order("updated_at DESC")
+
+	if search != "" {
+		query = query.Where("full_name ILIKE ? OR phone_number ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	result := query.Limit(10).Find(&orders)
+
+	if result.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Error retrieving the orders",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Orders were retrieved successfully",
+		"data":    orders,
+	})
+}
+
 func CreateOrder(c *gin.Context) {
 	var body struct {
 		FullName       string

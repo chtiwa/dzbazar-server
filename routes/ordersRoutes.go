@@ -11,6 +11,7 @@ func OrdersRoutes(router *gin.Engine) {
 		orders.POST("", controllers.CreateOrder)
 		// based on the input data / status / user info (phone or name)
 		orders.GET("", controllers.GetOrders)
+		orders.GET("/search", controllers.GetOrdersBySearch)
 
 		orders.GET("/:id", controllers.GetOrder)
 		orders.PATCH("/:id", controllers.UpdateOrder)
