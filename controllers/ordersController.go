@@ -2,7 +2,9 @@ package controllers
 
 import (
 	"fmt"
+	"math"
 	"net/http"
+	"strconv"
 
 	"github.com/chtiwa/herbs-store-client/initializers"
 	"github.com/chtiwa/herbs-store-client/models"
@@ -12,8 +14,31 @@ import (
 )
 
 func GetOrders(c *gin.Context) {
+	page := 1
+	pageString := c.Query("page")
+
+	if pageString != "" {
+		page, _ = strconv.Atoi(pageString)
+	}
+
+	var totalRows int64
+	result := initializers.DB.Model(&models.Order{}).Count(&totalRows)
+	if result.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Error white counting the orders",
+		})
+		return
+	}
+
+	perPage := 10.0
+	totalPages := math.Ceil(float64(totalRows) / perPage)
+
+	offset := (page - 1) * int(perPage)
+
 	var orders []models.Order
-	result := initializers.DB.Find(&orders)
+	result = initializers.DB.Order("updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&orders)
+	pagination := utils.GetPaginationData(page, int(totalPages), "/orders")
 
 	if result.Error != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -24,9 +49,10 @@ func GetOrders(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Orders were retrieved successfully",
-		"data":    orders,
+		"success":    true,
+		"message":    "Orders were retrieved successfully",
+		"data":       orders,
+		"pagination": pagination,
 	})
 }
 
@@ -70,7 +96,7 @@ func CreateOrder(c *gin.Context) {
 	}
 
 	go func() {
-		err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.StateNumber, order.City, order.Price, order.ShippingMethod, order.ShippingPrice, order.Quantity, order.TotalPrice)
+		err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.StateNumber, order.City, order.ProductName, order.Quantity, order.Price, order.ShippingMethod, order.ShippingPrice, order.TotalPrice)
 
 		if err != nil {
 			fmt.Println(err)
