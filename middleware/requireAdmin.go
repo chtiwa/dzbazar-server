@@ -1,10 +1,9 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 
-	"github.com/chtiwa/landing-page-server/models"
+	"github.com/chtiwa/herbs-store-client/models"
 	"github.com/gin-gonic/gin"
 )
 
@@ -13,13 +12,15 @@ func RequireAdmin(c *gin.Context) {
 
 	if !ok {
 		c.AbortWithStatus(http.StatusUnauthorized)
+		return
 	}
 
 	userData, ok := user.(models.User)
-	fmt.Println(userData)
+	// fmt.Println(userData)
 
 	if !ok || userData.Role != "Admin" {
 		c.AbortWithStatus(http.StatusUnauthorized)
+		return
 	}
 
 	c.Next()

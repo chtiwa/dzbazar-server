@@ -1,10 +1,12 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/chtiwa/herbs-store-client/initializers"
 	"github.com/chtiwa/herbs-store-client/models"
+	"github.com/chtiwa/herbs-store-client/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -67,13 +69,13 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	// go func() {
-	// 	err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.County, order.Color, order.Size, order.Price, order.ShippingMethod, order.ShippingPrice, order.TotalPrice)
+	go func() {
+		err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.StateNumber, order.City, order.Price, order.ShippingMethod, order.ShippingPrice, order.Quantity, order.TotalPrice)
 
-	// 	if err != nil {
-	// 		fmt.Println(err)
-	// 	}
-	// }()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

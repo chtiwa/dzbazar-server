@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/chtiwa/herbs-store-client/initializers"
+	"github.com/chtiwa/herbs-store-client/middleware"
 	"github.com/chtiwa/herbs-store-client/migrate"
 	"github.com/chtiwa/herbs-store-client/routes"
 	"github.com/gin-gonic/gin"
@@ -18,8 +19,9 @@ func init() {
 func main() {
 	router := gin.Default()
 
+	router.Use(middleware.CORSMiddleware())
 	routes.OrdersRoutes(router)
-	// routes.UsersRoutes(router)
+	routes.UsersRoutes(router)
 
 	fmt.Println("The server is running successfully!")
 	router.Run()

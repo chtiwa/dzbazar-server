@@ -1,0 +1,30 @@
+package middleware
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+// need to use external library for cors
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		origin := c.Request.Header.Get("Origin")
+		// clientURL := os.Getenv("CLIENT_URL")
+
+		// if origin == clientURL || origin == "http://localhost:5000" {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, PATCH, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		// }
+
+		// Handle OPTIONS method
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	}
+}

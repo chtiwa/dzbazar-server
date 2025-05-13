@@ -1,11 +1,24 @@
 package routes
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/chtiwa/herbs-store-client/controllers"
+	"github.com/chtiwa/herbs-store-client/middleware"
+	"github.com/gin-gonic/gin"
+)
 
 func UsersRoutes(router *gin.Engine) {
 	users := router.Group("/users")
 
 	{
-		users.GET("")
+		users.GET("", controllers.GetUsers)
+		users.GET("/validate", middleware.RequireAuthentication, controllers.Validate)
+		users.POST("/create", controllers.CreateUser)
+		users.POST("/login", controllers.Login)
+		users.GET("/logout", controllers.Logout)
+		// token verification => admin verification => action
+		users.GET("/verify", middleware.RequireAuthentication, middleware.RequireAdmin)
+		users.PATCH("/:id", middleware.RequireAuthentication, controllers.UpdateUser)
+		users.DELETE("/:id", middleware.RequireAuthentication, controllers.DeleteUser)
+
 	}
 }
