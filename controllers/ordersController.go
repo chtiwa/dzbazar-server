@@ -1,9 +1,11 @@
 package controllers
 
 import (
-	"fmt"
+	"bytes"
+	"io"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/chtiwa/herbs-store-client/initializers"
@@ -122,18 +124,68 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	go func() {
-		err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.StateNumber, order.City, order.ProductName, order.Quantity, order.Price, order.ShippingMethod, order.ShippingPrice, order.TotalPrice)
+	// go func() {
+	// 	err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.StateNumber, order.City, order.ProductName, order.Quantity, order.Price, order.ShippingMethod, order.ShippingPrice, order.TotalPrice)
 
-		if err != nil {
-			fmt.Println(err)
-		}
-	}()
+	// 	if err != nil {
+	// 		fmt.Println(err)
+	// 	}
+	// }()
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    order,
 	})
+}
+
+func CreateZrOrder(c *gin.Context) {
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to parse the body",
+		})
+		return
+	}
+
+	procolisApi := os.Getenv("PROCOLIS_URL")
+	token := os.Getenv("TOKEN")
+	key := os.Getenv("KEY")
+
+	req, err := http.NewRequest("POST", procolisApi, bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{
+			"success": false,
+			"error":   "Failed to create api request",
+		})
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("token", token)
+	req.Header.Set("key", key)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{
+			"success": false,
+			"error":   "Failed to contact external api",
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to read the api response",
+		})
+		return
+	}
+
+	c.Data(resp.StatusCode, "application/json", respBody)
 }
 
 func GetOrder(c *gin.Context) {

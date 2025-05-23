@@ -9,6 +9,7 @@ func OrdersRoutes(router *gin.Engine) {
 	orders := router.Group("/orders")
 	{
 		orders.POST("", controllers.CreateOrder)
+		orders.POST("/proxy", controllers.CreateZrOrder)
 		// based on the input data / status / user info (phone or name)
 		orders.GET("", controllers.GetOrders)
 		orders.GET("/search", controllers.GetOrdersBySearch)
