@@ -27,7 +27,8 @@ type Order struct {
 	ShippingMethod string  `json:"shippingMethod"`
 	ShippingPrice  float64 `json:"shippingPrice"`
 	TotalPrice     float64 `json:"totalPrice"`
-	Status         string  `gorm:"default:Pending" json:"status" binding:"oneof=Pending Confirmed Canceled Abandoned"`
+	Status         string  `gorm:"default:Pending" json:"status"`
+	// binding:"oneof=Pending Not Responding Confirmed Canceled Abandoned"
 }
 
 func (o *Order) BeforeCreate(tx *gorm.DB) (err error) {

@@ -29,7 +29,7 @@ func SendEmail(fullName string, phoneNumber string, state string, stateNumber ui
 		</head>
 		<body>
 			<div class="container">
-				<div class="header">New Order Placed</div>
+				<div class="header">New Order Placed ( Herbs Store )</div>
 				<div class="order-details">
 					<p><strong>Name:</strong> %s</p>
 					<p><strong>Phone Number:</strong> %s</p>

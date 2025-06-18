@@ -16,7 +16,6 @@ func RequireAdmin(c *gin.Context) {
 	}
 
 	userData, ok := user.(models.User)
-	// fmt.Println(userData)
 
 	if !ok || userData.Role != "Admin" {
 		c.AbortWithStatus(http.StatusUnauthorized)

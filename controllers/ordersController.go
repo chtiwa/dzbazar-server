@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -33,7 +34,7 @@ func GetOrders(c *gin.Context) {
 		return
 	}
 
-	perPage := 10.0
+	perPage := 20.0
 	totalPages := math.Ceil(float64(totalRows) / perPage)
 
 	offset := (page - 1) * int(perPage)
@@ -303,4 +304,50 @@ func DeleteOrder(c *gin.Context) {
 		"success": true,
 		"message": "The order was deleted successfully",
 	})
+}
+
+type FileExportResponse struct {
+	StatusCode int
+	FileBytes  []byte
+	FileName   string
+	MimeType   string
+	Error      error
+}
+
+func ExportAsExcel(c *gin.Context) {
+	var body []models.Order
+
+	err := c.ShouldBindJSON(&body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error while parsing the body",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	fmt.Println(body)
+
+	// generate excel file
+	excelBytes, err := utils.GenerateExcel(body)
+	var result FileExportResponse
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "failed to generate the excel file",
+		})
+		return
+	}
+
+	result = FileExportResponse{
+		StatusCode: http.StatusOK,
+		FileBytes:  excelBytes,
+		FileName:   "orders.xlsx",
+		MimeType:   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	}
+
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", result.FileName))
+	c.Data(result.StatusCode, result.MimeType, result.FileBytes)
 }
