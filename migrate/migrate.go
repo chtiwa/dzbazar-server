@@ -10,5 +10,6 @@ import (
 func Migrate() {
 	initializers.DB.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`)
 	initializers.DB.AutoMigrate(&models.Order{}, &models.User{}, &models.Client{})
+	SeedUsers()
 	fmt.Println("Migration was successful!")
 }

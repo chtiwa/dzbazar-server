@@ -34,7 +34,7 @@ func GetOrders(c *gin.Context) {
 		return
 	}
 
-	perPage := 20.0
+	perPage := 10.0
 	totalPages := math.Ceil(float64(totalRows) / perPage)
 
 	offset := (page - 1) * int(perPage)
@@ -125,13 +125,13 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	// go func() {
-	// 	err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.StateNumber, order.City, order.ProductName, order.Quantity, order.Price, order.ShippingMethod, order.ShippingPrice, order.TotalPrice)
+	go func() {
+		err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.StateNumber, order.City, order.ProductName, order.Quantity, order.Price, order.ShippingMethod, order.ShippingPrice, order.TotalPrice)
 
-	// 	if err != nil {
-	// 		fmt.Println(err)
-	// 	}
-	// }()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
