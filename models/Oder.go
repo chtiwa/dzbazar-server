@@ -20,9 +20,11 @@ type Order struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	DeletedAt   *time.Time `gorm:"index" json:"deleted_at"`
+	ShopName    string     `json:"shopName"`
 	ProductName string     `json:"productName"`
 	Client
 	Quantity       uint    `json:"quantity"`
+	Variant        string  `json:"variant"` // 100ml
 	Price          float64 `json:"price"`
 	ShippingMethod string  `json:"shippingMethod"`
 	ShippingPrice  float64 `json:"shippingPrice"`

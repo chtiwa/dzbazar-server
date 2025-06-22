@@ -10,7 +10,7 @@ import (
 )
 
 func SendEmail(fullName string, phoneNumber string, state string, stateNumber uint, city string, productName string, quantity uint, price float64, shippingMethod string, shippingPrice float64, totalPrice float64) error {
-	from := mail.NewEmail("Shoe Shock", "djeddid.sifeddine@gmail.com")
+	from := mail.NewEmail("Herbs Store", "djeddid.sifeddine@gmail.com")
 	subject := "New Order From Herbs Store"
 	to := mail.NewEmail("Sifeddine Djeddid", "chtiwaa@gmail.com")
 
