@@ -12,7 +12,7 @@ func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
 		clientURL := os.Getenv("CLIENT_URL")
-		clientURLv2 := os.Getenv("CLIENT_UR_V2")
+		clientURLv2 := os.Getenv("CLIENT_URL_V2")
 		adminURL := os.Getenv("ADMIN_URL")
 
 		if origin == clientURL || origin == adminURL || origin == clientURLv2 || origin == "http://localhost:5000" {
