@@ -9,9 +9,9 @@ import (
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
 )
 
-func SendEmail(fullName string, phoneNumber string, state string, stateNumber uint, city string, productName string, quantity uint, price float64, shippingMethod string, shippingPrice float64, totalPrice float64) error {
+func SendEmail(fullName string, phoneNumber string, state string, stateNumber uint, city string, productName string, variant string, quantity uint, price float64, shippingMethod string, shippingPrice float64, totalPrice float64) error {
 	from := mail.NewEmail("Herbs Store", "djeddid.sifeddine@gmail.com")
-	subject := "New Order From Herbs Store"
+	subject := "Nouvelle Commande ( LK Parfumo )"
 	to := mail.NewEmail("Sifeddine Djeddid", "chtiwaa@gmail.com")
 
 	htmlContent := fmt.Sprintf(`
@@ -31,21 +31,21 @@ func SendEmail(fullName string, phoneNumber string, state string, stateNumber ui
 			<div class="container">
 				<div class="header">New Order Placed ( Herbs Store )</div>
 				<div class="order-details">
-					<p><strong>Name:</strong> %s</p>
-					<p><strong>Phone Number:</strong> %s</p>
-					<p><strong>State:</strong> %s (%d)</p>
-					<p><strong>City:</strong> %s</p>
-					<p><strong>Product Name:</strong> %s</p>
+					<p><strong>Nom:</strong> %s</p>
+					<p><strong>Numéro:</strong> %s</p>
+					<p><strong>Wilaya:</strong> %s (%d)</p>
+					<p><strong>Commune:</strong> %s</p>
+					<p><strong>Prodcuit:</strong> %s</p>
+					<p><strong>Variant:</strong> %s</p>
 					<p><strong>Quantity:</strong> %d</p>
-					<p><strong>Price:</strong> %.2f DA</p>
-					<p><strong>Shipping Method:</strong> %s</p>
-					<p><strong>Shipping Price:</strong> %.2f DA</p>
-					<p><strong>Total Price:</strong> %.2f DA</p>
+					<p><strong>Prix:</strong> %.2f DA</p>
+					<p><strong>Methode de livraison:</strong> %s</p>
+					<p><strong>Prix de livraison:</strong> %.2f DA</p>
+					<p><strong>Prix total:</strong> %.2f DA</p>
 				</div>
-				<div class="footer">Thank you for your order!</div>
 			</div>
 		</body>
-		</html>`, fullName, phoneNumber, state, stateNumber, city, productName, quantity, price, shippingMethod, shippingPrice, totalPrice)
+		</html>`, fullName, phoneNumber, state, stateNumber, city, productName, variant, quantity, price, shippingMethod, shippingPrice, totalPrice)
 
 	message := mail.NewSingleEmail(from, subject, to, "", htmlContent)
 	client := sendgrid.NewSendClient(os.Getenv("SENDGRID_API_KEY"))

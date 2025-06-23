@@ -128,7 +128,7 @@ func CreateOrder(c *gin.Context) {
 	}
 
 	go func() {
-		err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.StateNumber, order.City, order.ProductName, order.Quantity, order.Price, order.ShippingMethod, order.ShippingPrice, order.TotalPrice)
+		err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.StateNumber, order.City, order.ProductName, order.Variant, order.Quantity, order.Price, order.ShippingMethod, order.ShippingPrice, order.TotalPrice)
 
 		if err != nil {
 			fmt.Println(err)
