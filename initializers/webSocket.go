@@ -41,7 +41,7 @@ func (er *EventRouter) Handle(conn *websocket.Conn, event string, data interface
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		allowedOrigins := []string{os.Getenv("CLIENT_URL"), os.Getenv("CLIENT_URL_V2")}
+		allowedOrigins := []string{os.Getenv("CLIENT_URL"), os.Getenv("CLIENT_URL_V2"), os.Getenv("ADMIN_URL")}
 		origin := r.Header.Get("Origin")
 		for _, o := range allowedOrigins {
 			if origin == o {

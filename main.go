@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/chtiwa/herbs-store-client/initializers"
 	"github.com/chtiwa/herbs-store-client/middleware"
@@ -42,7 +43,12 @@ func main() {
 
 	// Define WebSocket endpoint
 	router.GET("/ws", func(c *gin.Context) {
-		initializers.HandleWebSocket(c, WsRouter)
+		if websocket.IsWebSocketUpgrade(c.Request) {
+			initializers.HandleWebSocket(c, WsRouter)
+		} else {
+			// Return 400 if not a websocket upgrade request
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Not a WebSocket upgrade request"})
+		}
 	})
 
 	fmt.Println("The server is running successfully!")
