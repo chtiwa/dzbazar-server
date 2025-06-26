@@ -129,13 +129,16 @@ func CreateOrder(c *gin.Context) {
 	}
 
 	go func() {
-		err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.StateNumber, order.City, order.ProductName, order.Variant, order.Quantity, order.Price, order.ShippingMethod, order.ShippingPrice, order.TotalPrice)
+		// err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.StateNumber, order.City, order.ProductName, order.Variant, order.Quantity, order.Price, order.ShippingMethod, order.ShippingPrice, order.TotalPrice)
 
-		realtime.Broadcast("new_order", map[string]interface{}{
-			"id":          order.ID,
-			"productName": order.ProductName,
-			"totalPrice":  order.TotalPrice,
-		})
+		realtime.Broadcast <- realtime.Message{
+			Event: "order_created",
+			Data: map[string]interface{}{
+				"productName": order.ProductName,
+			},
+		}
+
+		fmt.Println("event broadcast")
 
 		if err != nil {
 			fmt.Println(err)
