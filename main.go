@@ -25,6 +25,8 @@ func main() {
 	// routes
 	routes.OrdersRoutes(router)
 	routes.UsersRoutes(router)
+	routes.ProductsRoutes(router)
+	routes.CategoriesRoutes(router)
 	routes.WebSocketRoutes(router)
 
 	go realtime.StartHub()
