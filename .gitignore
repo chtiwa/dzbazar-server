@@ -41,3 +41,6 @@ config.yaml
 # Go workspace-related (if using Go Work)
 go.work
 go.work.sum
+
+#
+/rest_tests

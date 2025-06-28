@@ -16,7 +16,7 @@ type Variant struct {
 // TODO : when the order is cancelled, get the variant item
 type VariantItem struct {
 	BaseModel
-	VariantID uuid.UUID `gorm:"not null" json:"variantId"`
+	VariantID uuid.UUID `json:"variantId"`
 	Variant   Variant   `gorm:"foreignKey:VariantID;references:ID" json:"variant"`
 	Value     string    `gorm:"not null" json:"value"`     // 100ml blue 6.5
 	Quantity  int       `gorm:"default:0" json:"quantity"` //

@@ -22,6 +22,8 @@ func main() {
 
 	router.Use(middleware.CORSMiddleware())
 
+	// setting a lower memory limit for multipart forms
+	router.MaxMultipartMemory = 20 << 20 //20 MiB
 	// routes
 	routes.OrdersRoutes(router)
 	routes.UsersRoutes(router)
