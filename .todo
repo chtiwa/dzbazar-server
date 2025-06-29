@@ -1,4 +1,4 @@
-- variant logic
+- variant logic ( price )
 - add update product which includes variants and images
-- add redis for chaching
 - add rabbit mq for sending emails
+- add redis for chaching

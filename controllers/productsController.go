@@ -21,8 +21,9 @@ import (
 )
 
 type VariantItemInput struct {
-	Value    string `json:"value"`
-	Quantity int    `json:"quantity"`
+	Value    string  `json:"value"`
+	Price    float64 `json:"price"`
+	Quantity int     `json:"quantity"`
 }
 
 type VariantInput struct {
@@ -186,6 +187,7 @@ func CreateProduct(c *gin.Context) {
 			items = append(items, models.VariantItem{
 				VariantID: variant.ID,
 				Value:     item.Value,
+				Price:     item.Price,
 				Quantity:  item.Quantity,
 			})
 		}
@@ -270,22 +272,26 @@ func UpdateVariant(c *gin.Context) {
 		var ids []string
 		caseQuantity := "CASE id "
 		caseValue := "CASE id "
+		casePrice := "CASE id "
 
 		for _, vi := range body.VariantItems {
 			ids = append(ids, fmt.Sprintf("'%s'", vi.ID))
 			caseQuantity += fmt.Sprintf("WHEN '%s' THEN %d", vi.ID, vi.Quantity)
 			caseValue += fmt.Sprintf("WHEN '%s' THEN '%s'", vi.ID, vi.Value)
+			caseValue += fmt.Sprintf("WHEN '%s' THEN '%s'", vi.ID, vi.Price)
 		}
 
 		caseQuantity += "END"
 		caseValue += "END"
+		casePrice += "END"
 
 		updateQuery := fmt.Sprintf(`
 			UPDATE variant_items
 			SET quantity = %s
 				value = %s
+				price = %s
 			WHERE id IN (%s)
-		`, caseQuantity, caseValue, strings.Join(ids, ","))
+		`, caseQuantity, caseValue, casePrice, strings.Join(ids, ","))
 
 		result := initializers.DB.Exec(updateQuery)
 

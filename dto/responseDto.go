@@ -31,4 +31,5 @@ type VariantItemSimple struct {
 	ID       string `json:"id"`
 	Value    string `json:"value"`
 	Quantity int    `json:"quantity"`
+	Price    int    `json:"price"`
 }

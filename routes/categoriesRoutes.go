@@ -10,5 +10,6 @@ func CategoriesRoutes(router *gin.Engine) {
 
 	{
 		categories.GET("", controllers.GetCategories)
+		categories.GET("/:id", controllers.GetProductsByCategoryId)
 	}
 }
