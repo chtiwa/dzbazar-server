@@ -1,3 +1,3 @@
-1) add redis
-2) add rabbit mq for sending email
-3) add product update logic which includes variants and product images
+- add update product which includes variants and images
+- add redis for chaching
+- add rabbit mq for sending emails

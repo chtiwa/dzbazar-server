@@ -1,23 +1,24 @@
 package dto
 
-import (
-	"github.com/chtiwa/herbs-store-client/models"
-)
-
 type ProductResponse struct {
-	ID          string                `json:"id"`
-	Title       string                `json:"title"`
-	Description string                `json:"description"`
-	Price       float64               `json:"price"`
-	OldPrice    float64               `json:"oldPrice"`
-	Images      []models.ProductImage `json:"images"`
-	Category    CategoryResponse      `json:"category"`
-	Variants    []VariantResponse     `json:"variants"`
+	ID          string                 `json:"id"`
+	Title       string                 `json:"title"`
+	Description string                 `json:"description"`
+	Price       float64                `json:"price"`
+	OldPrice    float64                `json:"oldPrice"`
+	Images      []ProductImageResponse `json:"images"`
+	Category    CategoryResponse       `json:"category"`
+	Variants    []VariantResponse      `json:"variants"`
 }
 
 type CategoryResponse struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
+}
+
+type ProductImageResponse struct {
+	ID  string `json:"id"`
+	URL string `json:"url"`
 }
 
 type VariantResponse struct {

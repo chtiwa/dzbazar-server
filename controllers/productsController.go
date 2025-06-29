@@ -104,7 +104,7 @@ func CreateProduct(c *gin.Context) {
 		return
 	}
 
-	urls := make([]string, 0, len(files))
+	// urls := make([]string, 0, len(files))
 
 	// Transaction start
 	tx := initializers.DB.Begin()
@@ -339,7 +339,7 @@ func GetProduct(c *gin.Context) {
 
 	var product models.Product
 
-	result := initializers.DB.Preload("Images").Preload("Variants").Preload("Variants.VariantItems").Preload("Category").First(&product, "id = ?", productId)
+	result := initializers.DB.Preload("Images").Preload("Category").Preload("Variants").Preload("Variants.VariantItems").First(&product, "id = ?", productId)
 
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -356,13 +356,22 @@ func GetProduct(c *gin.Context) {
 		Description: product.Description,
 		Price:       product.Price,
 		OldPrice:    product.OldPrice,
-		Images:      []models.ProductImage{},
 		Category: dto.CategoryResponse{
 			ID:    product.Category.ID.String(),
 			Title: product.Category.Title,
 		},
 		Variants: make([]dto.VariantResponse, 0),
 	}
+
+	var images []dto.ProductImageResponse
+	for _, i := range product.Images {
+		images = append(images, dto.ProductImageResponse{
+			ID:  i.ID.String(),
+			URL: i.URL,
+		})
+	}
+
+	response.Images = images
 
 	for _, v := range product.Variants {
 		var vr dto.VariantResponse
@@ -387,6 +396,39 @@ func GetProduct(c *gin.Context) {
 		"data":    response,
 	})
 }
+
+func GetProductImages(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error while parsing the id",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// var imgs []models.ProductImage
+	// result := initializers.DB.Where("product_id = ?", id).Find(&imgs)
+
+	var product models.Product
+
+	result := initializers.DB.Preload("Images").First(&product, "id = ?", id)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error while retrieving the product images",
+			"error":   result.Error.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    product,
+	})
+}
+
 func UpdateProduct(c *gin.Context) {}
 
 func DeleteProduct(c *gin.Context) {

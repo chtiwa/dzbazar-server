@@ -13,7 +13,7 @@ func Migrate() {
 	// if err := fixProductImagesConstraint(); err != nil {
 	// 	log.Fatalf("failed to fix constraint: %v", err)
 	// }
-	// initializers.DB.Migrator().DropTable(&models.Variant{}, models.VariantItem{})
+	// initializers.DB.Migrator().DropTable(&models.Product{}, &models.ProductImage{}, &models.Variant{}, models.VariantItem{})
 	err := initializers.DB.AutoMigrate(&models.BaseModel{}, &models.Order{}, &models.User{}, &models.Client{}, &models.Product{}, &models.ProductImage{}, &models.Variant{}, &models.VariantItem{}, &models.Category{})
 	if err != nil {
 		log.Fatal("Something went wrong while migrating")
