@@ -13,7 +13,7 @@ var S3Client *s3.Client
 var BucketName = os.Getenv("AWS_BUCKET_NAME")
 
 func InitAWS() {
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(os.Getenv("AWS_REGION")))
 	if err != nil {
 		log.Fatalf("Unable to load AWS SDK config : %v ", err)
 	}

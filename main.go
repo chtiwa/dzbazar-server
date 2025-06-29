@@ -14,6 +14,7 @@ import (
 func init() {
 	initializers.LoadEnvVars()
 	initializers.ConnectToDB()
+	initializers.InitAWS()
 	migrate.Migrate()
 }
 

@@ -2,6 +2,7 @@ package routes
 
 import (
 	"github.com/chtiwa/herbs-store-client/controllers"
+	"github.com/chtiwa/herbs-store-client/middleware"
 	"github.com/gin-gonic/gin"
 )
 
@@ -10,11 +11,11 @@ func ProductsRoutes(router *gin.Engine) {
 
 	{
 		products.GET("", controllers.GetProducts)
-		products.POST("", controllers.CreateProduct)
+		products.POST("", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.CreateProduct)
 		products.GET("/:id", controllers.GetProduct)
-		products.PATCH("/:id", controllers.UpdateProduct)
-		products.DELETE("/:id", controllers.DeleteProduct)
-		products.POST("/:id/variant", controllers.CreateVariant)
+		products.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.UpdateProduct)
+		products.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.DeleteProduct)
+		products.PATCH("/:id/variant", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.UpdateVariant)
 
 	}
 }

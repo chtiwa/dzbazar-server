@@ -1,8 +1,18 @@
 package controllers
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/chtiwa/herbs-store-client/dto"
 	"github.com/chtiwa/herbs-store-client/initializers"
 	"github.com/chtiwa/herbs-store-client/models"
@@ -30,154 +40,195 @@ type CreateProductInput struct {
 
 // check admin
 func CreateProduct(c *gin.Context) {
-	var body CreateProductInput
-	err := c.ShouldBindJSON(&body)
+	title := c.PostForm("title")
+	price := c.PostForm("price")
+	description := c.PostForm("description")
+	categoryID := c.PostForm("categoryId")
 
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+	if title == "" || categoryID == "" || price == "" || description == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "failed to parse the body",
+			"message": "error while parsing the body",
+		})
+		return
+	}
+
+	parsedPrice, err := strconv.ParseFloat(price, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "invalid price",
+		})
+		return
+	}
+
+	parsedCategoryID, err := uuid.Parse(categoryID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "invalid category id",
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	parsedCatgeoryId, err := uuid.Parse(body.CategoryID)
+	var variants []VariantInput
+	variantsJson := c.PostForm("variants")
+	if variantsJson != "" {
+		if err := json.Unmarshal([]byte(variantsJson), &variants); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "invalid variants JSON",
+				"error":   err.Error(),
+			})
+			return
+		}
+	}
+
+	form, err := c.MultipartForm()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "error while parsing the category id",
+			"message": "invalid form data",
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	// form, err := c.MultipartForm()
-	// if err != nil {
-	// 	c.JSON(http.StatusBadRequest, gin.H{
-	// 		"success": false,
-	// 		"message": "invalid form data",
-	// 		"error":   err.Error(),
-	// 	})
-	// 	return
-	// }
-
-	// files := form.File["files"]
-	// if len(files) == 0 {
-	// 	c.JSON(http.StatusBadRequest, gin.H{
-	// 		"success": false,
-	// 		"message": "no files to upload",
-	// 	})
-	// 	return
-	// }
-
-	// var urls []string
-	// for _, file := range files {
-	// 	// open the uploaded file
-	// 	src, err := file.Open()
-	// 	if err != nil {
-
-	// 		c.JSON(http.StatusBadRequest, gin.H{
-	// 			"success": false,
-	// 			"message": "invalid form data",
-	// 			"error":   err.Error(),
-	// 		})
-	// 		return
-	// 	}
-	// 	defer src.Close()
-
-	// 	// create a unique key for the S3 object
-	// 	key := fmt.Sprintf("uploads/%d_%s", time.Now().UnixNano(), filepath.Base(file.Filename))
-
-	// 	bucketName := os.Getenv("AWS_BUCKET_NAME")
-
-	// 	// uplaod to S3
-	// 	_, err = initializers.S3Client.PutObject(context.TODO(), &s3.PutObjectInput{
-	// 		Bucket:      aws.String(bucketName),
-	// 		Key:         aws.String(key),
-	// 		Body:        src,
-	// 		ACL:         "public-read",
-	// 		ContentType: aws.String(file.Header.Get("Content-Type")),
-	// 	})
-
-	// 	if err != nil {
-	// 		c.JSON(http.StatusInternalServerError, gin.H{
-	// 			"success": false,
-	// 			"error":   fmt.Sprintf("failed to upload %s: %v", file.Filename, err),
-	// 		})
-	// 		return
-	// 	}
-
-	// 	// Construct the public URL
-	// 	url := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", bucketName, key)
-	// 	urls = append(urls, url)
-	// }
-
-	product := models.Product{Title: body.Title, Description: body.Description, CategoryID: parsedCatgeoryId}
-
-	result := initializers.DB.Create(&product)
-
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+	files := form.File["images"]
+	if len(files) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "error while creating the product",
-			"error":   result.Error.Error(),
+			"message": "no files to upload",
 		})
 		return
 	}
 
-	// // create product images and associate them witht the product
-	// var productImages []models.ProductImage
-	// for _, url := range urls {
-	// 	productImages = append(productImages, models.ProductImage{
-	// 		ProductID: product.ID,
-	// 		URL:       url,
-	// 	})
-	// }
+	urls := make([]string, 0, len(files))
 
-	// if len(productImages) > 0 {
-	// 	result = initializers.DB.Create(&productImages)
+	// Transaction start
+	tx := initializers.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "internal server error"})
+		}
+	}()
 
-	// 	if result.Error != nil {
-	// 		c.JSON(http.StatusInternalServerError, gin.H{
-	// 			"success": false,
-	// 			"message": "error while uploading the images",
-	// 			"error":   result.Error.Error(),
-	// 		})
-	// 		return
-	// 	}
-	// }
+	product := models.Product{
+		Title:       title,
+		Description: description,
+		CategoryID:  parsedCategoryID,
+		Price:       parsedPrice,
+	}
 
-	// product.Images = productImages
+	if err := tx.Create(&product).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create product", "error": err.Error()})
+		return
+	}
+
+	// Upload images and store in DB
+	var productImages []models.ProductImage
+	for _, file := range files {
+		src, err := file.Open()
+		if err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "failed to open file", "error": err.Error()})
+			return
+		}
+
+		key := fmt.Sprintf("uploads/%d_%s", time.Now().UnixNano(), filepath.Base(file.Filename))
+		bucketName := os.Getenv("AWS_BUCKET_NAME")
+
+		_, err = initializers.S3Client.PutObject(context.TODO(), &s3.PutObjectInput{
+			Bucket:      aws.String(bucketName),
+			Key:         aws.String(key),
+			Body:        src,
+			ACL:         "public-read",
+			ContentType: aws.String(file.Header.Get("Content-Type")),
+		})
+		src.Close() // close immediately after upload
+
+		if err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": fmt.Sprintf("failed to upload %s", file.Filename), "error": err.Error()})
+			return
+		}
+
+		url := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", bucketName, key)
+		// urls = append(urls, url)
+		productImages = append(productImages, models.ProductImage{
+			ProductID: product.ID,
+			URL:       url,
+		})
+	}
+
+	if len(productImages) > 0 {
+		if err := tx.Create(&productImages).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to save images", "error": err.Error()})
+			return
+		}
+	}
+
+	// Create variants + items
+	for _, v := range variants {
+		variant := models.Variant{ProductID: product.ID, Title: v.Title}
+		if err := tx.Create(&variant).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create variant", "error": err.Error()})
+			return
+		}
+
+		var items []models.VariantItem
+		for _, item := range v.VariantItems {
+			items = append(items, models.VariantItem{
+				VariantID: variant.ID,
+				Value:     item.Value,
+				Quantity:  item.Quantity,
+			})
+		}
+
+		if len(items) > 0 {
+			if err := tx.Create(&items).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create variant items", "error": err.Error()})
+				return
+			}
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "transaction failed", "error": err.Error()})
+		return
+	}
+
+	product.Images = productImages
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Product was created succssfully",
+		"message": "Product created successfully",
 		"data":    product,
 	})
-
 }
 
-func CreateVariant(c *gin.Context) {
-	productID, err := uuid.Parse(c.Param("id"))
+func UpdateVariant(c *gin.Context) {
+	// get the variant id
+	variantId, err := uuid.Parse(c.Param("id"))
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": true,
-			"message": "error while parsing the product id",
+			"success": false,
+			"message": "error while parsing the body",
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	var body struct {
-		Title        string `json:"title"`
-		VariantItems []struct {
-			Value    string `json:"value"`
-			Quantity int    `json:"quantity"`
-		} `json:"variantItems"`
-	}
-
+	// define the struct
+	var body dto.UpdateVariantDTO
+	// bind the body
 	err = c.ShouldBindJSON(&body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -188,35 +239,69 @@ func CreateVariant(c *gin.Context) {
 		return
 	}
 
-	var items []models.VariantItem
-	for _, vi := range body.VariantItems {
-		items = append(items, models.VariantItem{
-			Value:    vi.Value,
-			Quantity: vi.Quantity,
-		})
-	}
-
-	variant := models.Variant{
-		ProductID:    productID,
-		Title:        body.Title,
-		VariantItems: items,
-	}
-
-	result := initializers.DB.Create(&variant)
-
+	// get the variant
+	var variant models.Variant
+	result := initializers.DB.First(&variant, variantId)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"message": "error while creating the variant",
+			"message": "failed while retrieving the variant",
 			"error":   result.Error.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	// check if the title exists
+	if body.Title != "" {
+		variant.Title = body.Title
+		result = initializers.DB.Save(&variant)
+		if result.Error != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "failed while update the variant",
+				"error":   result.Error.Error(),
+			})
+			return
+		}
+	}
+
+	// map through the variant items and update the items in bulk
+	if len(body.VariantItems) > 0 {
+		var ids []string
+		caseQuantity := "CASE id "
+		caseValue := "CASE id "
+
+		for _, vi := range body.VariantItems {
+			ids = append(ids, fmt.Sprintf("'%s'", vi.ID))
+			caseQuantity += fmt.Sprintf("WHEN '%s' THEN %d", vi.ID, vi.Quantity)
+			caseValue += fmt.Sprintf("WHEN '%s' THEN '%s'", vi.ID, vi.Value)
+		}
+
+		caseQuantity += "END"
+		caseValue += "END"
+
+		updateQuery := fmt.Sprintf(`
+			UPDATE variant_items
+			SET quantity = %s
+				value = %s
+			WHERE id IN (%s)
+		`, caseQuantity, caseValue, strings.Join(ids, ","))
+
+		result := initializers.DB.Exec(updateQuery)
+
+		if result.Error != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "failed while updating the variant items",
+				"error":   result.Error.Error(),
+			})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "variant was created successfully",
-		"data":    variant,
+		"message": "variant updated successfully",
 	})
 }
 
@@ -271,7 +356,7 @@ func GetProduct(c *gin.Context) {
 		Description: product.Description,
 		Price:       product.Price,
 		OldPrice:    product.OldPrice,
-		Images:      product.Images, // assuming this is []string
+		Images:      []models.ProductImage{},
 		Category: dto.CategoryResponse{
 			ID:    product.Category.ID.String(),
 			Title: product.Category.Title,
@@ -303,4 +388,31 @@ func GetProduct(c *gin.Context) {
 	})
 }
 func UpdateProduct(c *gin.Context) {}
-func DeleteProduct(c *gin.Context) {}
+
+func DeleteProduct(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error while parsing the id",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	result := initializers.DB.Delete(&models.Product{}, id)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error while parsing the id",
+			"error":   result.Error.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "product was deleted successfully",
+	})
+}

@@ -1,3 +1,3 @@
-1) add redit
+1) add redis
 2) add rabbit mq for sending email
-3) have meaningful git commits
+3) add product update logic which includes variants and product images
