@@ -5,9 +5,10 @@
 #     "status":"Not Responding"
 # }
 
-GET https://procolis.com/api_v1/tarification 
-token: e2b914224c00fe79c091141a3e4e6ce4322d57cddda165cc2119238db034d77d
-key: 3b7238f231ce49a5a503a2b56395328a
+POST https://procolis.com/api_v1/tarification
+Token: e2b914224c00fe79c091141a3e4e6ce4322d57cddda165cc2119238db034d77d
+Key: 3b7238f231ce49a5a503a2b56395328a
+Content-Type: application/json
 
 # GET http://localhost:5000/orders
 

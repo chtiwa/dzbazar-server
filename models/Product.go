@@ -7,7 +7,8 @@ type Product struct {
 	Title       string         `gorm:"not null" json:"title"`
 	Description string         `gorm:"not null" json:"description"`
 	Price       float64        `gorm:"not null" json:"price"`
-	OldPrice    float64        `gorm:"default:0" json:"oldPrice"`
+	OldPrice    float64      `gorm:"default:0" json:"oldPrice"`
+	Active      bool           `gorm:"default:true" json:"active"`
 	Images      []ProductImage `gorm:"foreignKey:ProductID;references:ID;constraint:OnDelete:CASCADE" json:"images"`
 	CategoryID  uuid.UUID      `gorm:"not null" json:"categoryId"`
 	Category    Category       `gorm:"foreignKey:CategoryID;references:ID"`

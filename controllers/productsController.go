@@ -308,7 +308,7 @@ func UpdateVariant(c *gin.Context) {
 func GetProducts(c *gin.Context) {
 	var products []models.Product
 
-	result := initializers.DB.Find(&products)
+	result := initializers.DB.Preload("Images").Find(&products)
 
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

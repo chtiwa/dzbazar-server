@@ -16,6 +16,8 @@ func GenerateExcel(orders []models.Order) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Excel file: %v", err)
 	}
+	// Delete the default empty "Sheet1"
+	f.DeleteSheet("Sheet1")
 
 	// Add headers to the sheet
 	f.SetCellValue("Orders", "A1", "Nom Complet")
