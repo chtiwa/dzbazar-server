@@ -325,6 +325,33 @@ func GetProducts(c *gin.Context) {
 	})
 }
 
+func GetProductsBySearch(c *gin.Context) {
+	search := c.Query("search")
+
+	var products []models.Product
+	query := initializers.DB.Order("updated_at DESC")
+
+	if search != "" {
+		query = query.Where("title ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	result := query.Limit(10).Preload("Images").Preload("Category").Find(&products)
+
+	if result.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Error retrieving the orders",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "products were retrieved successfully",
+		"data":    products,
+	})
+}
+
 func GetProduct(c *gin.Context) {
 	productId, err := uuid.Parse(c.Param("id"))
 
