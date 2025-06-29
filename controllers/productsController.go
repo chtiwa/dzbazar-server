@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -21,9 +20,9 @@ import (
 )
 
 type VariantItemInput struct {
-	Value    string  `json:"value"`
-	Price    float64 `json:"price"`
-	Quantity int     `json:"quantity"`
+	Value    string `json:"value"`
+	Price    int    `json:"price"`
+	Quantity int    `json:"quantity"`
 }
 
 type VariantInput struct {
@@ -129,7 +128,7 @@ func CreateProduct(c *gin.Context) {
 		return
 	}
 
-	// Upload images and store in DB
+	// Upload images and store in DB should be last in case anything else fails
 	var productImages []models.ProductImage
 	for _, file := range files {
 		src, err := file.Open()
@@ -184,10 +183,16 @@ func CreateProduct(c *gin.Context) {
 
 		var items []models.VariantItem
 		for _, item := range v.VariantItems {
+			parsedItemPrice, err := strconv.ParseInt(price, 0, 0)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid item price", "error": err.Error()})
+				return
+			}
+
 			items = append(items, models.VariantItem{
 				VariantID: variant.ID,
 				Value:     item.Value,
-				Price:     item.Price,
+				Price:     int(parsedItemPrice),
 				Quantity:  item.Quantity,
 			})
 		}
@@ -216,99 +221,55 @@ func CreateProduct(c *gin.Context) {
 }
 
 func UpdateVariant(c *gin.Context) {
-	// get the variant id
 	variantId, err := uuid.Parse(c.Param("id"))
-
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while parsing the body",
-			"error":   err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid variant ID", "error": err.Error()})
 		return
 	}
 
-	// define the struct
+	// Parse request body
 	var body dto.UpdateVariantDTO
-	// bind the body
-	err = c.ShouldBindJSON(&body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while parsing the body",
-			"error":   err.Error(),
-		})
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
 		return
 	}
 
-	// get the variant
+	// Retrieve the variant (and preload existing items if you want to verify)
 	var variant models.Variant
-	result := initializers.DB.First(&variant, variantId)
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "failed while retrieving the variant",
-			"error":   result.Error.Error(),
-		})
+	if err := initializers.DB.First(&variant, "id = ?", variantId).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Variant not found", "error": err.Error()})
 		return
 	}
 
-	// check if the title exists
-	if body.Title != "" {
-		variant.Title = body.Title
-		result = initializers.DB.Save(&variant)
-		if result.Error != nil {
+	// Update title if changed
+	if body.Title != "" && body.Title != variant.Title {
+		if err := initializers.DB.Model(&variant).Update("title", body.Title).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update variant title", "error": err.Error()})
+			return
+		}
+	}
+
+	// Update variant items
+	for _, item := range body.VariantItems {
+		// You only need the ID to update directly
+		updateData := map[string]interface{}{
+			"value":    item.Value,
+			"quantity": item.Quantity,
+			"price":    item.Price,
+		}
+
+		if err := initializers.DB.Model(&models.VariantItem{}).Where("id = ?", item.ID).
+			Updates(updateData).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
-				"message": "failed while update the variant",
-				"error":   result.Error.Error(),
+				"message": fmt.Sprintf("Failed to update variant item ID: %s", item.ID),
+				"error":   err.Error(),
 			})
 			return
 		}
 	}
 
-	// map through the variant items and update the items in bulk
-	if len(body.VariantItems) > 0 {
-		var ids []string
-		caseQuantity := "CASE id "
-		caseValue := "CASE id "
-		casePrice := "CASE id "
-
-		for _, vi := range body.VariantItems {
-			ids = append(ids, fmt.Sprintf("'%s'", vi.ID))
-			caseQuantity += fmt.Sprintf("WHEN '%s' THEN %d", vi.ID, vi.Quantity)
-			caseValue += fmt.Sprintf("WHEN '%s' THEN '%s'", vi.ID, vi.Value)
-			caseValue += fmt.Sprintf("WHEN '%s' THEN '%s'", vi.ID, vi.Price)
-		}
-
-		caseQuantity += "END"
-		caseValue += "END"
-		casePrice += "END"
-
-		updateQuery := fmt.Sprintf(`
-			UPDATE variant_items
-			SET quantity = %s
-				value = %s
-				price = %s
-			WHERE id IN (%s)
-		`, caseQuantity, caseValue, casePrice, strings.Join(ids, ","))
-
-		result := initializers.DB.Exec(updateQuery)
-
-		if result.Error != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "failed while updating the variant items",
-				"error":   result.Error.Error(),
-			})
-			return
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "variant updated successfully",
-	})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Variant and items updated successfully"})
 }
 
 func GetProducts(c *gin.Context) {
@@ -416,6 +377,7 @@ func GetProduct(c *gin.Context) {
 			vr.VariantItems = append(vr.VariantItems, dto.VariantItemSimple{
 				ID:       item.ID.String(),
 				Value:    item.Value,
+				Price:    item.Price,
 				Quantity: item.Quantity,
 			})
 		}
