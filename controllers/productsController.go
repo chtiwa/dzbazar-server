@@ -286,12 +286,12 @@ func GetProductsBySearch(c *gin.Context) {
 		query = query.Where("title ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 
-	result := query.Limit(10).Preload("Images").Preload("Category").Find(&products)
+	result := query.Limit(10).Preload("Images").Find(&products)
 
 	if result.Error != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Error retrieving the orders",
+			"message": "Error retrieving the products",
 		})
 		return
 	}
