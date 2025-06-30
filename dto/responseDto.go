@@ -7,13 +7,19 @@ type ProductResponse struct {
 	Price       float64                `json:"price"`
 	OldPrice    float64                `json:"oldPrice"`
 	Images      []ProductImageResponse `json:"images"`
-	Category    CategoryResponse       `json:"category"`
-	Variants    []VariantResponse      `json:"variants"`
+	// Category    CategoryResponse       `json:"category"`
+	Variants []VariantResponse `json:"variants"`
+	Tags     []string          `json:"tags"`
 }
 
 type CategoryResponse struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
+}
+
+type TagResponse struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type ProductImageResponse struct {

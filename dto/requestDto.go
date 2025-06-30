@@ -9,3 +9,8 @@ type UpdateVariantDTO struct {
 		Quantity int    `json:"quantity"`
 	} `json:"variantItems"`
 }
+
+type UpdateProductsImageInput struct {
+	ID  string `json:"id"`
+	URL string `json:"url"`
+}

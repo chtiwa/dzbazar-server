@@ -1,3 +1,5 @@
-- add update product which includes variants and images
+- add pagination for GetProducts
+- update tags
+
 - add rabbit mq for sending emails
 - add redis for chaching
