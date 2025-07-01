@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"github.com/chtiwa/herbs-store-client/dto"
 	"github.com/chtiwa/herbs-store-client/initializers"
 	"github.com/chtiwa/herbs-store-client/models"
+	"github.com/chtiwa/herbs-store-client/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -246,8 +248,18 @@ func CreateProduct(c *gin.Context) {
 
 func GetProducts(c *gin.Context) {
 	tag := c.Query("tag")
+	page := 1
+	pageString := c.Query("page")
+
+	if pageString != "" {
+		if parsedPage, err := strconv.Atoi(pageString); err == nil && parsedPage > 0 {
+			page = parsedPage
+		}
+	}
+
+	var totalRows int64
 	var products []models.Product
-	db := initializers.DB.Preload("Images").Preload("Tags")
+	db := initializers.DB.Model(&models.Product{}).Preload("Images").Preload("Tags")
 
 	if tag != "" {
 		// Filter products by tag name
@@ -255,12 +267,24 @@ func GetProducts(c *gin.Context) {
 		db = db.Joins("JOIN product_tags ON product_tags.product_id = products.id").
 			Joins("JOIN tags ON tags.id = product_tags.tag_id").
 			Where("LOWER(tags.name) = ?", strings.ToLower(tag))
-	} else {
-		// No filter: get latest products by created_at
-		db = db.Order("created_at DESC")
 	}
 
-	result := db.Find(&products)
+	// count total rows after applying the filter if there's any
+	if err := db.Count(&totalRows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error while counting the products",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	perPage := 10.0
+	totalPages := math.Ceil(float64(totalRows) / perPage)
+
+	offset := (page - 1) * int(perPage)
+
+	result := db.Order("products.created_at DESC").Limit(int(perPage)).Offset(offset).Find(&products)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -270,9 +294,12 @@ func GetProducts(c *gin.Context) {
 		return
 	}
 
+	pagination := utils.GetPaginationData(page, int(totalPages), "/products")
+
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    products,
+		"success":    true,
+		"data":       products,
+		"pagination": pagination,
 	})
 }
 
