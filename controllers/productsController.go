@@ -316,6 +316,9 @@ func GetProducts(c *gin.Context) {
 	totalPages := math.Ceil(float64(totalRows) / perPage)
 
 	offset := (page - 1) * int(perPage)
+	if page > int(totalPages) {
+		offset = 0
+	}
 
 	result := db.Order("products.updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&products)
 	if result.Error != nil {
