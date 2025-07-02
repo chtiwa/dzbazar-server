@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -21,7 +20,6 @@ import (
 	"github.com/chtiwa/herbs-store-client/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 type VariantItemInput struct {
@@ -84,37 +82,80 @@ func CreateProduct(c *gin.Context) {
 		}
 	}
 
-	// Parse tags JSON and fetch/create tags
+	// Transaction start
+	tx := initializers.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "internal server error"})
+		}
+	}()
+
 	var tagNames []string
 	var tags []models.Tag
+
+	// Step 1: Parse tags JSON from form data
 	tagsJson := c.PostForm("tags")
-	fmt.Println(tagsJson)
+
 	if tagsJson != "" {
 		if err := json.Unmarshal([]byte(tagsJson), &tagNames); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid tags JSON", "error": err.Error()})
 			return
 		}
 
+		// Step 2: Normalize tag names and collect unique names
+		uniqueNames := make(map[string]struct{})
+		normalizedNames := []string{}
 		for _, tagName := range tagNames {
 			tagName = strings.ToLower(strings.TrimSpace(tagName))
 			if tagName == "" {
 				continue
 			}
+			if _, exists := uniqueNames[tagName]; !exists {
+				uniqueNames[tagName] = struct{}{}
+				normalizedNames = append(normalizedNames, tagName)
+			}
+		}
 
-			var tag models.Tag
-			err := initializers.DB.Where("name = ?", tagName).First(&tag).Error
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				tag = models.Tag{Name: tagName}
-				if err := initializers.DB.Create(&tag).Error; err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create tag", "error": err.Error()})
-					return
-				}
-			} else if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to fetch tag", "error": err.Error()})
+		if len(normalizedNames) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "no valid tags provided"})
+			return
+		}
+
+		// Step 3: Process tags inside the existing transaction
+		// Fetch existing tags in one query
+		var existingTags []models.Tag
+		if err := tx.Where("name IN ?", normalizedNames).Find(&existingTags).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to fetch tags", "error": err.Error()})
+			return
+		}
+
+		// Build a map of existing tags for quick lookup
+		existingMap := make(map[string]models.Tag)
+		for _, tag := range existingTags {
+			existingMap[tag.Name] = tag
+		}
+
+		// Determine missing tags to create
+		var tagsToCreate []models.Tag
+		for _, tagName := range normalizedNames {
+			if _, exists := existingMap[tagName]; !exists {
+				tagsToCreate = append(tagsToCreate, models.Tag{Name: tagName})
+			}
+		}
+
+		// Create missing tags in one batch
+		if len(tagsToCreate) > 0 {
+			if err := tx.Create(&tagsToCreate).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create tags", "error": err.Error()})
 				return
 			}
-			tags = append(tags, tag)
 		}
+
+		// Merge existing + new tags
+		tags = append(existingTags, tagsToCreate...)
 	}
 
 	form, err := c.MultipartForm()
@@ -137,15 +178,6 @@ func CreateProduct(c *gin.Context) {
 	}
 
 	// urls := make([]string, 0, len(files))
-
-	// Transaction start
-	tx := initializers.DB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "internal server error"})
-		}
-	}()
 
 	product := models.Product{
 		Title:       title,
@@ -259,6 +291,7 @@ func GetProducts(c *gin.Context) {
 
 	var totalRows int64
 	var products []models.Product
+	// db := initializers.DB.Model(&models.Product{}).Where("products.active = ?", true).Preload("Images").Preload("Tags")
 	db := initializers.DB.Model(&models.Product{}).Preload("Images").Preload("Tags")
 
 	if tag != "" {
@@ -462,13 +495,74 @@ func UpdateProduct(c *gin.Context) {
 		product.Active = body.Active
 	}
 
-	result = initializers.DB.Save(&product)
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while saving the product",
-			"error":   result.Error.Error(),
-		})
+	// ensures that there are no duplicates (sets)
+	tagNameSet := make(map[string]struct{})
+	for _, t := range body.Tags {
+		cleaned := strings.ToLower(strings.TrimSpace(t))
+		if cleaned != "" {
+			tagNameSet[cleaned] = struct{}{}
+		}
+	}
+
+	// convert the set to a slice in order to map through
+	uniqueTagNames := make([]string, 0, len(tagNameSet))
+	for name := range tagNameSet {
+		uniqueTagNames = append(uniqueTagNames, name)
+	}
+
+	// star the transaction
+	tx := initializers.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to start transaction"})
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	// fetch existing tags in the a single query
+	var existingTags []models.Tag
+	if err := tx.Where("name IN ?", uniqueTagNames).Find(&existingTags).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to fetch existing tags", "error": err.Error()})
+		return
+	}
+
+	// build a map of existing tags
+	existingTagMap := make(map[string]models.Tag)
+	for _, tag := range existingTags {
+		existingTagMap[tag.Name] = tag
+	}
+
+	// create missing tags if there are any
+	var allTags []models.Tag
+	for _, name := range uniqueTagNames {
+		if existingTag, found := existingTagMap[name]; found {
+			allTags = append(allTags, existingTag)
+			continue
+		}
+		newTag := models.Tag{Name: name}
+		if err := tx.Create(&newTag).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create tag", "error": err.Error()})
+			return
+		}
+		allTags = append(allTags, newTag)
+	}
+
+	// replace the product tags in one go
+	if err := tx.Model(&product).Association("Tags").Replace(allTags); err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to update product tags", "error": err.Error()})
+		return
+	}
+
+	// commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to commit transaction", "error": err.Error()})
 		return
 	}
 
@@ -786,4 +880,36 @@ func GetTags(c *gin.Context) {
 		"message": "tags were retrieved successfully",
 		"data":    formattedTags,
 	})
+}
+
+func GetAllTags(c *gin.Context) {
+	var tags []models.Tag
+
+	initializers.DB.Find(&tags)
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": tags,
+	})
+}
+
+func DeleteTag(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error",
+		})
+		return
+	}
+
+	initializers.DB.Delete(&models.Tag{}, id)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+	})
+}
+
+func CreateTag(c *gin.Context) {
+
 }
