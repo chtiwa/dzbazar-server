@@ -312,12 +312,12 @@ func GetProducts(c *gin.Context) {
 		return
 	}
 
-	perPage := 10.0
+	perPage := 8.0
 	totalPages := math.Ceil(float64(totalRows) / perPage)
 
 	offset := (page - 1) * int(perPage)
 
-	result := db.Order("products.created_at DESC").Limit(int(perPage)).Offset(offset).Find(&products)
+	result := db.Order("products.updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&products)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -487,6 +487,7 @@ func UpdateProduct(c *gin.Context) {
 	}
 	if body.Price != 0 {
 		product.Price = body.Price
+		fmt.Println(product.Price, body.Price)
 	}
 	if body.OldPrice != 0 {
 		product.OldPrice = body.OldPrice
@@ -522,6 +523,12 @@ func UpdateProduct(c *gin.Context) {
 			panic(r)
 		}
 	}()
+
+	if err := tx.Save(&product).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to update product fields", "error": err.Error()})
+		return
+	}
 
 	// fetch existing tags in the a single query
 	var existingTags []models.Tag
