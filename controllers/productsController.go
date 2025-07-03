@@ -271,6 +271,24 @@ func CreateProduct(c *gin.Context) {
 
 	product.Images = productImages
 
+	var cursor uint64
+	for {
+		var keys []string
+		var err error
+		keys, cursor, err = initializers.RClient.Scan(initializers.Ctx, cursor, "products:*", 100).Result()
+		if err != nil {
+			fmt.Printf("failed to scan keys")
+		}
+		if len(keys) > 0 {
+			if err := initializers.RClient.Del(initializers.Ctx, keys...).Err(); err != nil {
+				fmt.Printf("failed to delete keys")
+			}
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Product created successfully",
