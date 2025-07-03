@@ -280,13 +280,25 @@ func CreateProduct(c *gin.Context) {
 
 func GetProducts(c *gin.Context) {
 	tag := c.Query("tag")
-	page := 1
 	pageString := c.Query("page")
+	page := 1
 
 	if pageString != "" {
 		if parsedPage, err := strconv.Atoi(pageString); err == nil && parsedPage > 0 {
 			page = parsedPage
 		}
+	}
+
+	// redis key
+	cacheKey := fmt.Sprintf("products:tage=%s:page=%d", tag, page)
+	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
+	if err == nil {
+		var cachedReponse map[string]interface{}
+		if unmarshalErr := json.Unmarshal([]byte(val), &cachedReponse); unmarshalErr == nil {
+			c.JSON(http.StatusOK, cachedReponse)
+			return // crucial: avoid continuing to DB query
+		}
+		// if unmarshaling failed, fall through to DB fetch
 	}
 
 	var totalRows int64
@@ -332,11 +344,18 @@ func GetProducts(c *gin.Context) {
 
 	pagination := utils.GetPaginationData(page, int(totalPages), "/products")
 
-	c.JSON(http.StatusOK, gin.H{
+	response := gin.H{
 		"success":    true,
 		"data":       products,
 		"pagination": pagination,
-	})
+	}
+
+	jsonData, err := json.Marshal(response)
+	if err == nil {
+		initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute)
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func GetProductsBySearch(c *gin.Context) {
@@ -368,7 +387,6 @@ func GetProductsBySearch(c *gin.Context) {
 
 func GetProduct(c *gin.Context) {
 	productId, err := uuid.Parse(c.Param("id"))
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -376,6 +394,23 @@ func GetProduct(c *gin.Context) {
 			"error":   err.Error(),
 		})
 		return
+	}
+
+	// redis key
+	cacheKey := fmt.Sprintf("product:id=%s", c.Param("id"))
+
+	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
+	if err == nil {
+		var cachedResponse dto.ProductResponse
+		if unmarshalErr := json.Unmarshal([]byte(val), &cachedResponse); unmarshalErr == nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"message": "product was retrieved successfully (from cache)",
+				"data":    cachedResponse,
+			})
+			return // crucial: avoid continuing to DB query
+		}
+		// if unmarshaling failed, fall through to DB fetch
 	}
 
 	var product models.Product
@@ -431,6 +466,12 @@ func GetProduct(c *gin.Context) {
 		}
 
 		response.Variants = append(response.Variants, vr)
+	}
+
+	// save the data to redis
+	jsonData, err := json.Marshal(response)
+	if err == nil {
+		initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -574,6 +615,12 @@ func UpdateProduct(c *gin.Context) {
 	if err := tx.Commit().Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to commit transaction", "error": err.Error()})
 		return
+	}
+
+	// delete the cached key in redis
+	cacheKey := fmt.Sprintf("product:id=%s", id)
+	if err := initializers.RClient.Del(initializers.Ctx, cacheKey).Err(); err != nil {
+		fmt.Println("Failed to delete the product cache key")
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -747,6 +794,11 @@ func UpdateProductImages(c *gin.Context) {
 			"error":   err.Error(),
 		})
 		return
+	}
+
+	cacheKey := fmt.Sprintf("product:id=%s", productId)
+	if err := initializers.RClient.Del(initializers.Ctx, cacheKey).Err(); err != nil {
+		fmt.Println("Failed to delete the product cache key")
 	}
 
 	c.JSON(http.StatusOK, gin.H{

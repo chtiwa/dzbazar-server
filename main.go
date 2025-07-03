@@ -15,6 +15,7 @@ func init() {
 	initializers.LoadEnvVars()
 	initializers.ConnectToDB()
 	initializers.InitAWS()
+	initializers.InitRedis()
 	migrate.Migrate()
 }
 
