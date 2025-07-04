@@ -129,7 +129,7 @@ func CreateOrder(c *gin.Context) {
 	}
 
 	go func() {
-		err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.StateNumber, order.City, order.ProductName, order.Variant, order.Quantity, order.Price, order.ShippingMethod, order.ShippingPrice, order.TotalPrice)
+		err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.City, order.ProductName, order.Variant, order.ShippingMethod, order.Quantity, order.Price, order.ShippingPrice, order.TotalPrice)
 
 		realtime.Broadcast <- realtime.Message{
 			Event: "order_created",

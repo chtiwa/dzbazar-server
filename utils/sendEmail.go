@@ -9,49 +9,87 @@ import (
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
 )
 
-func SendEmail(fullName string, phoneNumber string, state string, stateNumber uint, city string, productName string, variant string, quantity uint, price float64, shippingMethod string, shippingPrice float64, totalPrice float64) error {
-	from := mail.NewEmail("Herbs Store", "djeddid.sifeddine@gmail.com")
-	subject := "Nouvelle Commande ( LK Parfumo )"
-	to := mail.NewEmail("Sifeddine Djeddid", "chtiwaa@gmail.com")
+func SendEmail(
+	fullName, phoneNumber, state, city, productName, variant, shippingMethod string,
+	quantity uint,
+	price, shippingPrice, totalPrice float64,
+) error {
 
+	from := mail.NewEmail("LK Parfumo", "support@lkparfumo.com")
+	subject := "Nouvelle Commande (LK Parfumo)"
+
+	// Recipients
+	to1 := mail.NewEmail("Sifeddine Djeddid", "chtiwaa@gmail.com")
+	// to2 := mail.NewEmail("Admin", "lakhalzineddine12@gmail.com")
+
+	// HTML body
 	htmlContent := fmt.Sprintf(`
-		<!DOCTYPE html>
-		<html>
-		<head>
-			<title>New Order Confirmation</title>
-			<style>
-				body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
-				.container { max-width: 600px; margin: auto; background: #ffffff; padding: 20px; border-radius: 8px; }
-				.header { background: #007bff; color: white; text-align: center; padding: 10px; font-size: 20px; font-weight: bold; }
-				.order-details { padding: 20px; font-size: 16px; }
-				.footer { text-align: center; font-size: 14px; color: #666; margin-top: 20px; }
-			</style>
-		</head>
-		<body>
-			<div class="container">
-				<div class="header">New Order Placed ( Herbs Store )</div>
-				<div class="order-details">
-					<p><strong>Nom:</strong> %s</p>
-					<p><strong>Numéro:</strong> %s</p>
-					<p><strong>Wilaya:</strong> %s (%d)</p>
-					<p><strong>Commune:</strong> %s</p>
-					<p><strong>Prodcuit:</strong> %s</p>
-					<p><strong>Variant:</strong> %s</p>
-					<p><strong>Quantity:</strong> %d</p>
-					<p><strong>Prix:</strong> %.2f DA</p>
-					<p><strong>Methode de livraison:</strong> %s</p>
-					<p><strong>Prix de livraison:</strong> %.2f DA</p>
-					<p><strong>Prix total:</strong> %.2f DA</p>
-				</div>
-			</div>
-		</body>
-		</html>`, fullName, phoneNumber, state, stateNumber, city, productName, variant, quantity, price, shippingMethod, shippingPrice, totalPrice)
+	<!DOCTYPE html>
+	<html lang="fr">
+	<head>
+	<meta charset="UTF-8">
+	<title>Nouvelle Commande - LK Parfumo</title>
+	<style>
+		body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
+		.container { max-width: 600px; margin: auto; background: #ffffff; padding: 20px; border-radius: 8px; }
+		.header { background: #007bff; color: white; text-align: center; padding: 15px; font-size: 22px; font-weight: bold; border-radius: 8px 8px 0 0; }
+		.order-details { padding: 20px; font-size: 16px; line-height: 1.5; color: #333; }
+		.order-details p { margin: 8px 0; }
+		.footer { text-align: center; font-size: 14px; color: #666; margin-top: 20px; }
+	</style>
+	</head>
+	<body>
+	<div class="container">
+		<div class="header">Nouvelle Commande Reçue (LK Parfumo)</div>
+		<div class="order-details">
+		<p><strong>Nom:</strong> %s</p>
+		<p><strong>Téléphone:</strong> %s</p>
+		<p><strong>Wilaya:</strong> %s</p>
+		<p><strong>Commune:</strong> %s</p>
+		<p><strong>Produit:</strong> %s</p>
+		<p><strong>Variant:</strong> %s</p>
+		<p><strong>Quantité:</strong> %d</p>
+		<p><strong>Prix unitaire:</strong> %.2f DA</p>
+		<p><strong>Méthode de livraison:</strong> %s</p>
+		<p><strong>Frais de livraison:</strong> %.2f DA</p>
+		<p><strong>Prix total:</strong> %.2f DA</p>
+		</div>
+		<div class="footer">
+		Cet email a été envoyé automatiquement par LK Parfumo.
+		</div>
+	</div>
+	</body>
+	</html>`,
+		fullName, phoneNumber, state, city, productName, variant, quantity, price, shippingMethod, shippingPrice, totalPrice)
 
-	message := mail.NewSingleEmail(from, subject, to, "", htmlContent)
+	// Build the message
+	message := mail.NewV3Mail()
+	message.SetFrom(from)
+	message.Subject = subject
+
+	// Personalization: add both recipients
+	personalization := mail.NewPersonalization()
+	// personalization.AddTos(to1, to2)
+	personalization.AddTos(to1)
+	message.AddPersonalizations(personalization)
+
+	// Add HTML content
+	content := mail.NewContent("text/html", htmlContent)
+	message.AddContent(content)
+
+	// Send the email
 	client := sendgrid.NewSendClient(os.Getenv("SENDGRID_API_KEY"))
-	_, err := client.Send(message)
+	response, err := client.Send(message)
 	if err != nil {
-		log.Println("SendGrid error:", err)
+		log.Printf("SendGrid error: %v\n", err)
+		return err
 	}
-	return err
+
+	if response.StatusCode >= 400 {
+		log.Printf("SendGrid response error: Status %d, Body: %s\n", response.StatusCode, response.Body)
+		return fmt.Errorf("sendgrid error: status %d", response.StatusCode)
+	}
+
+	log.Printf("Email sent successfully: Status %d\n", response.StatusCode)
+	return nil
 }
