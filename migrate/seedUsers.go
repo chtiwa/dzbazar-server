@@ -17,7 +17,7 @@ func SeedUsers() {
 		hash2, _ := bcrypt.GenerateFromPassword([]byte("sabrine29052003"), 10)
 		users := []models.User{
 			{Username: "chtiwa", Password: string(hash1), Role: "Admin"},
-			{Username: "zinou", Password: string(hash2), Role: "User"},
+			{Username: "zinou", Password: string(hash2), Role: "Admin"},
 		}
 
 		result := initializers.DB.Create(&users)

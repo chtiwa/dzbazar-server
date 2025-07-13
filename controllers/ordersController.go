@@ -42,7 +42,6 @@ func GetOrders(c *gin.Context) {
 
 	var orders []models.Order
 	result = initializers.DB.Order("updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&orders)
-	pagination := utils.GetPaginationData(page, int(totalPages), "/orders")
 
 	if result.Error != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -52,6 +51,7 @@ func GetOrders(c *gin.Context) {
 		return
 	}
 
+	pagination := utils.GetPaginationData(page, int(totalPages), "/orders")
 	c.JSON(http.StatusOK, gin.H{
 		"success":    true,
 		"message":    "Orders were retrieved successfully",

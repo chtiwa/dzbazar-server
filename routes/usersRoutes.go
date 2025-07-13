@@ -18,7 +18,7 @@ func UsersRoutes(router *gin.Engine) {
 		// token verification => admin verification => action
 		users.GET("/verify", middleware.RequireAuthentication, middleware.RequireAdmin)
 		users.PATCH("/:id", middleware.RequireAuthentication, controllers.UpdateUser)
-		users.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.DeleteUser)
+		// users.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.DeleteUser)
 
 	}
 }
