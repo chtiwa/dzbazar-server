@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/chtiwa/herbs-store-client/initializers"
-	"github.com/chtiwa/herbs-store-client/models"
+	"github.com/chtiwa/lk-parfumo-server/initializers"
+	"github.com/chtiwa/lk-parfumo-server/models"
 )
 
 func Migrate() {

@@ -14,10 +14,11 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/chtiwa/herbs-store-client/dto"
-	"github.com/chtiwa/herbs-store-client/initializers"
-	"github.com/chtiwa/herbs-store-client/models"
-	"github.com/chtiwa/herbs-store-client/utils"
+	"github.com/chtiwa/lk-parfumo-server/dto"
+	"github.com/chtiwa/lk-parfumo-server/initializers"
+	"github.com/chtiwa/lk-parfumo-server/models"
+	"github.com/chtiwa/lk-parfumo-server/utils"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -203,13 +204,12 @@ func CreateProduct(c *gin.Context) {
 		}
 
 		key := fmt.Sprintf("uploads/%d_%s", time.Now().UnixNano(), filepath.Base(file.Filename))
-		bucketName := os.Getenv("AWS_BUCKET_NAME")
+		bucketName := os.Getenv("B2_BUCKET_NAME")
 
 		_, err = initializers.S3Client.PutObject(context.TODO(), &s3.PutObjectInput{
 			Bucket:      aws.String(bucketName),
 			Key:         aws.String(key),
 			Body:        src,
-			ACL:         "public-read",
 			ContentType: aws.String(file.Header.Get("Content-Type")),
 		})
 		src.Close() // close immediately after upload
@@ -220,7 +220,8 @@ func CreateProduct(c *gin.Context) {
 			return
 		}
 
-		url := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", bucketName, key)
+		url := fmt.Sprintf("https://%s.s3.%s.backblazeb2.com/%s", bucketName, os.Getenv("B2_REGION"), key)
+
 		// urls = append(urls, url)
 		productImages = append(productImages, models.ProductImage{
 			ProductID: product.ID,
@@ -771,13 +772,12 @@ func UpdateProductImages(c *gin.Context) {
 			// TODO : save the images in a folder named after the shop name
 			// e.g : lk-parfumo/
 			key := fmt.Sprintf("uploads/%d_%s", time.Now().UnixNano(), filepath.Base(file.Filename))
-			bucketName := os.Getenv("AWS_BUCKET_NAME")
+			bucketName := os.Getenv("B2_BUCKET_NAME")
 
 			_, err = initializers.S3Client.PutObject(context.TODO(), &s3.PutObjectInput{
 				Bucket:      aws.String(bucketName),
 				Key:         aws.String(key),
 				Body:        src,
-				ACL:         "public-read",
 				ContentType: aws.String(file.Header.Get("Content-Type")),
 			})
 			src.Close() // close immediately after upload
@@ -788,7 +788,8 @@ func UpdateProductImages(c *gin.Context) {
 				return
 			}
 
-			url := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", bucketName, key)
+			url := fmt.Sprintf("https://%s.s3.%s.backblazeb2.com/%s", bucketName, os.Getenv("B2_REGION"), key)
+
 			// urls = append(urls, url)
 			productImages = append(productImages, models.ProductImage{
 				ProductID: productId,

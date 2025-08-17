@@ -1,4 +1,4 @@
-module github.com/chtiwa/herbs-store-client
+module github.com/chtiwa/lk-parfumo-server
 
 go 1.24.1
 

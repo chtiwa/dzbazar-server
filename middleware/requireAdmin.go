@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/chtiwa/herbs-store-client/models"
+	"github.com/chtiwa/lk-parfumo-server/models"
 	"github.com/gin-gonic/gin"
 )
 

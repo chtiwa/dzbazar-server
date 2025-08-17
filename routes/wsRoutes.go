@@ -1,7 +1,7 @@
 package routes
 
 import (
-	ws "github.com/chtiwa/herbs-store-client/realtime"
+	ws "github.com/chtiwa/lk-parfumo-server/realtime"
 	"github.com/gin-gonic/gin"
 )
 

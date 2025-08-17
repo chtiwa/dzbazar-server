@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/chtiwa/herbs-store-client/initializers"
-	"github.com/chtiwa/herbs-store-client/models"
-	"github.com/chtiwa/herbs-store-client/utils"
+	"github.com/chtiwa/lk-parfumo-server/initializers"
+	"github.com/chtiwa/lk-parfumo-server/models"
+	"github.com/chtiwa/lk-parfumo-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"

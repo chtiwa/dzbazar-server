@@ -1,8 +1,8 @@
 package routes
 
 import (
-	"github.com/chtiwa/herbs-store-client/controllers"
-	"github.com/chtiwa/herbs-store-client/middleware"
+	"github.com/chtiwa/lk-parfumo-server/controllers"
+	"github.com/chtiwa/lk-parfumo-server/middleware"
 	"github.com/gin-gonic/gin"
 )
 

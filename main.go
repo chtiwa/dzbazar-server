@@ -3,18 +3,18 @@ package main
 import (
 	"fmt"
 
-	"github.com/chtiwa/herbs-store-client/initializers"
-	"github.com/chtiwa/herbs-store-client/middleware"
-	"github.com/chtiwa/herbs-store-client/migrate"
-	"github.com/chtiwa/herbs-store-client/realtime"
-	"github.com/chtiwa/herbs-store-client/routes"
+	"github.com/chtiwa/lk-parfumo-server/initializers"
+	"github.com/chtiwa/lk-parfumo-server/middleware"
+	"github.com/chtiwa/lk-parfumo-server/migrate"
+	"github.com/chtiwa/lk-parfumo-server/realtime"
+	"github.com/chtiwa/lk-parfumo-server/routes"
 	"github.com/gin-gonic/gin"
 )
 
 func init() {
 	initializers.LoadEnvVars()
 	initializers.ConnectToDB()
-	initializers.InitAWS()
+	initializers.InitB2()
 	initializers.InitRedis()
 	migrate.Migrate()
 }

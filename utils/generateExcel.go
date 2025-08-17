@@ -3,7 +3,7 @@ package utils
 import (
 	"fmt"
 
-	"github.com/chtiwa/herbs-store-client/models"
+	"github.com/chtiwa/lk-parfumo-server/models"
 	"github.com/xuri/excelize/v2"
 )
 
