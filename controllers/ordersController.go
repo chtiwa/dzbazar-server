@@ -89,20 +89,25 @@ func GetOrdersBySearch(c *gin.Context) {
 
 func CreateOrder(c *gin.Context) {
 	var body struct {
-		ShopName       string
-		FullName       string
-		PhoneNumber    string
-		State          string
-		StateNumber    uint
-		City           string
-		ProductName    string
-		Variant        string
-		Price          float64
-		ShippingMethod string
-		ShippingPrice  float64
-		Quantity       uint
-		TotalPrice     float64
-		Status         string // to check if the order is abandoned
+		ShopName         string
+		FullName         string
+		PhoneNumber      string
+		State            string
+		StateNumber      uint
+		City             string
+		ProductID        string
+		ProductName      string
+		Variant          string
+		ConversionSource string
+		Price            float64
+		ShippingMethod   string
+		ShippingPrice    float64
+		Quantity         uint
+		TotalPrice       float64
+		Status           string // to check if the order is abandoned
+		FBclid           string
+		FBc              string
+		FBp              string
 	}
 
 	err := c.ShouldBindJSON(&body)
@@ -111,12 +116,22 @@ func CreateOrder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Error while binding the body",
-			"error":   err,
+			"error":   err.Error(),
 		})
 		return
 	}
 
-	order := models.Order{Client: models.Client{FullName: body.FullName, PhoneNumber: body.PhoneNumber, State: body.State, StateNumber: body.StateNumber, City: body.City}, ShopName: body.ShopName, ProductName: body.ProductName, Price: body.Price, Variant: body.Variant, ShippingMethod: body.ShippingMethod, ShippingPrice: body.ShippingPrice, Quantity: body.Quantity, TotalPrice: body.TotalPrice, Status: body.Status}
+	productId, err := uuid.Parse(body.ProductID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Something went wrong while parsing the id",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	order := models.Order{Client: models.Client{FullName: body.FullName, PhoneNumber: body.PhoneNumber, State: body.State, StateNumber: body.StateNumber, City: body.City}, ShopName: body.ShopName, ConversionSource: body.ConversionSource, ProductID: productId, ProductName: body.ProductName, Price: body.Price, Variant: body.Variant, ShippingMethod: body.ShippingMethod, ShippingPrice: body.ShippingPrice, Quantity: body.Quantity, TotalPrice: body.TotalPrice, Status: body.Status, FBclid: body.FBclid, FBc: body.FBc, FBp: body.FBp}
 
 	result := initializers.DB.Create(&order)
 
@@ -128,13 +143,13 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	go func() {
-		err = utils.SendEmail(order.FullName, order.PhoneNumber, order.State, order.City, order.ProductName, order.Variant, order.ShippingMethod, order.Quantity, order.Price, order.ShippingPrice, order.TotalPrice)
+	go func(o models.Order) {
+		err = utils.SendEmail(o.FullName, o.PhoneNumber, o.State, o.City, o.ProductName, o.Variant, o.ShippingMethod, o.Quantity, o.Price, o.ShippingPrice, o.TotalPrice)
 
 		realtime.Broadcast <- realtime.Message{
 			Event: "order_created",
 			Data: map[string]interface{}{
-				"productName": order.ProductName,
+				"productName": o.ProductName,
 			},
 		}
 
@@ -143,14 +158,30 @@ func CreateOrder(c *gin.Context) {
 		if err != nil {
 			fmt.Println(err)
 		}
-	}()
+
+		err = utils.SendFacebookPurchase(
+			o.ID.String(),
+			o.Client.FullName, // replace with email if available
+			o.Client.PhoneNumber,
+			o.TotalPrice,
+			"DZD", // or "USD", "EUR"
+			o.FBc,
+			o.FBp,
+			o.CreatedAt,
+			// o.FBclid,
+		)
+		if err != nil {
+			fmt.Println("Error sending purchase event:", err)
+		} else {
+			fmt.Println("Event was sent successfully")
+		}
+	}(order)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    order,
 	})
 }
-
 func CreateZrOrder(c *gin.Context) {
 	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -249,11 +280,13 @@ func UpdateOrder(c *gin.Context) {
 		State          *string
 		StateNumber    *uint
 		City           *string
+		Variant        *string
 		Price          *float64
 		ShippingMethod *string
 		ShippingPrice  *float64
 		TotalPrice     *float64
 		Status         *string
+		IsShipped      *bool
 	}
 	err = c.ShouldBindJSON(&body)
 
@@ -283,6 +316,45 @@ func UpdateOrder(c *gin.Context) {
 			"message": "Error while retrieving the order",
 		})
 		return
+	}
+
+	// If status was updated to confirmed => send purchase event
+	if body.Status != nil && *body.Status == "Confirmed" {
+		go func(o models.Order) {
+			if o.ConversionSource == "facebook" {
+				err := utils.SendFacebookPurchase(
+					o.ID.String(),
+					o.Client.FullName, // replace with email if available
+					o.Client.PhoneNumber,
+					o.TotalPrice,
+					"DZD", // or "USD", "EUR"
+					o.FBc,
+					o.FBp,
+					o.CreatedAt,
+					// o.FBclid,
+				)
+				if err != nil {
+					fmt.Println("Error sending purchase event:", err)
+				} else {
+					fmt.Println("Event was sent successfully")
+				}
+			} else if o.ConversionSource == "tiktok" {
+				err := utils.SendTikTokPurchase(
+					o.ID.String(),
+					o.Client.FullName, // replace with email if available
+					o.Client.PhoneNumber,
+					o.Ttclid,
+					o.TotalPrice,
+					"DZD",
+					o.CreatedAt,
+				)
+				if err != nil {
+					fmt.Println("Error sending purchase event:", err)
+				} else {
+					fmt.Println("Event was sent successfully")
+				}
+			}
+		}(order)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

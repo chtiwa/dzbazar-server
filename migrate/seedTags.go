@@ -15,8 +15,8 @@ func SeedTags() {
 		tags := []models.Tag{
 			{Name: "homme"},
 			{Name: "femme"},
-			{Name: "Unisex"},
-			{Name: "Collection"},
+			// {Name: "Unisex"},
+			{Name: "collection"},
 		}
 
 		result := initializers.DB.Create(&tags)

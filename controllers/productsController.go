@@ -309,7 +309,7 @@ func GetProducts(c *gin.Context) {
 	}
 
 	// redis key
-	cacheKey := fmt.Sprintf("products:tage=%s:page=%d", tag, page)
+	cacheKey := fmt.Sprintf("products:tag=%s:page=%d", tag, page)
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
 		var cachedReponse map[string]interface{}
@@ -387,7 +387,7 @@ func GetProductsBySearch(c *gin.Context) {
 		query = query.Where("title ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 
-	result := query.Limit(10).Preload("Images").Find(&products)
+	result := query.Limit(10).Preload("Images").Preload("Variants").Preload("Variants.VariantItems").Find(&products)
 
 	if result.Error != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
