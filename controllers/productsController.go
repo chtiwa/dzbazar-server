@@ -381,13 +381,23 @@ func GetProductsBySearch(c *gin.Context) {
 	search := c.Query("search")
 
 	var products []models.Product
+
 	query := initializers.DB.Order("updated_at DESC")
 
 	if search != "" {
-		query = query.Where("title ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
-	}
+		words := strings.Fields(search)
 
-	result := query.Limit(10).Preload("Images").Preload("Variants").Preload("Variants.VariantItems").Find(&products)
+		for _, w := range words {
+			like := "%" + w + "%"
+			query = query.Where("title ILIKE ? OR description ILIKE ?", like, like)
+		}
+	}
+	result := query.
+		Limit(10).
+		Preload("Images").
+		Preload("Variants").
+		Preload("Variants.VariantItems").
+		Find(&products)
 
 	if result.Error != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
