@@ -89,13 +89,13 @@ func GetOrdersBySearch(c *gin.Context) {
 
 func CreateOrder(c *gin.Context) {
 	var body struct {
-		ShopName         string
-		FullName         string
-		PhoneNumber      string
-		State            string
-		StateNumber      uint
-		City             string
-		ProductID        string
+		ShopName    string
+		FullName    string
+		PhoneNumber string
+		State       string
+		StateNumber uint
+		City        string
+		// ProductID        string
 		ProductName      string
 		Variant          string
 		ConversionSource string
@@ -121,17 +121,17 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	productId, err := uuid.Parse(body.ProductID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Something went wrong while parsing the id",
-			"error":   err.Error(),
-		})
-		return
-	}
+	// productId, err := uuid.Parse(body.ProductID)
+	// if err != nil {
+	// 	c.JSON(http.StatusBadRequest, gin.H{
+	// 		"success": false,
+	// 		"message": "Something went wrong while parsing the id",
+	// 		"error":   err.Error(),
+	// 	})
+	// 	return
+	// }
 
-	order := models.Order{Client: models.Client{FullName: body.FullName, PhoneNumber: body.PhoneNumber, State: body.State, StateNumber: body.StateNumber, City: body.City}, ShopName: body.ShopName, ConversionSource: body.ConversionSource, ProductID: productId, ProductName: body.ProductName, Price: body.Price, Variant: body.Variant, ShippingMethod: body.ShippingMethod, ShippingPrice: body.ShippingPrice, Quantity: body.Quantity, TotalPrice: body.TotalPrice, Status: body.Status, FBclid: body.FBclid, FBc: body.FBc, FBp: body.FBp}
+	order := models.Order{Client: models.Client{FullName: body.FullName, PhoneNumber: body.PhoneNumber, State: body.State, StateNumber: body.StateNumber, City: body.City}, ShopName: body.ShopName, ConversionSource: body.ConversionSource, ProductName: body.ProductName, Price: body.Price, Variant: body.Variant, ShippingMethod: body.ShippingMethod, ShippingPrice: body.ShippingPrice, Quantity: body.Quantity, TotalPrice: body.TotalPrice, Status: body.Status, FBclid: body.FBclid, FBc: body.FBc, FBp: body.FBp}
 
 	result := initializers.DB.Create(&order)
 
