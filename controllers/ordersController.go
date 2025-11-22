@@ -169,6 +169,7 @@ func CreateOrder(c *gin.Context) {
 		// for testing the tiktok pixel
 		err = utils.SendTikTokPurchase(
 			o.ID.String(),
+			o.FullName,
 			o.Client.PhoneNumber,
 			o.Ttclid,
 			o.TotalPrice,
@@ -196,6 +197,7 @@ func CreateOrder(c *gin.Context) {
 		} else if o.ConversionSource == "tiktok" {
 			err := utils.SendTikTokPurchase(
 				o.ID.String(),
+				o.FullName,
 				o.Client.PhoneNumber,
 				o.Ttclid,
 				o.TotalPrice,
