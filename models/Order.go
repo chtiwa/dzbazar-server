@@ -6,7 +6,7 @@ type Client struct {
 	FullName    string `json:"fullName"`
 	PhoneNumber string `json:"phoneNumber"`
 	State       string `json:"state"`
-	StateNumber uint   `json:"stateNumber"`
+	StateNumber string `json:"stateNumber"`
 	City        string `json:"city"`
 }
 

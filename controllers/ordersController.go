@@ -93,7 +93,7 @@ func CreateOrder(c *gin.Context) {
 		FullName    string
 		PhoneNumber string
 		State       string
-		StateNumber uint
+		StateNumber string
 		City        string
 		// ProductID        string
 		ProductName      string
@@ -303,7 +303,7 @@ func UpdateOrder(c *gin.Context) {
 		FullName       *string
 		PhoneNumber    *string
 		State          *string
-		StateNumber    *uint
+		StateNumber    *string
 		City           *string
 		Variant        *string
 		Price          *float64
