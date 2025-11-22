@@ -181,7 +181,7 @@ func CreateOrder(c *gin.Context) {
 			if err != nil {
 				fmt.Println("Error sending purchase event:", err)
 			} else {
-				fmt.Println("Event was sent successfully")
+				fmt.Println("Facebook Event was sent successfully")
 			}
 		} else if o.ConversionSource == "tiktok" {
 			err := utils.SendTikTokPurchase(
@@ -196,7 +196,7 @@ func CreateOrder(c *gin.Context) {
 			if err != nil {
 				fmt.Println("Error sending purchase event:", err)
 			} else {
-				fmt.Println("Event was sent successfully")
+				fmt.Println("Tiktok Event was sent successfully")
 			}
 		}
 	}(order)
