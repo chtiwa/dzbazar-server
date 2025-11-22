@@ -17,6 +17,10 @@ func Migrate() {
 		log.Fatal("Something went wrong while migrating")
 	}
 
+	status := initializers.RClient.Set(initializers.Ctx, "promo:pack3:remaining", 87, 0)
+
+	fmt.Println(status)
+
 	SeedUsers()
 	SeedTags()
 	fmt.Println("Migration was successful!")

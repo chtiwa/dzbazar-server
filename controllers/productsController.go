@@ -47,6 +47,25 @@ type CreateProductInput struct {
 	Tags        []string       `json:"tags"`
 }
 
+func GetPromoRemaining(c *gin.Context) {
+	remaining, err := initializers.RClient.Get(initializers.Ctx, "promo:pack3:remaining").Int()
+
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Something went wrong while retrieving the remaining amount",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"message":   "Promo count retrieved successfully",
+		"remaining": max(remaining, 0),
+	})
+}
+
 // check admin
 func CreateProduct(c *gin.Context) {
 	title := c.PostForm("title")

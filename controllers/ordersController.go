@@ -108,6 +108,7 @@ func CreateOrder(c *gin.Context) {
 		FBclid           string
 		FBc              string
 		FBp              string
+		Ttclid           string
 	}
 
 	err := c.ShouldBindJSON(&body)
@@ -131,7 +132,7 @@ func CreateOrder(c *gin.Context) {
 	// 	return
 	// }
 
-	order := models.Order{Client: models.Client{FullName: body.FullName, PhoneNumber: body.PhoneNumber, State: body.State, StateNumber: body.StateNumber, City: body.City}, ShopName: body.ShopName, ConversionSource: body.ConversionSource, ProductName: body.ProductName, Price: body.Price, Variant: body.Variant, ShippingMethod: body.ShippingMethod, ShippingPrice: body.ShippingPrice, Quantity: body.Quantity, TotalPrice: body.TotalPrice, Status: body.Status, FBclid: body.FBclid, FBc: body.FBc, FBp: body.FBp}
+	order := models.Order{Client: models.Client{FullName: body.FullName, PhoneNumber: body.PhoneNumber, State: body.State, StateNumber: body.StateNumber, City: body.City}, ShopName: body.ShopName, ConversionSource: body.ConversionSource, ProductName: body.ProductName, Price: body.Price, Variant: body.Variant, ShippingMethod: body.ShippingMethod, ShippingPrice: body.ShippingPrice, Quantity: body.Quantity, TotalPrice: body.TotalPrice, Status: body.Status, FBclid: body.FBclid, FBc: body.FBc, FBp: body.FBp, Ttclid: body.Ttclid}
 
 	result := initializers.DB.Create(&order)
 
@@ -141,6 +142,12 @@ func CreateOrder(c *gin.Context) {
 			"message": "Error while creating the order",
 		})
 		return
+	}
+
+	remaining, err := initializers.RClient.Decr(initializers.Ctx, "promo:pack3:remaining").Result()
+
+	if err != nil {
+		fmt.Printf("Soemthing went wrong while decreasing the promo count in redis, %v\n", remaining)
 	}
 
 	go func(o models.Order) {
@@ -159,21 +166,47 @@ func CreateOrder(c *gin.Context) {
 			fmt.Println(err)
 		}
 
-		err = utils.SendFacebookPurchase(
+		// for testing the tiktok pixel
+		err = utils.SendTikTokPurchase(
 			o.ID.String(),
-			o.Client.FullName, // replace with email if available
 			o.Client.PhoneNumber,
+			o.Ttclid,
 			o.TotalPrice,
-			"DZD", // or "USD", "EUR"
-			o.FBc,
-			o.FBp,
+			"DZD",
 			o.CreatedAt,
-			// o.FBclid,
 		)
-		if err != nil {
-			fmt.Println("Error sending purchase event:", err)
-		} else {
-			fmt.Println("Event was sent successfully")
+
+		if o.ConversionSource == "facebook" {
+			err := utils.SendFacebookPurchase(
+				o.ID.String(),
+				o.Client.FullName, // replace with email if available
+				o.Client.PhoneNumber,
+				o.TotalPrice,
+				"DZD", // or "USD", "EUR"
+				o.FBc,
+				o.FBp,
+				o.CreatedAt,
+				// o.FBclid,
+			)
+			if err != nil {
+				fmt.Println("Error sending purchase event:", err)
+			} else {
+				fmt.Println("Event was sent successfully")
+			}
+		} else if o.ConversionSource == "tiktok" {
+			err := utils.SendTikTokPurchase(
+				o.ID.String(),
+				o.Client.PhoneNumber,
+				o.Ttclid,
+				o.TotalPrice,
+				"DZD",
+				o.CreatedAt,
+			)
+			if err != nil {
+				fmt.Println("Error sending purchase event:", err)
+			} else {
+				fmt.Println("Event was sent successfully")
+			}
 		}
 	}(order)
 
@@ -182,6 +215,7 @@ func CreateOrder(c *gin.Context) {
 		"data":    order,
 	})
 }
+
 func CreateZrOrder(c *gin.Context) {
 	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -316,45 +350,6 @@ func UpdateOrder(c *gin.Context) {
 			"message": "Error while retrieving the order",
 		})
 		return
-	}
-
-	// If status was updated to confirmed => send purchase event
-	if body.Status != nil && *body.Status == "Confirmed" {
-		go func(o models.Order) {
-			if o.ConversionSource == "facebook" {
-				err := utils.SendFacebookPurchase(
-					o.ID.String(),
-					o.Client.FullName, // replace with email if available
-					o.Client.PhoneNumber,
-					o.TotalPrice,
-					"DZD", // or "USD", "EUR"
-					o.FBc,
-					o.FBp,
-					o.CreatedAt,
-					// o.FBclid,
-				)
-				if err != nil {
-					fmt.Println("Error sending purchase event:", err)
-				} else {
-					fmt.Println("Event was sent successfully")
-				}
-			} else if o.ConversionSource == "tiktok" {
-				err := utils.SendTikTokPurchase(
-					o.ID.String(),
-					o.Client.FullName, // replace with email if available
-					o.Client.PhoneNumber,
-					o.Ttclid,
-					o.TotalPrice,
-					"DZD",
-					o.CreatedAt,
-				)
-				if err != nil {
-					fmt.Println("Error sending purchase event:", err)
-				} else {
-					fmt.Println("Event was sent successfully")
-				}
-			}
-		}(order)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

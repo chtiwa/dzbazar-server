@@ -22,5 +22,6 @@ func ProductsRoutes(router *gin.Engine) {
 		products.GET("/all-tags", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.GetAllTags)
 		products.DELETE("/tags/:id", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.DeleteTag)
 		products.POST("/tags", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.CreateTag)
+		products.GET("/promo", controllers.GetPromoRemaining)
 	}
 }
