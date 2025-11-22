@@ -69,7 +69,7 @@ func SendTikTokPurchase(orderID, fullName, phone, ttclid string, value float64, 
 				Callback: ttclid, // Optional but recommended
 			},
 			Page: TikTokPageContext{
-				URL: "https://flodybox.com",
+				URL: "https://lkparfumo.com",
 			},
 			User: TikTokUserContext{
 				PhoneNumber: hashedPhone,
