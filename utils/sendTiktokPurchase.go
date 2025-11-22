@@ -78,10 +78,9 @@ func SendTikTokPurchase(orderID, fullName, phone, ttclid string, value float64, 
 			},
 		},
 		Properties: map[string]interface{}{
-			"currency":        currency,
-			"value":           value,
-			"contents":        []map[string]interface{}{{"content_id": orderID, "content_type": "product"}},
-			"test_event_code": "TEST01620", // <- Add this line for testing
+			"currency": currency,
+			"value":    value,
+			"contents": []map[string]interface{}{{"content_id": orderID, "content_type": "product"}},
 		},
 	}
 
