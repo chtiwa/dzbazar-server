@@ -37,6 +37,7 @@ type TikTokUserContext struct {
 	PhoneNumber  string `json:"phone_number,omitempty"` // SHA256 hashed
 	Email        string `json:"email,omitempty"`
 	ClientUserID string `json:"client_user_id,omitempty"`
+	ExternalID   string `json:"external_id,omitempty"`
 }
 
 type TikTokPayload struct {
@@ -47,7 +48,7 @@ type TikTokPayload struct {
 }
 
 // SendTikTokPurchase sends a purchase event via TikTok CAPI
-func SendTikTokPurchase(orderID, phone, ttclid string, value float64, currency string, createdAt time.Time) error {
+func SendTikTokPurchase(orderID, fullName, phone, ttclid string, value float64, currency string, createdAt time.Time) error {
 	pixelID := os.Getenv("TIKTOK_PIXEL_ID")
 	accessToken := os.Getenv("TIKTOK_ACCESS_TOKEN")
 
@@ -58,33 +59,34 @@ func SendTikTokPurchase(orderID, phone, ttclid string, value float64, currency s
 	url := "https://business-api.tiktok.com/open_api/v1.3/event/track/"
 
 	hashedPhone := hashData(phone)
+	hashedName := hashData(fullName)
 
 	event := TikTokEvent{
-		Event:     "Purchase", // TikTok's Purchase event
+		Event:     "CompletePayment",
 		EventID:   orderID,
 		Timestamp: createdAt.Unix(),
 		Context: TikTokContext{
 			Ad: TikTokAdContext{
-				Callback: ttclid, // optional, only if available
+				Callback: ttclid,
 			},
 			Page: TikTokPageContext{
 				URL: "https://lkparfumo.com",
 			},
 			User: TikTokUserContext{
-				PhoneNumber: hashedPhone, // required if no email
+				PhoneNumber: hashedPhone,
+				ExternalID:  hashedName,
 			},
 		},
 		Properties: map[string]interface{}{
-			"currency": currency,
-			"value":    value,
-			"contents": []map[string]interface{}{
-				{"content_id": orderID, "quantity": 1, "content_type": "product"},
-			},
+			"currency":        currency,
+			"value":           value,
+			"contents":        []map[string]interface{}{{"content_id": orderID, "content_type": "product"}},
+			"test_event_code": "TEST01620", // <- Add this line for testing
 		},
 	}
 
 	payload := TikTokPayload{
-		EventSource:   "server", // must be "server" for server-side events
+		EventSource:   "web",
 		EventSourceID: pixelID,
 		PartnerName:   "Lkparfumo",
 		Data:          []TikTokEvent{event},
@@ -95,9 +97,6 @@ func SendTikTokPurchase(orderID, phone, ttclid string, value float64, currency s
 		return fmt.Errorf("failed to marshal payload: %v", err)
 	}
 
-	// Debug log
-	fmt.Printf("Sending TikTok payload: %s\n", string(jsonData))
-
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
@@ -105,7 +104,7 @@ func SendTikTokPurchase(orderID, phone, ttclid string, value float64, currency s
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Access-Token", accessToken)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %v", err)
