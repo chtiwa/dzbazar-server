@@ -5,8 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/sendgrid/sendgrid-go"
-	"github.com/sendgrid/sendgrid-go/helpers/mail"
+	"github.com/resendlabs/resend-go"
 )
 
 func SendEmail(
@@ -15,12 +14,10 @@ func SendEmail(
 	price, shippingPrice, totalPrice float64,
 ) error {
 
-	from := mail.NewEmail("LK Parfumo", "support@lkparfumo.com")
-	subject := "Nouvelle Commande (LK Parfumo)"
-
-	// Recipients
-	to1 := mail.NewEmail("Sifeddine Djeddid", "chtiwaa@gmail.com")
-	// to2 := mail.NewEmail("Admin", "lakhalzineddine12@gmail.com")
+	client := resend.NewClient(os.Getenv("RESEND_API_KEY"))
+	if client == nil {
+		return fmt.Errorf("failed to initialize Resend client")
+	}
 
 	// HTML body
 	htmlContent := fmt.Sprintf(`
@@ -62,34 +59,28 @@ func SendEmail(
 	</html>`,
 		fullName, phoneNumber, state, city, productName, variant, quantity, price, shippingMethod, shippingPrice, totalPrice)
 
-	// Build the message
-	message := mail.NewV3Mail()
-	message.SetFrom(from)
-	message.Subject = subject
-
-	// Personalization: add both recipients
-	personalization := mail.NewPersonalization()
-	// personalization.AddTos(to1, to2)
-	personalization.AddTos(to1)
-	message.AddPersonalizations(personalization)
-
-	// Add HTML content
-	content := mail.NewContent("text/html", htmlContent)
-	message.AddContent(content)
+	// Build the email request
+	params := &resend.SendEmailRequest{
+		From:    "LK Parfumo <contact@lkparfumo.com>",
+		To:      []string{"chtiwaa@gmail.com"},           // Primary recipient
+		Cc:      []string{"lakhalzineddine12@gmail.com"}, // Uncomment to add CC recipient
+		Subject: "Nouvelle Commande (Flody Box)",
+		Html:    htmlContent,
+	}
 
 	// Send the email
-	client := sendgrid.NewSendClient(os.Getenv("SENDGRID_API_KEY"))
-	response, err := client.Send(message)
+	resp, err := client.Emails.Send(params)
 	if err != nil {
-		log.Printf("SendGrid error: %v\n", err)
-		return err
+		log.Printf("Resend error: %v\n", err)
+		return fmt.Errorf("resend error: %v", err)
 	}
 
-	if response.StatusCode >= 400 {
-		log.Printf("SendGrid response error: Status %d, Body: %s\n", response.StatusCode, response.Body)
-		return fmt.Errorf("sendgrid error: status %d", response.StatusCode)
+	// Check for non-200 status (Resend doesn't return status codes directly, but we check response ID)
+	if resp.Id == "" {
+		log.Printf("Resend response error: empty response ID")
+		return fmt.Errorf("resend error: failed to send email")
 	}
 
-	log.Printf("Email sent successfully: Status %d\n", response.StatusCode)
+	log.Printf("Email sent successfully: ID %s\n", resp.Id)
 	return nil
 }
