@@ -29,5 +29,5 @@ Content-Type: application/json
     "shippingPrice":800,
     "shippingMethod":"Home",
     "totalPrice":3200,
-    "conversionSource":"tiktok"
+    "conversionSource":"facebook"
 }

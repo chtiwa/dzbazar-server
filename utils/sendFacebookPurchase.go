@@ -35,7 +35,7 @@ func SendFacebookPurchase(orderID, fullName, phone string, value float64, curren
 		return fmt.Errorf("missing FACEBOOK_PIXEL_ID or FACEBOOK_ACCESS_TOKEN")
 	}
 
-	url := fmt.Sprintf("https://graph.facebook.com/v23.0/%s/events?access_token=%s", pixelID, accessToken)
+	url := fmt.Sprintf("https://graph.facebook.com/v24.0/%s/events?access_token=%s", pixelID, accessToken)
 
 	// normalize phone
 	phone = strings.TrimSpace(phone)
