@@ -151,7 +151,7 @@ func CreateOrder(c *gin.Context) {
 	}
 
 	go func(o models.Order) {
-		err = utils.SendEmail(o.FullName, o.PhoneNumber, o.State, o.City, o.ProductName, o.Variant, o.ShippingMethod, o.Quantity, o.Price, o.ShippingPrice, o.TotalPrice)
+		// err := utils.SendEmail(o.FullName, o.PhoneNumber, o.State, o.City, o.ProductName, o.Variant, o.ShippingMethod, o.Quantity, o.Price, o.ShippingPrice, o.TotalPrice)
 
 		realtime.Broadcast <- realtime.Message{
 			Event: "order_created",
@@ -167,6 +167,8 @@ func CreateOrder(c *gin.Context) {
 		}
 
 		if o.ConversionSource == "facebook" {
+			// uncomment for testing
+			testCode := os.Getenv("FACEBOOK_TEST_CODE")
 			err := utils.SendFacebookPurchase(
 				o.ID.String(),
 				o.Client.FullName, // replace with email if available
@@ -177,6 +179,7 @@ func CreateOrder(c *gin.Context) {
 				o.FBp,
 				o.CreatedAt,
 				// o.FBclid,
+				testCode,
 			)
 			if err != nil {
 				fmt.Println("Error sending purchase event:", err)
@@ -184,14 +187,18 @@ func CreateOrder(c *gin.Context) {
 				fmt.Println("Facebook Event was sent successfully")
 			}
 		} else if o.ConversionSource == "tiktok" {
+			// uncomment for testing
+			testCode := os.Getenv("TIKTOK_TEST_CODE")
 			err := utils.SendTikTokPurchase(
 				o.ID.String(),
+				o.ProductName,
 				o.FullName,
 				o.Client.PhoneNumber,
 				o.Ttclid,
 				o.TotalPrice,
 				"DZD",
 				o.CreatedAt,
+				testCode,
 			)
 			if err != nil {
 				fmt.Println("Error sending purchase event:", err)

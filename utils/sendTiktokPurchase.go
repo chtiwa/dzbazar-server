@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -13,7 +14,7 @@ import (
 type TikTokEvent struct {
 	Event      string                 `json:"event"`
 	EventID    string                 `json:"event_id"`
-	Timestamp  int64                  `json:"timestamp"`
+	EventTime  int64                  `json:"event_time"`
 	Context    TikTokContext          `json:"context"`
 	Properties map[string]interface{} `json:"properties"`
 }
@@ -36,6 +37,8 @@ type TikTokPageContext struct {
 type TikTokUserContext struct {
 	PhoneNumber  string `json:"phone_number,omitempty"` // SHA256 hashed
 	Email        string `json:"email,omitempty"`
+	FirstName    string `json:"first_name,omitempty"`
+	LastName     string `json:"last_name,omitempty"`
 	ClientUserID string `json:"client_user_id,omitempty"`
 	ExternalID   string `json:"external_id,omitempty"`
 }
@@ -45,10 +48,11 @@ type TikTokPayload struct {
 	EventSourceID string        `json:"event_source_id"` // your pixel ID
 	PartnerName   string        `json:"partner_name"`
 	Data          []TikTokEvent `json:"data"`
+	TestEventCode string        `json:"test_event_code,omitempty"`
 }
 
 // SendTikTokPurchase sends a purchase event via TikTok CAPI
-func SendTikTokPurchase(orderID, fullName, phone, ttclid string, value float64, currency string, createdAt time.Time) error {
+func SendTikTokPurchase(orderID, productName, fullName, phone, ttclid string, value float64, currency string, createdAt time.Time, testCode string) error {
 	pixelID := os.Getenv("TIKTOK_PIXEL_ID")
 	accessToken := os.Getenv("TIKTOK_ACCESS_TOKEN")
 
@@ -59,12 +63,23 @@ func SendTikTokPurchase(orderID, fullName, phone, ttclid string, value float64, 
 	url := "https://business-api.tiktok.com/open_api/v1.3/event/track/"
 
 	hashedPhone := hashData(phone)
-	hashedName := hashData(fullName)
+	parts := strings.Split(fullName, " ")
+	first := parts[0]
+	last := ""
+	if len(parts) > 1 {
+		last = parts[len(parts)-1]
+	}
+
+	var hashedFirstName, hashedLastName string
+	hashedFirstName = hashData(first)
+	if last != "" {
+		hashedLastName = hashData((last))
+	}
 
 	event := TikTokEvent{
-		Event:     "CompletePayment",
+		Event:     "Purchase",
 		EventID:   orderID,
-		Timestamp: createdAt.Unix(),
+		EventTime: createdAt.Unix(),
 		Context: TikTokContext{
 			Ad: TikTokAdContext{
 				Callback: ttclid,
@@ -73,22 +88,25 @@ func SendTikTokPurchase(orderID, fullName, phone, ttclid string, value float64, 
 				URL: "https://lkparfumo.com",
 			},
 			User: TikTokUserContext{
+				FirstName:   hashedFirstName,
+				LastName:    hashedLastName,
 				PhoneNumber: hashedPhone,
-				ExternalID:  hashedName,
+				ExternalID:  orderID,
 			},
 		},
 		Properties: map[string]interface{}{
 			"currency": currency,
 			"value":    value,
-			"contents": []map[string]interface{}{{"content_id": orderID, "content_type": "product"}},
+			"contents": []map[string]interface{}{{"content_id": orderID, "content_type": productName}},
 		},
 	}
 
 	payload := TikTokPayload{
 		EventSource:   "web",
 		EventSourceID: pixelID,
-		PartnerName:   "Lkparfumo",
+		PartnerName:   "",
 		Data:          []TikTokEvent{event},
+		TestEventCode: testCode,
 	}
 
 	jsonData, err := json.Marshal(payload)

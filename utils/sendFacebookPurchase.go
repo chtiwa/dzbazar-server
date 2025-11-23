@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -26,7 +27,7 @@ type FacebookPayload struct {
 }
 
 // SendFacebookPurchase fires a confirmed purchase event via Conversion API
-func SendFacebookPurchase(orderID, fullName, phone string, value float64, currency, fbc, fbp string, createdAt time.Time) error {
+func SendFacebookPurchase(orderID, fullName, phone string, value float64, currency, fbc, fbp string, createdAt time.Time, testCode string) error {
 	pixelID := os.Getenv("FACEBOOK_PIXEL_ID")
 	accessToken := os.Getenv("FACEBOOK_ACCESS_TOKEN")
 
@@ -36,14 +37,33 @@ func SendFacebookPurchase(orderID, fullName, phone string, value float64, curren
 
 	url := fmt.Sprintf("https://graph.facebook.com/v23.0/%s/events?access_token=%s", pixelID, accessToken)
 
-	// Hash email and phone (SHA256)
-	hashedFullname := hashData(fullName)
+	// normalize phone
+	phone = strings.TrimSpace(phone)
+	// Hash phone (SHA256)
 	hashedPhone := hashData(phone)
+
+	parts := strings.Split(fullName, " ")
+	first := parts[0]
+	last := ""
+	if len(parts) > 1 {
+		last = parts[len(parts)-1]
+	}
+
+	// normalize first and last name
+	first = strings.ToLower(strings.TrimSpace(first))
+	last = strings.ToLower(strings.TrimSpace(last))
+	var hashedFirstName, hashedLastName string
+
+	// Hash fn and ln (SHA256)
+	hashedFirstName = hashData(first)
+	if last != "" {
+		hashedLastName = hashData((last))
+	}
 
 	// Include fbp and fbc in user_data
 	userData := map[string]interface{}{
-		"fn":  hashedFullname,
-		"ln":  hashedFullname,
+		"fn":  hashedFirstName,
+		"ln":  hashedLastName,
 		"ph":  hashedPhone,
 		"fbp": fbp,
 		"fbc": fbc,
@@ -59,14 +79,14 @@ func SendFacebookPurchase(orderID, fullName, phone string, value float64, curren
 		EventName:      "Purchase",
 		EventTime:      createdAt.Unix(),
 		ActionSource:   "website",
-		EventSourceURL: "https://flodybox.com",
+		EventSourceURL: "https://lkparfumo.com",
 		UserData:       userData,
 		CustomData:     customData,
 	}
 
 	payload := FacebookPayload{
-		Data: []FacebookEvent{event},
-		// TestEventCode: "TEST95444", // Uncomment for testing
+		Data:          []FacebookEvent{event},
+		TestEventCode: testCode,
 	}
 
 	jsonData, err := json.Marshal(payload)
