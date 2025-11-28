@@ -64,7 +64,7 @@ func SendEmail(
 		From:    "LK Parfumo <contact@lkparfumo.com>",
 		To:      []string{"chtiwaa@gmail.com"},           // Primary recipient
 		Cc:      []string{"lakhalzineddine12@gmail.com"}, // Uncomment to add CC recipient
-		Subject: "Nouvelle Commande (Flody Box)",
+		Subject: "Nouvelle Commande (LK Parfumo)",
 		Html:    htmlContent,
 	}
 

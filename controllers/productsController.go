@@ -70,6 +70,7 @@ func GetPromoRemaining(c *gin.Context) {
 func CreateProduct(c *gin.Context) {
 	title := c.PostForm("title")
 	price := c.PostForm("price")
+	brand := c.PostForm("brand")
 	description := c.PostForm("description")
 
 	if title == "" || price == "" || description == "" {
@@ -202,6 +203,7 @@ func CreateProduct(c *gin.Context) {
 	product := models.Product{
 		Title:       title,
 		Description: description,
+		Brand:       brand,
 		Price:       parsedPrice,
 		Tags:        tags,
 	}
@@ -477,6 +479,7 @@ func GetProduct(c *gin.Context) {
 	response := dto.ProductResponse{
 		ID:          product.ID.String(),
 		Title:       product.Title,
+		Brand:       product.Brand,
 		Description: product.Description,
 		Price:       product.Price,
 		OldPrice:    product.OldPrice,
@@ -543,6 +546,7 @@ func UpdateProduct(c *gin.Context) {
 	var body struct {
 		Title       string   `json:"title"`
 		Description string   `json:"description"`
+		Brand       string   `json:"brand"`
 		Price       float64  `json:"price"`
 		OldPrice    float64  `json:"oldPrice"`
 		Active      bool     `json:"active"`
@@ -576,6 +580,9 @@ func UpdateProduct(c *gin.Context) {
 	}
 	if body.Description != "" {
 		product.Description = body.Description
+	}
+	if body.Brand != "" {
+		product.Brand = body.Brand
 	}
 	if body.Price != 0 {
 		product.Price = body.Price
@@ -667,8 +674,14 @@ func UpdateProduct(c *gin.Context) {
 
 	// delete the cached key in redis
 	cacheKey := fmt.Sprintf("product:id=%s", id)
-	if err := initializers.RClient.Del(initializers.Ctx, cacheKey).Err(); err != nil {
-		fmt.Println("Failed to delete the product cache key")
+	err = initializers.RClient.Del(
+		initializers.Ctx,
+		cacheKey,
+		"products",
+	).Err()
+
+	if err != nil {
+		fmt.Println("Failed to delete Redis cache keys:", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
