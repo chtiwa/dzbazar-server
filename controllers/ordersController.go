@@ -323,6 +323,7 @@ func UpdateOrder(c *gin.Context) {
 		TotalPrice     *float64
 		Status         *string
 		IsShipped      *bool
+		Note           *string
 	}
 	err = c.ShouldBindJSON(&body)
 
