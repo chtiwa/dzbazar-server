@@ -22,7 +22,7 @@ type Order struct {
 	ShippingMethod   string  `json:"shippingMethod"`
 	ShippingPrice    float64 `json:"shippingPrice"`
 	TotalPrice       float64 `json:"totalPrice"`
-	Status           string  `gorm:"default:Pending" json:"status"`
+	Status           string  `gorm:"default:En attente" json:"status"`
 	FBclid           string  `json:"fbclid"`
 	FBc              string  `json:"fbc"`
 	FBp              string  `json:"fbp"`

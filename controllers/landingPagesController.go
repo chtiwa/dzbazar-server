@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/chtiwa/lk-parfumo-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func CreateLandingPage(c *gin.Context) {
@@ -59,10 +61,12 @@ func CreateLandingPage(c *gin.Context) {
 	tx := initializers.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
+			fmt.Println("PANIC:", r)
+			debug.PrintStack()
 			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
-				"message": "Internal server error",
+				"error":   fmt.Sprintf("%v", r),
 			})
 		}
 	}()
@@ -106,7 +110,7 @@ func CreateLandingPage(c *gin.Context) {
 
 	// upload the landing page images
 	var landingPageImages []models.LandingPageImage
-	for _, file := range files {
+	for index, file := range files {
 		src, err := file.Open()
 		if err != nil {
 			tx.Rollback()
@@ -141,7 +145,7 @@ func CreateLandingPage(c *gin.Context) {
 		landingPageImages = append(landingPageImages, models.LandingPageImage{
 			LandingPageID: landingPage.ID,
 			URL:           url,
-			// OrderIndex: 0,
+			OrderIndex:    index,
 		})
 	}
 
@@ -226,7 +230,9 @@ func IndexLandingPage(c *gin.Context) {
 	var ladingPage models.LandingPage
 
 	// get the landing page
-	result := initializers.DB.Preload("Images").Preload("Product").Preload("Product.Variants").Preload("Product.Variants.VariantItems").First(&ladingPage, id)
+	result := initializers.DB.Preload("Images", func(db *gorm.DB) *gorm.DB {
+		return db.Order("order_index ASC")
+	}).Preload("Product").Preload("Product.Variants").Preload("Product.Variants.VariantItems").First(&ladingPage, id)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

@@ -32,6 +32,7 @@ func RequireAuthentication(c *gin.Context) {
 			id, _ := uuid.Parse(claims["sub"].(string))
 			if result := initializers.DB.First(&user, id); result.Error == nil {
 				c.Set("user", user)
+				c.Set("role", user.Role)
 				c.Next()
 				return
 			}
@@ -59,6 +60,7 @@ func RequireAuthentication(c *gin.Context) {
 				c.SetCookie("AccessToken", accessTokenString, 60*15, "/", "", false, true)
 
 				c.Set("user", user)
+				c.Set("role", user.Role)
 				c.Next()
 				return
 			}
