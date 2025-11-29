@@ -15,6 +15,7 @@ import (
 type FacebookEvent struct {
 	EventName      string                 `json:"event_name"`
 	EventTime      int64                  `json:"event_time"`
+	EventId        string                 `json:"event_id"`
 	EventSourceURL string                 `json:"event_source_url,omitempty"`
 	ActionSource   string                 `json:"action_source"`
 	UserData       map[string]interface{} `json:"user_data"`
@@ -78,6 +79,7 @@ func SendFacebookPurchase(orderID, fullName, phone string, value float64, curren
 	event := FacebookEvent{
 		EventName:      "Purchase",
 		EventTime:      createdAt.Unix(),
+		EventId:        orderID,
 		ActionSource:   "website",
 		EventSourceURL: "https://lkparfumo.com",
 		UserData:       userData,

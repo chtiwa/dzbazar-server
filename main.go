@@ -30,7 +30,8 @@ func main() {
 	routes.OrdersRoutes(router)
 	routes.UsersRoutes(router)
 	routes.ProductsRoutes(router)
-	routes.WebSocketRoutes(router)
+	routes.LandingPagesRoutes(router)
+	// routes.WebSocketRoutes(router)
 
 	go realtime.StartHub()
 

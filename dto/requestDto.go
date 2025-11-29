@@ -14,3 +14,9 @@ type UpdateProductsImageInput struct {
 	ID  string `json:"id"`
 	URL string `json:"url"`
 }
+
+type UpdateLandingPageImageInput struct {
+	ID         string `json:"id"`
+	URL        string `json:"url"`
+	OrderIndex int    `json:"orderIndex"`
+}

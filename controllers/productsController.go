@@ -66,7 +66,6 @@ func GetPromoRemaining(c *gin.Context) {
 	})
 }
 
-// check admin
 func CreateProduct(c *gin.Context) {
 	title := c.PostForm("title")
 	price := c.PostForm("price")
@@ -410,7 +409,7 @@ func GetProductsBySearch(c *gin.Context) {
 
 		for _, w := range words {
 			like := "%" + w + "%"
-			query = query.Where("title ILIKE ? OR description ILIKE ?", like, like)
+			query = query.Where("title ILIKE ? OR description ILIKE ? OR brand ILIKE ?", like, like, like)
 		}
 	}
 	result := query.
@@ -458,9 +457,8 @@ func GetProduct(c *gin.Context) {
 				"message": "product was retrieved successfully (from cache)",
 				"data":    cachedResponse,
 			})
-			return // crucial: avoid continuing to DB query
+			return
 		}
-		// if unmarshaling failed, fall through to DB fetch
 	}
 
 	var product models.Product

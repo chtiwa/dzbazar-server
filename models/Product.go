@@ -25,3 +25,19 @@ type Tag struct {
 	ID   uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey" json:"id"`
 	Name string    `gorm:"unique;not null" json:"name"`
 }
+
+type LandingPage struct {
+	BaseModel
+	ProductID uuid.UUID          `gorm:"not null" json:"productId"`
+	Product   Product            `gorm:"foreignKey:ProductID;references:ID" json:"product"`
+	Title     string             `gorm:"not null" json:"title"`
+	Images    []LandingPageImage `gorm:"foreignKey:LandingPageID;constraint:OnDelete:CASCADE" json:"images"`
+	Active    bool               `gorm:"default:true" json:"active"`
+}
+
+type LandingPageImage struct {
+	BaseModel
+	LandingPageID uuid.UUID `gorm:"not null" json:"landingPageID"`
+	URL           string    `gorm:"not null" json:"url"`
+	OrderIndex    int       `gorm:"not null;default:0" json:"orderIndex"`
+}

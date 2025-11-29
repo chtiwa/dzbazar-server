@@ -151,7 +151,15 @@ func CreateOrder(c *gin.Context) {
 	}
 
 	go func(o models.Order) {
-		err := utils.SendEmail(o.FullName, o.PhoneNumber, o.State, o.City, o.ProductName, o.Variant, o.ShippingMethod, o.Quantity, o.Price, o.ShippingPrice, o.TotalPrice)
+		testCode := os.Getenv("FACEBOOK_TEST_CODE")
+		// only send the emails on production
+		if testCode == "" {
+			err := utils.SendEmail(o.FullName, o.PhoneNumber, o.State, o.City, o.ProductName, o.Variant, o.ShippingMethod, o.Quantity, o.Price, o.ShippingPrice, o.TotalPrice)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+		}
 
 		realtime.Broadcast <- realtime.Message{
 			Event: "order_created",
@@ -161,10 +169,6 @@ func CreateOrder(c *gin.Context) {
 		}
 
 		fmt.Println("event broadcast")
-
-		if err != nil {
-			fmt.Println(err)
-		}
 
 		if o.ConversionSource == "facebook" {
 			// uncomment for testing
