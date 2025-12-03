@@ -372,6 +372,13 @@ func GetProducts(c *gin.Context) {
 	}
 
 	result := db.Order("products.updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&products)
+
+	// if it's not the admin then only fetch the active products
+	role, ok := c.Get("Role")
+	if !ok && role != "Admin" {
+		result = result.Where("active = ?", true)
+	}
+
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

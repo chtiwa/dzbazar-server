@@ -83,6 +83,7 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 
+	// TODO : add password later for admins to change
 	var body struct {
 		Username *string
 		Role     *string
@@ -170,12 +171,22 @@ func Login(c *gin.Context) {
 	c.SetCookie("AccessToken", accessTokenString, 60*15, "", "", false, true)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
+		"role":    user.Role,
 	})
 }
 
 func Validate(c *gin.Context) {
+	role, ok := c.Get("role")
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error while fetching the role",
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
+		"role":    role,
 	})
 }
 

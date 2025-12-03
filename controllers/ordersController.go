@@ -214,7 +214,8 @@ func CreateOrder(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    order,
+		// "data":    order,
+		"message": "The order was created successfully",
 	})
 }
 
