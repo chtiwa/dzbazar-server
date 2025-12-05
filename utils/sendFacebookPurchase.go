@@ -28,7 +28,7 @@ type FacebookPayload struct {
 }
 
 // SendFacebookPurchase fires a confirmed purchase event via Conversion API
-func SendFacebookPurchase(orderID, fullName, phone string, value float64, currency, fbc, fbp string, createdAt time.Time, testCode string) error {
+func SendFacebookPurchase(orderID, fullName, phone string, value float64, currency, fbc, fbp string, createdAt time.Time, clientUserAgent, clientIP, testCode string) error {
 	pixelID := os.Getenv("FACEBOOK_PIXEL_ID")
 	accessToken := os.Getenv("FACEBOOK_ACCESS_TOKEN")
 
@@ -63,11 +63,13 @@ func SendFacebookPurchase(orderID, fullName, phone string, value float64, curren
 
 	// Include fbp and fbc in user_data
 	userData := map[string]interface{}{
-		"fn":  hashedFirstName,
-		"ln":  hashedLastName,
-		"ph":  hashedPhone,
-		"fbp": fbp,
-		"fbc": fbc,
+		"fn":                hashedFirstName,
+		"ln":                hashedLastName,
+		"ph":                hashedPhone,
+		"fbp":               hashData(fbp),
+		"fbc":               hashData(fbc),
+		"client_user_agent": clientUserAgent,
+		"client_ip_address": clientIP,
 	}
 
 	customData := map[string]interface{}{
@@ -78,7 +80,7 @@ func SendFacebookPurchase(orderID, fullName, phone string, value float64, curren
 
 	event := FacebookEvent{
 		EventName:      "Purchase",
-		EventTime:      createdAt.Unix(),
+		EventTime:      createdAt.UTC().Unix(),
 		EventId:        orderID,
 		ActionSource:   "website",
 		EventSourceURL: "https://lkparfumo.com",

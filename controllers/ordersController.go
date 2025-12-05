@@ -170,6 +170,9 @@ func CreateOrder(c *gin.Context) {
 
 		fmt.Println("event broadcast")
 
+		clientUserAgent := c.Request.UserAgent()
+		clientIP := c.ClientIP()
+
 		if o.ConversionSource == "facebook" {
 			// uncomment for testing
 			testCode := os.Getenv("FACEBOOK_TEST_CODE")
@@ -183,6 +186,8 @@ func CreateOrder(c *gin.Context) {
 				o.FBp,
 				o.CreatedAt,
 				// o.FBclid,
+				clientUserAgent,
+				clientIP,
 				testCode,
 			)
 			if err != nil {
