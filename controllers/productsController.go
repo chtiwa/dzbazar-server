@@ -863,7 +863,7 @@ func UpdateProductImages(c *gin.Context) {
 	}
 
 	cacheKey := fmt.Sprintf("product:id=%s", productId)
-	if err := initializers.RClient.Del(initializers.Ctx, cacheKey).Err(); err != nil {
+	if err := initializers.RClient.Del(initializers.Ctx, cacheKey, "products").Err(); err != nil {
 		fmt.Println("Failed to delete the product cache key")
 	}
 
@@ -926,6 +926,11 @@ func UpdateVariant(c *gin.Context) {
 			})
 			return
 		}
+	}
+
+	cacheKey := fmt.Sprintf("product:id=%s", variant.ProductID)
+	if err := initializers.RClient.Del(initializers.Ctx, cacheKey, "products").Err(); err != nil {
+		fmt.Println("Failed to delete the product cache key")
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Variant and items updated successfully"})
