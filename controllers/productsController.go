@@ -317,6 +317,23 @@ func CreateProduct(c *gin.Context) {
 	})
 }
 
+// func GetActiveProducts(c *gin.Context) {
+// 	var products []models.Product
+// 	result := initializers.DB.Where("active = ? ", false).Find(&products)
+// 	if result.Error != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{
+// 			"success": false,
+// 			"error":   result.Error.Error(),
+// 		})
+// 		return
+// 	}
+
+// 	c.JSON(http.StatusOK, gin.H{
+// 		"success": true,
+// 		"date":    products,
+// 	})
+// }
+
 func GetProducts(c *gin.Context) {
 	tag := c.Query("tag")
 	pageString := c.Query("page")
@@ -328,8 +345,8 @@ func GetProducts(c *gin.Context) {
 		}
 	}
 
-	// redis key
-	cacheKey := fmt.Sprintf("products:tag=%s:page=%d", tag, page)
+	// redis key | the key should be different so that there won't be any erros between the admin view and the client view however when a product is updated both should be invalidate
+	cacheKey := fmt.Sprintf("products:admin:tag=%s:page=%d", tag, page)
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
 		var cachedReponse map[string]interface{}
@@ -342,7 +359,6 @@ func GetProducts(c *gin.Context) {
 
 	var totalRows int64
 	var products []models.Product
-	// db := initializers.DB.Model(&models.Product{}).Where("products.active = ?", true).Preload("Images").Preload("Tags")
 	db := initializers.DB.Model(&models.Product{}).Preload("Images").Preload("Tags")
 
 	if tag != "" {
@@ -373,11 +389,86 @@ func GetProducts(c *gin.Context) {
 
 	result := db.Order("products.updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&products)
 
-	// if it's not the admin then only fetch the active products
-	role, ok := c.Get("Role")
-	if !ok && role != "Admin" {
-		result = result.Where("active = ?", true)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error while retrieving the products",
+			"error":   result.Error.Error(),
+		})
+		return
 	}
+
+	pagination := utils.GetPaginationData(page, int(totalPages), "/products")
+
+	response := gin.H{
+		"success":    true,
+		"data":       products,
+		"pagination": pagination,
+	}
+
+	jsonData, err := json.Marshal(response)
+	if err == nil {
+		initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute)
+		initializers.RClient.SAdd(initializers.Ctx, "cache:products", cacheKey)
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func GetProductsClient(c *gin.Context) {
+	tag := c.Query("tag")
+	pageString := c.Query("page")
+	page := 1
+
+	if pageString != "" {
+		if parsedPage, err := strconv.Atoi(pageString); err == nil && parsedPage > 0 {
+			page = parsedPage
+		}
+	}
+
+	// redis key
+	cacheKey := fmt.Sprintf("products:tag=%s:page=%d", tag, page)
+	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
+	if err == nil {
+		var cachedReponse map[string]interface{}
+		if unmarshalErr := json.Unmarshal([]byte(val), &cachedReponse); unmarshalErr == nil {
+			c.JSON(http.StatusOK, cachedReponse)
+			return // crucial: avoid continuing to DB query
+		}
+		// if unmarshaling failed, fall through to DB fetch
+	}
+
+	var totalRows int64
+	var products []models.Product
+	db := initializers.DB.Model(&models.Product{}).Where("products.active = ?", true).Preload("Images").Preload("Tags")
+
+	if tag != "" {
+		// Filter products by tag name
+		// Join product_tags and tags to filter products by tag name
+		db = db.Joins("JOIN product_tags ON product_tags.product_id = products.id").
+			Joins("JOIN tags ON tags.id = product_tags.tag_id").
+			Where("LOWER(tags.name) = ?", strings.ToLower(tag))
+	}
+
+	// count total rows after applying the filter if there's any
+	if err := db.Count(&totalRows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error while counting the products",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	perPage := 8.0
+	totalPages := math.Ceil(float64(totalRows) / perPage)
+
+	offset := (page - 1) * int(perPage)
+	if page > int(totalPages) {
+		offset = 0
+	}
+
+	result := db.Order("products.updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&products)
 
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -399,6 +490,7 @@ func GetProducts(c *gin.Context) {
 	jsonData, err := json.Marshal(response)
 	if err == nil {
 		initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute)
+		initializers.RClient.SAdd(initializers.Ctx, "cache:products", cacheKey)
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -416,7 +508,7 @@ func GetProductsBySearch(c *gin.Context) {
 
 		for _, w := range words {
 			like := "%" + w + "%"
-			query = query.Where("title ILIKE ? OR description ILIKE ? OR brand ILIKE ?", like, like, like)
+			query = query.Where("title ILIKE ? OR description ILIKE ? OR brand ILIKE ?", like, like, like).Where("products.active = ?", true)
 		}
 	}
 	result := query.
@@ -454,7 +546,6 @@ func GetProduct(c *gin.Context) {
 
 	// redis key
 	cacheKey := fmt.Sprintf("product:id=%s", c.Param("id"))
-
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
 		var cachedResponse dto.ProductResponse
@@ -528,6 +619,7 @@ func GetProduct(c *gin.Context) {
 	jsonData, err := json.Marshal(response)
 	if err == nil {
 		initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute)
+		initializers.RClient.SAdd(initializers.Ctx, "cache:product:id", cacheKey)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -677,21 +769,26 @@ func UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	// delete the cached key in redis
-	cacheKey := fmt.Sprintf("product:id=%s", id)
-	err = initializers.RClient.Del(
-		initializers.Ctx,
-		cacheKey,
-		"products",
-	).Err()
+	go func() {
+		productsKeys, _ := initializers.RClient.SMembers(initializers.Ctx, "cache:products").Result()
+		for _, key := range productsKeys {
+			initializers.RClient.Del(initializers.Ctx, key)
+		}
 
-	if err != nil {
-		fmt.Println("Failed to delete Redis cache keys:", err)
-	}
+		productKeys, _ := initializers.RClient.SMembers(initializers.Ctx, "cache:product:id").Result()
+		for _, key := range productKeys {
+			initializers.RClient.Del(initializers.Ctx, key)
+		}
+
+		// clear the set itself
+		initializers.RClient.Del(initializers.Ctx, "cache:products")
+		initializers.RClient.Del(initializers.Ctx, "cache:product:id")
+	}()
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Product was updated successfully",
+		"data":    product,
 	})
 }
 

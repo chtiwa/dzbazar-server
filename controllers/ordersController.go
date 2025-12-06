@@ -337,6 +337,7 @@ func UpdateOrder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Error while parsing the body!",
+			"error":   err.Error(),
 		})
 		return
 	}

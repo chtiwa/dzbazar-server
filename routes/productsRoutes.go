@@ -17,6 +17,7 @@ func ProductsRoutes(router *gin.Engine) {
 		products.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.DeleteProduct)
 		products.PATCH("/variant/:id", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.UpdateVariant)
 		products.PATCH("/images/:id", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.UpdateProductImages)
+		products.GET("/client", controllers.GetProductsClient)
 		products.GET("/search", controllers.GetProductsBySearch)
 		products.GET("/tags", controllers.GetTags)
 		products.GET("/all-tags", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.GetAllTags)
