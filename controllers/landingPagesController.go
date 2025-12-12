@@ -255,7 +255,7 @@ func IndexLandingPage(c *gin.Context) {
 	})
 }
 
-func UpdateLandingPageImages(c *gin.Context) {
+func UpdateLandingPage(c *gin.Context) {
 	// get the product images sent from the front end and check if they have been modified (e.g : sending 2 images when the db has 4)
 	// if the product images exist on the database but not on the data received then delete them based on the id
 	// get the new images from the formData
