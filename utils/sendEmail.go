@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/resendlabs/resend-go"
 )
 
@@ -62,11 +64,15 @@ func SendEmail(
 	// Build the email request
 	params := &resend.SendEmailRequest{
 		From:    "LK Parfumo <contact@lkparfumo.com>",
-		To:      []string{"chtiwaa@gmail.com"},           // Primary recipient
+	To:      []string{"chtiwaa@gmail.com"},
 		Cc:      []string{"lakhalzineddine12@gmail.com"}, // Uncomment to add CC recipient
-		Subject: "Nouvelle Commande (LK Parfumo)",
-		Html:    htmlContent,
-	}
+	Subject: fmt.Sprintf("Nouvelle Commande – %s – %s – %d", fullName, phoneNumber, time.Now().Unix()),
+	Html:    htmlContent,
+	Headers: map[string]string{
+		"Message-ID": fmt.Sprintf("<%d-%s@lkparfumo>", time.Now().UnixNano(), uuid.New().String()),
+	},
+}
+
 
 	// Send the email
 	resp, err := client.Emails.Send(params)
