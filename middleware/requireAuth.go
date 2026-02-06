@@ -31,7 +31,7 @@ func RequireAuthentication(c *gin.Context) {
 			var user models.User
 			id, _ := uuid.Parse(claims["sub"].(string))
 			if result := initializers.DB.First(&user, id); result.Error == nil {
-				c.Set("user", user)
+			c.Set("user", user)
 				c.Set("role", user.Role)
 				c.Next()
 				return

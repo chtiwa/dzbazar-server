@@ -417,8 +417,11 @@ func GetProducts(c *gin.Context) {
 
 func GetProductsClient(c *gin.Context) {
 	tag := c.Query("tag")
+	brand := strings.TrimSpace(c.Query("brand"))
 	pageString := c.Query("page")
 	page := 1
+
+	fmt.Println("tag", tag, "brand", brand)
 
 	if pageString != "" {
 		if parsedPage, err := strconv.Atoi(pageString); err == nil && parsedPage > 0 {
@@ -427,7 +430,7 @@ func GetProductsClient(c *gin.Context) {
 	}
 
 	// redis key
-	cacheKey := fmt.Sprintf("products:tag=%s:page=%d", tag, page)
+	cacheKey := fmt.Sprintf("products:tag=%s:brand=%s:page=%d", tag, brand, page)
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
 		var cachedReponse map[string]interface{}
@@ -442,7 +445,9 @@ func GetProductsClient(c *gin.Context) {
 	var products []models.Product
 	db := initializers.DB.Model(&models.Product{}).Where("products.active = ?", true).Preload("Images").Preload("Tags")
 
-	if tag != "" {
+	if brand != "" {
+		db = db.Where("LOWER(TRIM(brand)) = ?", strings.ToLower(brand))
+	} else if tag != "" {
 		// Filter products by tag name
 		// Join product_tags and tags to filter products by tag name
 		db = db.Joins("JOIN product_tags ON product_tags.product_id = products.id").
