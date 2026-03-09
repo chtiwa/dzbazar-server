@@ -94,7 +94,9 @@ func CreateOrder(c *gin.Context) {
 		PhoneNumber      string
 		State            string
 		StateNumber      string
+		StateId          string
 		City             string
+		CityId           string
 		ProductID        string
 		ProductName      string
 		Variant          string
@@ -132,7 +134,7 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	order := models.Order{Client: models.Client{FullName: body.FullName, PhoneNumber: body.PhoneNumber, State: body.State, StateNumber: body.StateNumber, City: body.City}, ShopName: body.ShopName, ProductID: productId, ConversionSource: body.ConversionSource, ProductName: body.ProductName, Price: body.Price, Variant: body.Variant, ShippingMethod: body.ShippingMethod, ShippingPrice: body.ShippingPrice, Quantity: body.Quantity, TotalPrice: body.TotalPrice, Status: body.Status, FBclid: body.FBclid, FBc: body.FBc, FBp: body.FBp, Ttclid: body.Ttclid}
+	order := models.Order{Client: models.Client{FullName: body.FullName, PhoneNumber: body.PhoneNumber, State: body.State, StateNumber: body.StateNumber, City: body.City, CityId: body.CityId, StateId: body.StateId}, ShopName: body.ShopName, ProductID: productId, ConversionSource: body.ConversionSource, ProductName: body.ProductName, Price: body.Price, Variant: body.Variant, ShippingMethod: body.ShippingMethod, ShippingPrice: body.ShippingPrice, Quantity: body.Quantity, TotalPrice: body.TotalPrice, Status: body.Status, FBclid: body.FBclid, FBc: body.FBc, FBp: body.FBp, Ttclid: body.Ttclid}
 
 	result := initializers.DB.Create(&order)
 
@@ -144,11 +146,11 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	remaining, err := initializers.RClient.Decr(initializers.Ctx, "promo:pack3:remaining").Result()
+	// remaining, err := initializers.RClient.Decr(initializers.Ctx, "promo:pack3:remaining").Result()
 
-	if err != nil {
-		fmt.Printf("Soemthing went wrong while decreasing the promo count in redis, %v\n", remaining)
-	}
+	// if err != nil {
+	// 	fmt.Printf("Soemthing went wrong while decreasing the promo count in redis, %v\n", remaining)
+	// }
 
 	go func(o models.Order) {
 		testCode := os.Getenv("FACEBOOK_TEST_CODE")
@@ -234,11 +236,11 @@ func CreateZrOrder(c *gin.Context) {
 		return
 	}
 
-	procolisApi := os.Getenv("PROCOLIS_URL")
-	token := os.Getenv("TOKEN")
-	key := os.Getenv("KEY")
+	zrApi := os.Getenv("ZR_EXPRESS_URL")
+	token := os.Getenv("ZR_EXPRESS_TOKEN")
+	key := os.Getenv("ZR_EXPRESS_KEY")
 
-	req, err := http.NewRequest("POST", procolisApi, bytes.NewBuffer(bodyBytes))
+	req, err := http.NewRequest("POST", fmt.Sprint(zrApi, "/parcels"), bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{
 			"success": false,
@@ -247,9 +249,10 @@ func CreateZrOrder(c *gin.Context) {
 		return
 	}
 
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("token", token)
-	req.Header.Set("key", key)
+	req.Header.Set("X-Tenant", token)
+	req.Header.Set("X-Api-Key", key)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)

@@ -7,7 +7,9 @@ type Client struct {
 	PhoneNumber string `json:"phoneNumber"`
 	State       string `json:"state"`
 	StateNumber string `json:"stateNumber"`
+	StateId     string `json:"stateId"`
 	City        string `json:"city"`
+	CityId      string `json:"cityId"`
 }
 
 type Order struct {
