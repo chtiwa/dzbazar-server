@@ -211,6 +211,8 @@ func CreateOrder(c *gin.Context) {
 				"DZD",
 				o.CreatedAt,
 				testCode,
+				clientUserAgent,
+				clientIP,
 			)
 			if err != nil {
 				fmt.Println("Error sending purchase event:", err)

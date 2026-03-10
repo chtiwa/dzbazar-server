@@ -52,7 +52,7 @@ type TikTokPayload struct {
 }
 
 // SendTikTokPurchase sends a purchase event via TikTok CAPI
-func SendTikTokPurchase(orderID, productName, fullName, phone, ttclid string, value float64, currency string, createdAt time.Time, testCode string) error {
+func SendTikTokPurchase(orderID, productName, fullName, phone, ttclid string, value float64, currency string, createdAt time.Time, testCode, clientUserAgent, clientIP string) error {
 	pixelID := os.Getenv("TIKTOK_PIXEL_ID")
 	accessToken := os.Getenv("TIKTOK_ACCESS_TOKEN")
 
@@ -76,37 +76,38 @@ func SendTikTokPurchase(orderID, productName, fullName, phone, ttclid string, va
 		hashedLastName = hashData((last))
 	}
 
-	event := TikTokEvent{
-		Event:     "Purchase",
-		EventID:   orderID,
-		EventTime: createdAt.Unix(),
-		Context: TikTokContext{
-			Ad: TikTokAdContext{
-				Callback: ttclid,
+	data := []map[string]interface{}{
+		{
+			"event":      "Purchase",
+			"event_id":   orderID,
+			"event_time": createdAt.Unix(),
+			"user": map[string]string{
+				"phone_number_sha256": hashedPhone,
+				"first_name_sha256":   hashedFirstName,
+				"last_name_sha256":    hashedLastName,
 			},
-			Page: TikTokPageContext{
-				URL: "https://lkparfumo.com",
+			"properties": map[string]interface{}{
+				"currency": currency,
+				"value":    value,
+				"order_id": orderID,
+				"contents": []map[string]interface{}{{
+					"content_id":   orderID,
+					"content_type": "product", // or "product_group"
+				}},
 			},
-			User: TikTokUserContext{
-				FirstName:   hashedFirstName,
-				LastName:    hashedLastName,
-				PhoneNumber: hashedPhone,
-				ExternalID:  orderID,
+			"context": map[string]interface{}{
+				"ip":         clientIP, // add params
+				"user_agent": clientUserAgent,
+				"ad":         map[string]string{"callback": ttclid},
+				"page":       map[string]string{"url": "https://lkparfumo.com"},
 			},
-		},
-		Properties: map[string]interface{}{
-			"currency": currency,
-			"value":    value,
-			"contents": []map[string]interface{}{{"content_id": orderID, "content_type": productName}},
 		},
 	}
-
-	payload := TikTokPayload{
-		EventSource:   "web",
-		EventSourceID: pixelID,
-		PartnerName:   "",
-		Data:          []TikTokEvent{event},
-		TestEventCode: testCode,
+	payload := map[string]interface{}{
+		"data":            data,
+		"pixel_code":      pixelID,
+		"partner_name":    "default",
+		"test_event_code": testCode,
 	}
 
 	jsonData, err := json.Marshal(payload)

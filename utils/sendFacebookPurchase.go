@@ -66,8 +66,8 @@ func SendFacebookPurchase(orderID, fullName, phone string, value float64, curren
 		"fn":                hashedFirstName,
 		"ln":                hashedLastName,
 		"ph":                hashedPhone,
-		"fbp":               hashData(fbp),
-		"fbc":               hashData(fbc),
+		"fbp":               fbp,
+		"fbc":               fbc,
 		"client_user_agent": clientUserAgent,
 		"client_ip_address": clientIP,
 	}
@@ -128,6 +128,6 @@ func hashData(data string) string {
 	if data == "" {
 		return ""
 	}
-	hash := sha256.Sum256([]byte(data))
+	hash := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(data))))
 	return hex.EncodeToString(hash[:])
 }
