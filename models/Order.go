@@ -10,6 +10,7 @@ type Client struct {
 	StateId     string `json:"stateId"`
 	City        string `json:"city"`
 	CityId      string `json:"cityId"`
+	HubId       string `json:"hubId"`
 }
 
 type Order struct {

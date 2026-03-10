@@ -97,6 +97,7 @@ func CreateOrder(c *gin.Context) {
 		StateId          string
 		City             string
 		CityId           string
+		HubId            string
 		ProductID        string
 		ProductName      string
 		Variant          string
@@ -134,7 +135,7 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	order := models.Order{Client: models.Client{FullName: body.FullName, PhoneNumber: body.PhoneNumber, State: body.State, StateNumber: body.StateNumber, City: body.City, CityId: body.CityId, StateId: body.StateId}, ShopName: body.ShopName, ProductID: productId, ConversionSource: body.ConversionSource, ProductName: body.ProductName, Price: body.Price, Variant: body.Variant, ShippingMethod: body.ShippingMethod, ShippingPrice: body.ShippingPrice, Quantity: body.Quantity, TotalPrice: body.TotalPrice, Status: body.Status, FBclid: body.FBclid, FBc: body.FBc, FBp: body.FBp, Ttclid: body.Ttclid}
+	order := models.Order{Client: models.Client{FullName: body.FullName, PhoneNumber: body.PhoneNumber, State: body.State, StateNumber: body.StateNumber, City: body.City, CityId: body.CityId, StateId: body.StateId, HubId: body.HubId}, ShopName: body.ShopName, ProductID: productId, ConversionSource: body.ConversionSource, ProductName: body.ProductName, Price: body.Price, Variant: body.Variant, ShippingMethod: body.ShippingMethod, ShippingPrice: body.ShippingPrice, Quantity: body.Quantity, TotalPrice: body.TotalPrice, Status: body.Status, FBclid: body.FBclid, FBc: body.FBc, FBp: body.FBp, Ttclid: body.Ttclid}
 
 	result := initializers.DB.Create(&order)
 
