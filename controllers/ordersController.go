@@ -156,6 +156,7 @@ func CreateOrder(c *gin.Context) {
 	go func(o models.Order) {
 		testCode := os.Getenv("FACEBOOK_TEST_CODE")
 		// only send the emails on production
+		o.ConversionSource = "tiktok"
 		if testCode == "" {
 			err := utils.SendEmail(o.FullName, o.PhoneNumber, o.State, o.City, o.ProductName, o.Variant, o.ShippingMethod, o.Quantity, o.Price, o.ShippingPrice, o.TotalPrice)
 			if err != nil {
@@ -198,34 +199,36 @@ func CreateOrder(c *gin.Context) {
 			} else {
 				fmt.Println("Facebook Event was sent successfully")
 			}
-		} else if o.ConversionSource == "tiktok" {
-			// uncomment for testing
-			testCode := os.Getenv("TIKTOK_TEST_CODE")
-			err := utils.SendTikTokPurchase(
-				o.ID.String(),
-				o.ProductName,
-				o.FullName,
-				o.Client.PhoneNumber,
-				o.Ttclid,
-				o.TotalPrice,
-				"DZD",
-				o.CreatedAt,
-				testCode,
-				clientUserAgent,
-				clientIP,
-			)
-			if err != nil {
-				fmt.Println("Error sending purchase event:", err)
-			} else {
-				fmt.Println("Tiktok Event was sent successfully")
-			}
 		}
+		// else if o.ConversionSource == "tiktok" {
+		// 	// uncomment for testing
+		// 	testCode := os.Getenv("TIKTOK_TEST_CODE")
+		// 	err := utils.SendTikTokPurchase(
+		// 		o.ID.String(),
+		// 		o.ProductName,
+		// 		o.FullName,
+		// 		o.Client.PhoneNumber,
+		// 		o.Ttclid,
+		// 		o.TotalPrice,
+		// 		"DZD",
+		// 		o.CreatedAt,
+		// 		testCode,
+		// 		clientUserAgent,
+		// 		clientIP,
+		// 	)
+		// 	if err != nil {
+		// 		fmt.Println("Error sending purchase event:", err)
+		// 	} else {
+		// 		fmt.Println("Tiktok Event was sent successfully")
+		// 	}
+		// }
 	}(order)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		// "data":    order,
-		"message": "The order was created successfully",
+		"message":  "The order was created successfully",
+		"order_id": order.ID,
 	})
 }
 

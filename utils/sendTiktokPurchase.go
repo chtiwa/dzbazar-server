@@ -103,14 +103,26 @@ func SendTikTokPurchase(orderID, productName, fullName, phone, ttclid string, va
 			},
 		},
 	}
+
+	// payload := map[string]interface{}{
+	// 	"data":            data,
+	// 	"pixel_code":      pixelID,
+	// 	"partner_name":    "default",
+	// 	"test_event_code": testCode,
+	// }
+
 	payload := map[string]interface{}{
-		"data":            data,
-		"pixel_code":      pixelID,
+		"event_source":    "web", // or "server" depending on your setup
+		"event_source_id": pixelID,
 		"partner_name":    "default",
-		"test_event_code": testCode,
+		"data":            data, // your existing event array
+	}
+	if testCode != "" {
+		payload["test_event_code"] = testCode
 	}
 
 	jsonData, err := json.Marshal(payload)
+	fmt.Printf("SENDING PAYLOAD: %s\n", string(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %v", err)
 	}
