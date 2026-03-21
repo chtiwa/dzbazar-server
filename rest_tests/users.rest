@@ -10,8 +10,8 @@
 # Content-Type: application/json
 
 # {
-#     "username":"Sifeddine",
-#     "password":"sigma",
+#     "username":"chtiwa",
+#     "password":"sigma"
 # }
 
 # GET http://localhost:5000/users/validate

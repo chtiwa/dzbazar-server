@@ -10,7 +10,7 @@ func UsersRoutes(router *gin.Engine) {
 	users := router.Group("/users")
 
 	{
-		users.GET("", controllers.GetUsers)
+		users.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.GetUsers)
 		users.GET("/validate", middleware.RequireAuthentication, controllers.Validate)
 		users.POST("/create", middleware.RequireAuthentication, middleware.RequireAdmin, controllers.CreateUser)
 		users.POST("/login", controllers.Login)

@@ -19,10 +19,16 @@ import (
 
 func GetOrders(c *gin.Context) {
 	page := 1
+	perPage := 10
 	pageString := c.Query("page")
+	perPageString := c.Query("perPage")
 
 	if pageString != "" {
 		page, _ = strconv.Atoi(pageString)
+	}
+
+	if perPageString != "" {
+		perPage, _ = strconv.Atoi(perPageString)
 	}
 
 	var totalRows int64
@@ -30,13 +36,12 @@ func GetOrders(c *gin.Context) {
 	if result.Error != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Error white counting the orders",
+			"message": "Error while counting the orders",
 		})
 		return
 	}
 
-	perPage := 10.0
-	totalPages := math.Ceil(float64(totalRows) / perPage)
+	totalPages := math.Ceil(float64(totalRows) / float64(perPage))
 
 	offset := (page - 1) * int(perPage)
 
@@ -52,6 +57,58 @@ func GetOrders(c *gin.Context) {
 	}
 
 	pagination := utils.GetPaginationData(page, int(totalPages), "/orders")
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"message":    "Orders were retrieved successfully",
+		"data":       orders,
+		"pagination": pagination,
+	})
+}
+
+func GetOrdersByStatus(c *gin.Context) {
+	status := c.Query("status")
+	page := 1
+	pageString := c.Query("page")
+
+	if pageString != "" {
+		page, _ = strconv.Atoi(pageString)
+	}
+
+	db := initializers.DB.Model(&models.Order{})
+
+	if status != "" {
+		db = db.Where("status = ?", status)
+	}
+
+	var totalRows int64
+	result := db.Count(&totalRows)
+	if result.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Error while counting the orders",
+			"error":   result.Error.Error(),
+		})
+		return
+	}
+
+	perPage := 10.0
+	totalPages := math.Ceil(float64(totalRows) / perPage)
+	offset := (page - 1) * int(perPage)
+
+	var orders []models.Order
+	result = db.Order("updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&orders)
+
+	if result.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Error while fetching the orders",
+			"error":   result.Error.Error(),
+		})
+		return
+	}
+
+	pagination := utils.GetPaginationData(page, int(totalPages), "/orders/filters")
+
 	c.JSON(http.StatusOK, gin.H{
 		"success":    true,
 		"message":    "Orders were retrieved successfully",

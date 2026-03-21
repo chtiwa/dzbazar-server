@@ -14,20 +14,22 @@
 
 # GET http://localhost:5000/orders/68d256a1-1f23-4be0-a2a8-c01613483824
 
-POST http://localhost:5000/orders
-Content-Type: application/json
+GET http://localhost:5000/orders/filters?status=&page=1 
 
-{
-    "fullName" :"John Doe",
-    "phoneNumber":"0888888888",
-    "state":"Oran",
-    "StateNumber":"31",
-    "city":"Es senia",
-    "productName":"Facial hair oil",
-    "price":2500,
-    "quantity":2,
-    "shippingPrice":800,
-    "shippingMethod":"Home",
-    "totalPrice":3200,
-    "conversionSource":"facebook"
-}
+# POST http://localhost:5000/orders
+# Content-Type: application/json
+
+# {
+#     "fullName" :"John Doe",
+#     "phoneNumber":"0888888888",
+#     "state":"Oran",
+#     "StateNumber":"31",
+#     "city":"Es senia",
+#     "productName":"Facial hair oil",
+#     "price":2500,
+#     "quantity":2,
+#     "shippingPrice":800,
+#     "shippingMethod":"Home",
+#     "totalPrice":3200,
+#     "conversionSource":"facebook"
+# }
