@@ -156,12 +156,17 @@ func CreateOrder(c *gin.Context) {
 	go func(o models.Order) {
 		testCode := os.Getenv("FACEBOOK_TEST_CODE")
 		// only send the emails on production
-		if testCode == "" {
+		if testCode == "" && o.Status != "Confirmé" {
+
 			err := utils.SendEmail(o.FullName, o.PhoneNumber, o.State, o.City, o.ProductName, o.Variant, o.ShippingMethod, o.Quantity, o.Price, o.ShippingPrice, o.TotalPrice)
 			if err != nil {
 				fmt.Println(err)
 			}
 
+		}
+
+		if o.Status == "Abandonné" {
+			return
 		}
 
 		realtime.Broadcast <- realtime.Message{
@@ -171,7 +176,7 @@ func CreateOrder(c *gin.Context) {
 			},
 		}
 
-		fmt.Println("event broadcast")
+		// fmt.Println("event broadcast")
 
 		clientUserAgent := c.Request.UserAgent()
 		clientIP := c.ClientIP()

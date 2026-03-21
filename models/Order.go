@@ -31,7 +31,7 @@ type Order struct {
 	FBc              string  `json:"fbc"`
 	FBp              string  `json:"fbp"`
 	Ttclid           string  `json:"ttclid"`
-	ConversionSource string  `gorm:"binding:tiktok facebook organic" json:"conversionSource"`
+	ConversionSource string  `gorm:"binding:tiktok facebook organic auto_pending" json:"conversionSource"`
 	IsShipped        bool    `gorm:"default:false" json:"isShipped"`
 	// binding:"oneof=Pending Not Responding Confirmed Canceled Abandoned"
 }
