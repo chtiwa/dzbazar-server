@@ -389,6 +389,7 @@ func UpdateOrder(c *gin.Context) {
 		Quantity       *uint
 		FullName       *string
 		PhoneNumber    *string
+		PhoneNumber2   *string
 		State          *string
 		StateNumber    *string
 		City           *string

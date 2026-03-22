@@ -34,6 +34,7 @@ func CreateUser(c *gin.Context) {
 	var body struct {
 		Username string
 		Password string
+		Role     string
 	}
 
 	err := c.ShouldBindJSON(&body)
@@ -55,7 +56,11 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
-	user := models.User{Username: body.Username, Password: string(hash)}
+	if body.Role == "" {
+		body.Role = "User"
+	}
+
+	user := models.User{Username: body.Username, Password: string(hash), Role: body.Role}
 	result := initializers.DB.Create(&user)
 
 	if result.Error != nil {

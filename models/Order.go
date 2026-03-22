@@ -3,14 +3,15 @@ package models
 import "github.com/google/uuid"
 
 type Client struct {
-	FullName    string `json:"fullName"`
-	PhoneNumber string `json:"phoneNumber"`
-	State       string `json:"state"`
-	StateNumber string `json:"stateNumber"`
-	StateId     string `json:"stateId"`
-	City        string `json:"city"`
-	CityId      string `json:"cityId"`
-	HubId       string `json:"hubId"`
+	FullName     string `json:"fullName"`
+	PhoneNumber  string `json:"phoneNumber"`
+	PhoneNumber2 string `json:"phoneNumber2"`
+	State        string `json:"state"`
+	StateNumber  string `json:"stateNumber"`
+	StateId      string `json:"stateId"`
+	City         string `json:"city"`
+	CityId       string `json:"cityId"`
+	HubId        string `json:"hubId"`
 }
 
 type Order struct {

@@ -27,12 +27,13 @@ func GenerateExcel(orders []models.Order) ([]byte, error) {
 	f.SetCellValue("Orders", "E1", "Qauntité")
 	f.SetCellValue("Orders", "F1", "Adresse")
 	f.SetCellValue("Orders", "G1", "Wilaya")
-	f.SetCellValue("Orders", "H1", "Commune")
-	f.SetCellValue("Orders", "I1", "Total à ramasser")
-	f.SetCellValue("Orders", "J1", "Note")
-	f.SetCellValue("Orders", "K1", "ID")
-	f.SetCellValue("Orders", "L1", "Echange")
-	f.SetCellValue("Orders", "M1", "Stopdesk")
+	f.SetCellValue("Orders", "H1", "WilayaCode")
+	f.SetCellValue("Orders", "I1", "Commune")
+	f.SetCellValue("Orders", "J1", "Total à ramasser")
+	f.SetCellValue("Orders", "K1", "Note")
+	f.SetCellValue("Orders", "L1", "ID")
+	f.SetCellValue("Orders", "M1", "Echange")
+	f.SetCellValue("Orders", "N1", "Stopdesk")
 
 	// Loop through the Orders and add data to the sheet
 	for i, order := range orders {
@@ -45,12 +46,14 @@ func GenerateExcel(orders []models.Order) ([]byte, error) {
 		f.SetCellValue("Orders", fmt.Sprintf("D%d", row), order.ProductName)
 		f.SetCellValue("Orders", fmt.Sprintf("E%d", row), order.Quantity)
 		f.SetCellValue("Orders", fmt.Sprintf("F%d", row), "")
-		f.SetCellValue("Orders", fmt.Sprintf("G%d", row), order.StateNumber)
-		f.SetCellValue("Orders", fmt.Sprintf("H%d", row), order.City)
-		f.SetCellValue("Orders", fmt.Sprintf("I%d", row), int(order.TotalPrice))
-		f.SetCellValue("Orders", fmt.Sprintf("J%d", row), "Autorisation d'ouvrir")
-		f.SetCellValue("Orders", fmt.Sprintf("K%d", row), "")
+		f.SetCellValue("Orders", fmt.Sprintf("G%d", row), order.State)
+		f.SetCellValue("Orders", fmt.Sprintf("H%d", row), order.StateNumber)
+		f.SetCellValue("Orders", fmt.Sprintf("I%d", row), order.City)
+		f.SetCellValue("Orders", fmt.Sprintf("J%d", row), int(order.TotalPrice))
+		f.SetCellValue("Orders", fmt.Sprintf("K%d", row), "Autorisation d'ouvrir")
 		f.SetCellValue("Orders", fmt.Sprintf("L%d", row), "")
+		f.SetCellValue("Orders", fmt.Sprintf("M%d", row), "")
+		f.SetCellValue("Orders", fmt.Sprintf("N%d", row), "")
 		shippingMethod := ""
 		if order.ShippingMethod == "Stopdesk" {
 			shippingMethod = "OUI"
