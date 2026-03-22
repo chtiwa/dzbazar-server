@@ -9,7 +9,7 @@ import (
 func LandingPagesRoutes(router *gin.Engine) {
 	landingPages := router.Group("/landing-pages")
 	{
-		landingPages.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.GetLandingPages)
+		landingPages.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Admin", "Moderator"), controllers.GetLandingPages)
 		landingPages.POST("", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.CreateLandingPage)
 		landingPages.GET("/:id", controllers.IndexLandingPage)
 		landingPages.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.DeleteLandingPage)
