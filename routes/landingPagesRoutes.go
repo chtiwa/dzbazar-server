@@ -13,7 +13,7 @@ func LandingPagesRoutes(router *gin.Engine) {
 		landingPages.POST("", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.CreateLandingPage)
 		landingPages.GET("/:id", controllers.IndexLandingPage)
 		landingPages.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.DeleteLandingPage)
-		landingPages.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.UpdateLandingPage)
+		landingPages.PATCH("/:id/images", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.UpdateLandingPage)
 		landingPages.DELETE("/:id/images/:imageId", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.DeleteLandingPageImage)
 	}
 }
