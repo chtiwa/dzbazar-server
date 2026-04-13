@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/chtiwa/lk-parfumo-server/initializers"
 	"github.com/chtiwa/lk-parfumo-server/models"
@@ -20,38 +21,66 @@ import (
 func GetOrders(c *gin.Context) {
 	page := 1
 	perPage := 10
-	pageString := c.Query("page")
-	perPageString := c.Query("perPage")
 
-	if pageString != "" {
-		page, _ = strconv.Atoi(pageString)
+	if pageString := c.Query("page"); pageString != "" {
+		if parsedPage, err := strconv.Atoi(pageString); err == nil && parsedPage > 0 {
+			page = parsedPage
+		}
 	}
 
-	if perPageString != "" {
-		perPage, _ = strconv.Atoi(perPageString)
+	if perPageString := c.Query("perPage"); perPageString != "" {
+		if parsedPerPage, err := strconv.Atoi(perPageString); err == nil && parsedPerPage > 0 {
+			perPage = parsedPerPage
+		}
+	}
+
+	status := c.Query("status")
+	search := strings.TrimSpace(c.Query("search"))
+
+	db := initializers.DB.Model(&models.Order{})
+
+	if status != "" && status != "Tous" {
+		db = db.Where("status = ?", status)
+	}
+
+	if search != "" {
+		likeSearch := "%" + search + "%"
+		db = db.Where(
+			"full_name LIKE ? OR phone_number LIKE ?",
+			likeSearch, likeSearch,
+		)
 	}
 
 	var totalRows int64
-	result := initializers.DB.Model(&models.Order{}).Count(&totalRows)
-	if result.Error != nil {
+	if err := db.Count(&totalRows).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Error while counting the orders",
+			"error":   err.Error(),
 		})
 		return
 	}
 
-	totalPages := math.Ceil(float64(totalRows) / float64(perPage))
+	totalPages := int(math.Ceil(float64(totalRows) / float64(perPage)))
+	if totalPages == 0 {
+		totalPages = 1
+	}
 
-	offset := (page - 1) * int(perPage)
+	if page > totalPages {
+		page = totalPages
+	}
+
+	offset := (page - 1) * perPage
 
 	var orders []models.Order
-	result = initializers.DB.Order("updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&orders)
-
-	if result.Error != nil {
+	if err := db.Order("updated_at DESC").
+		Limit(perPage).
+		Offset(offset).
+		Find(&orders).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Error retrieving the orders",
+			"error":   err.Error(),
 		})
 		return
 	}
@@ -67,11 +96,16 @@ func GetOrders(c *gin.Context) {
 
 func GetOrdersByStatus(c *gin.Context) {
 	status := c.Query("status")
+	perPage := 10
 	page := 1
 	pageString := c.Query("page")
+	perPageString := c.Query("perPage")
 
 	if pageString != "" {
 		page, _ = strconv.Atoi(pageString)
+	}
+	if perPageString != "" {
+		perPage, _ = strconv.Atoi(perPageString)
 	}
 
 	db := initializers.DB.Model(&models.Order{})
@@ -91,8 +125,7 @@ func GetOrdersByStatus(c *gin.Context) {
 		return
 	}
 
-	perPage := 10.0
-	totalPages := math.Ceil(float64(totalRows) / perPage)
+	totalPages := math.Ceil(float64(totalRows) / float64(perPage))
 	offset := (page - 1) * int(perPage)
 
 	var orders []models.Order
