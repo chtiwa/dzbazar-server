@@ -5,7 +5,6 @@ import (
 
 	"github.com/chtiwa/lk-parfumo-server/initializers"
 	"github.com/chtiwa/lk-parfumo-server/middleware"
-	"github.com/chtiwa/lk-parfumo-server/migrate"
 	"github.com/chtiwa/lk-parfumo-server/realtime"
 	"github.com/chtiwa/lk-parfumo-server/routes"
 	"github.com/gin-gonic/gin"
@@ -16,7 +15,7 @@ func init() {
 	initializers.ConnectToDB()
 	initializers.InitB2()
 	initializers.InitRedis()
-	migrate.Migrate()
+	// migrate.Migrate()
 }
 
 func main() {

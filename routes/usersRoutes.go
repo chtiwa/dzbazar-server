@@ -17,6 +17,7 @@ func UsersRoutes(router *gin.Engine) {
 		users.GET("/logout", controllers.Logout)
 		// token verification => admin verification => action
 		users.GET("/verify", middleware.RequireAuthentication)
+		users.GET("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.GetUser)
 		users.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.UpdateUser)
 		users.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.DeleteUser)
 

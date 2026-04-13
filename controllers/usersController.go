@@ -30,6 +30,34 @@ func GetUsers(c *gin.Context) {
 	})
 }
 
+func GetUser(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Error while parsing the id",
+		})
+		return
+	}
+
+	var user models.User
+
+	result := initializers.DB.First(&user, id)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error while retrieving the users",
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "The user was retrieved successfully",
+		"data":    user,
+	})
+}
+
 func CreateUser(c *gin.Context) {
 	var body struct {
 		Username string
@@ -90,8 +118,8 @@ func UpdateUser(c *gin.Context) {
 
 	// TODO : add password later for admins to change
 	var body struct {
-		Username *string
-		Role     *string
+		Username string `json:"username"`
+		Role     string `json:"role"`
 	}
 
 	err = c.ShouldBindJSON(&body)
@@ -111,6 +139,7 @@ func UpdateUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "User was updated successfuly",
+		"data":    user,
 	})
 
 }
