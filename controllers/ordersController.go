@@ -16,6 +16,7 @@ import (
 	"github.com/chtiwa/lk-parfumo-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func GetOrders(c *gin.Context) {
@@ -47,7 +48,7 @@ func GetOrders(c *gin.Context) {
 		likeSearch := "%" + search + "%"
 		db = db.Where(
 			"full_name LIKE ? OR phone_number LIKE ?",
-			likeSearch, likeSearch,
+			likeSearch, likeSearch, likeSearch,
 		)
 	}
 
@@ -191,22 +192,21 @@ func CreateOrder(c *gin.Context) {
 		ProductID        string
 		ProductName      string
 		Variant          string
+		VariantItemId    string
 		ConversionSource string
 		Price            float64
 		ShippingMethod   string
 		ShippingPrice    float64
 		Quantity         uint
 		TotalPrice       float64
-		Status           string // to check if the order is abandoned
+		Status           string
 		FBclid           string
 		FBc              string
 		FBp              string
 		Ttclid           string
 	}
 
-	err := c.ShouldBindJSON(&body)
-
-	if err != nil {
+	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Error while binding the body",
@@ -215,44 +215,87 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	productId, err := uuid.Parse(body.ProductID)
+	productID, err := uuid.Parse(body.ProductID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Something went wrong while parsing the id",
+			"message": "Something went wrong while parsing the product id",
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	order := models.Order{Client: models.Client{FullName: body.FullName, PhoneNumber: body.PhoneNumber, State: body.State, StateNumber: body.StateNumber, City: body.City, CityId: body.CityId, StateId: body.StateId, HubId: body.HubId}, ShopName: body.ShopName, ProductID: productId, ConversionSource: body.ConversionSource, ProductName: body.ProductName, Price: body.Price, Variant: body.Variant, ShippingMethod: body.ShippingMethod, ShippingPrice: body.ShippingPrice, Quantity: body.Quantity, TotalPrice: body.TotalPrice, Status: body.Status, FBclid: body.FBclid, FBc: body.FBc, FBp: body.FBp, Ttclid: body.Ttclid}
-
-	result := initializers.DB.Create(&order)
-
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+	variantItemID, err := uuid.Parse(body.VariantItemId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Error while creating the order",
+			"message": "Something went wrong while parsing the variant item id",
+			"error":   err.Error(),
 		})
 		return
 	}
 
-	// remaining, err := initializers.RClient.Decr(initializers.Ctx, "promo:pack3:remaining").Result()
+	order := models.Order{
+		Client: models.Client{
+			FullName:    body.FullName,
+			PhoneNumber: body.PhoneNumber,
+			State:       body.State,
+			StateNumber: body.StateNumber,
+			City:        body.City,
+			CityId:      body.CityId,
+			StateId:     body.StateId,
+			HubId:       body.HubId,
+		},
+		ShopName:         body.ShopName,
+		ProductID:        productID,
+		ConversionSource: body.ConversionSource,
+		ProductName:      body.ProductName,
+		Price:            body.Price,
+		Variant:          body.Variant,
+		VariantItemId:    variantItemID,
+		ShippingMethod:   body.ShippingMethod,
+		ShippingPrice:    body.ShippingPrice,
+		Quantity:         body.Quantity,
+		TotalPrice:       body.TotalPrice,
+		Status:           body.Status,
+		FBclid:           body.FBclid,
+		FBc:              body.FBc,
+		FBp:              body.FBp,
+		Ttclid:           body.Ttclid,
+	}
 
-	// if err != nil {
-	// 	fmt.Printf("Soemthing went wrong while decreasing the promo count in redis, %v\n", remaining)
-	// }
+	result := initializers.DB.Create(&order)
+	if result.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Error while creating the order",
+			"error":   result.Error.Error(),
+		})
+		return
+	}
 
-	go func(o models.Order) {
+	clientUserAgent := c.Request.UserAgent()
+	clientIP := c.ClientIP()
+
+	go func(o models.Order, userAgent, ip string) {
 		testCode := os.Getenv("FACEBOOK_TEST_CODE")
-		// only send the emails on production
+
 		if testCode == "" && o.Status != "Confirmé" {
-
-			err := utils.SendEmail(o.FullName, o.PhoneNumber, o.State, o.City, o.ProductName, o.Variant, o.ShippingMethod, o.Quantity, o.Price, o.ShippingPrice, o.TotalPrice)
-			if err != nil {
-				fmt.Println(err)
+			if err := utils.SendEmail(
+				o.FullName,
+				o.PhoneNumber,
+				o.State,
+				o.City,
+				o.ProductName,
+				o.Variant,
+				o.ShippingMethod,
+				o.Quantity,
+				o.Price,
+				o.ShippingPrice,
+				o.TotalPrice,
+			); err != nil {
+				fmt.Println("Error sending email:", err)
 			}
-
 		}
 
 		if o.Status == "Abandonné" {
@@ -266,26 +309,19 @@ func CreateOrder(c *gin.Context) {
 			},
 		}
 
-		// fmt.Println("event broadcast")
-
-		clientUserAgent := c.Request.UserAgent()
-		clientIP := c.ClientIP()
-
 		if o.ConversionSource == "facebook" {
-			// uncomment for testing
 			testCode := os.Getenv("FACEBOOK_TEST_CODE")
 			err := utils.SendFacebookPurchase(
 				o.ID.String(),
-				o.Client.FullName, // replace with email if available
+				o.Client.FullName,
 				o.Client.PhoneNumber,
 				o.TotalPrice,
-				"DZD", // or "USD", "EUR"
+				"DZD",
 				o.FBc,
 				o.FBp,
 				o.CreatedAt,
-				// o.FBclid,
-				clientUserAgent,
-				clientIP,
+				userAgent,
+				ip,
 				testCode,
 			)
 			if err != nil {
@@ -294,8 +330,8 @@ func CreateOrder(c *gin.Context) {
 				fmt.Println("Facebook Event was sent successfully")
 			}
 		}
+
 		// else if o.ConversionSource == "tiktok" {
-		// 	// uncomment for testing
 		// 	testCode := os.Getenv("TIKTOK_TEST_CODE")
 		// 	err := utils.SendTikTokPurchase(
 		// 		o.ID.String(),
@@ -307,8 +343,8 @@ func CreateOrder(c *gin.Context) {
 		// 		"DZD",
 		// 		o.CreatedAt,
 		// 		testCode,
-		// 		clientUserAgent,
-		// 		clientIP,
+		// 		userAgent,
+		// 		ip,
 		// 	)
 		// 	if err != nil {
 		// 		fmt.Println("Error sending purchase event:", err)
@@ -316,11 +352,10 @@ func CreateOrder(c *gin.Context) {
 		// 		fmt.Println("Tiktok Event was sent successfully")
 		// 	}
 		// }
-	}(order)
+	}(order, clientUserAgent, clientIP)
 
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		// "data":    order,
+		"success":  true,
 		"message":  "The order was created successfully",
 		"order_id": order.ID,
 	})
@@ -408,9 +443,8 @@ func GetOrder(c *gin.Context) {
 
 func UpdateOrder(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
-
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "error while parsing the id",
 		})
@@ -435,9 +469,8 @@ func UpdateOrder(c *gin.Context) {
 		IsShipped      *bool
 		Note           *string
 	}
-	err = c.ShouldBindJSON(&body)
 
-	if err != nil {
+	if err = c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Error while parsing the body!",
@@ -447,9 +480,7 @@ func UpdateOrder(c *gin.Context) {
 	}
 
 	var order models.Order
-	result := initializers.DB.First(&order, id)
-
-	if result.Error != nil {
+	if err := initializers.DB.First(&order, id).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Error while retrieving the order",
@@ -457,13 +488,52 @@ func UpdateOrder(c *gin.Context) {
 		return
 	}
 
-	result = initializers.DB.Model(&order).Updates(body)
+	oldStatus := order.Status
+	newStatus := oldStatus
+	if body.Status != nil {
+		newStatus = *body.Status
+	}
+
+	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&order).Updates(body).Error; err != nil {
+			return err
+		}
+
+		if oldStatus != "Expedié" && newStatus == "Expedié" {
+			result := tx.Model(&models.VariantItem{}).
+				Where("id = ? AND quantity >= ?", order.VariantItemId, order.Quantity).
+				UpdateColumn("quantity", gorm.Expr("quantity - ?", order.Quantity))
+
+			if result.Error != nil {
+				return result.Error
+			}
+
+			if result.RowsAffected == 0 {
+				return fmt.Errorf("variant item not found or insufficient quantity")
+			}
+		}
+
+		return nil
+	})
+
+	var variantItem models.VariantItem
+
+	result := initializers.DB.First(&variantItem, order.VariantItemId)
 	if result.Error != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Error while retrieving the order",
+			"message": "Error while retrieving the variant item",
+			"error":   result.Error.Error(),
 		})
 		return
+	}
+
+	if oldStatus != "Expedié" && newStatus == "Expedié" && variantItem.Quantity < 10 {
+		go func(productName, variant string, quantity int) {
+			if err := utils.SendLowStockEmail(productName, variant, int(quantity)); err != nil {
+				fmt.Println("Error sending low stock email:", err)
+			}
+		}(order.ProductName, order.Variant, variantItem.Quantity)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

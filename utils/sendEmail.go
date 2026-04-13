@@ -64,15 +64,14 @@ func SendEmail(
 	// Build the email request
 	params := &resend.SendEmailRequest{
 		From:    "LK Parfumo <contact@lkparfumo.com>",
-	To:      []string{"chtiwaa@gmail.com"},
+		To:      []string{"chtiwaa@gmail.com"},
 		Cc:      []string{"lakhalzineddine12@gmail.com"}, // Uncomment to add CC recipient
-	Subject: fmt.Sprintf("Nouvelle Commande – %s – %s – %d", fullName, phoneNumber, time.Now().Unix()),
-	Html:    htmlContent,
-	Headers: map[string]string{
-		"Message-ID": fmt.Sprintf("<%d-%s@lkparfumo>", time.Now().UnixNano(), uuid.New().String()),
-	},
-}
-
+		Subject: fmt.Sprintf("Nouvelle Commande – %s – %s – %d", fullName, phoneNumber, time.Now().Unix()),
+		Html:    htmlContent,
+		Headers: map[string]string{
+			"Message-ID": fmt.Sprintf("<%d-%s@lkparfumo>", time.Now().UnixNano(), uuid.New().String()),
+		},
+	}
 
 	// Send the email
 	resp, err := client.Emails.Send(params)
@@ -88,5 +87,70 @@ func SendEmail(
 	}
 
 	log.Printf("Email sent successfully: ID %s\n", resp.Id)
+	return nil
+}
+
+func SendLowStockEmail(productName, variant string, quantity int) error {
+	client := resend.NewClient(os.Getenv("RESEND_API_KEY"))
+	if client == nil {
+		return fmt.Errorf("failed to initialize Resend client")
+	}
+
+	htmlContent := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html lang="fr">
+	<head>
+	<meta charset="UTF-8">
+	<title>Alerte Stock Faible - LK Parfumo</title>
+	<style>
+		body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
+		.container { max-width: 600px; margin: auto; background: #ffffff; padding: 20px; border-radius: 8px; }
+		.header { background: #dc3545; color: white; text-align: center; padding: 15px; font-size: 22px; font-weight: bold; border-radius: 8px 8px 0 0; }
+		.content { padding: 20px; font-size: 16px; line-height: 1.5; color: #333; }
+		.content p { margin: 8px 0; }
+		.footer { text-align: center; font-size: 14px; color: #666; margin-top: 20px; }
+	</style>
+	</head>
+	<body>
+	<div class="container">
+		<div class="header">Alerte Stock Faible</div>
+		<div class="content">
+			<p><strong>Produit :</strong> %s</p>
+			<p><strong>Variant :</strong> %s</p>
+			<p><strong>Quantité restante :</strong> %d</p>
+			<p>Le stock de ce produit est désormais inférieur à 10.</p>
+			<p>Veuillez réapprovisionner ce produit dès que possible.</p>
+		</div>
+		<div class="footer">
+			Cet email a été envoyé automatiquement par LK Parfumo.
+		</div>
+	</div>
+	</body>
+	</html>`,
+		productName, variant, quantity)
+
+	params := &resend.SendEmailRequest{
+		From:    "LK Parfumo <contact@lkparfumo.com>",
+		To:      []string{"chtiwaa@gmail.com"},
+		Cc:      []string{"lakhalzineddine12@gmail.com"},
+		Subject: fmt.Sprintf("Alerte stock faible – %s – %s", productName, variant),
+		Html:    htmlContent,
+		Headers: map[string]string{
+			"Message-ID": fmt.Sprintf("<%d-%s@lkparfumo>", time.Now().UnixNano(), uuid.New().String()),
+		},
+	}
+
+	resp, err := client.Emails.Send(params)
+	if err != nil {
+		log.Printf("Resend error: %v\n", err)
+		return fmt.Errorf("resend error: %v", err)
+	}
+
+	if resp.Id == "" {
+		log.Printf("Resend response error: empty response ID")
+		return fmt.Errorf("resend error: failed to send email")
+	}
+
+	log.Printf("Low stock email sent successfully: ID %s\n", resp.Id)
 	return nil
 }

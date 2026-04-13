@@ -13,9 +13,8 @@ func OrdersRoutes(router *gin.Engine) {
 		orders.POST("", controllers.CreateOrder)
 		orders.POST("/proxy", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.CreateZrOrder)
 		orders.POST("/excel", middleware.RequireAuthentication, middleware.RequireRoles("Admin", "Moderator"), controllers.ExportAsExcel)
-		// based on the input data / status / user info (phone or name)
-		orders.GET("/search", middleware.RequireAuthentication, controllers.GetOrdersBySearch)
-		orders.GET("/filters", middleware.RequireAuthentication, middleware.RequireRoles("Admin", "User", "Moderator"), controllers.GetOrdersByStatus)
+		// orders.GET("/search", middleware.RequireAuthentication, controllers.GetOrdersBySearch)
+		// orders.GET("/filters", middleware.RequireAuthentication, middleware.RequireRoles("Admin", "User", "Moderator"), controllers.GetOrdersByStatus)
 
 		orders.GET("/:id", middleware.RequireAuthentication, controllers.GetOrder)
 		orders.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin", "User", "Moderator"), controllers.UpdateOrder)

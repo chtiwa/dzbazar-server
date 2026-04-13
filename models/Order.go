@@ -16,9 +16,10 @@ type Client struct {
 
 type Order struct {
 	BaseModel
-	ShopName    string    `json:"shopName"` // should be shop id
-	ProductID   uuid.UUID `json:"productId"`
-	ProductName string    `json:"productName"`
+	ShopName      string    `json:"shopName"` // should be shop id
+	ProductID     uuid.UUID `json:"productId"`
+	VariantItemId uuid.UUID `gorm:"omitempty" json:"variantItemId"`
+	ProductName   string    `json:"productName"`
 	Client
 	Quantity         uint    `json:"quantity"`
 	Variant          string  `json:"variant"` // 100ml
