@@ -30,6 +30,7 @@ func main() {
 	routes.UsersRoutes(router)
 	routes.ProductsRoutes(router)
 	routes.LandingPagesRoutes(router)
+	routes.DashboardRoutes(router)
 	// routes.WebSocketRoutes(router)
 
 	go realtime.StartHub()
