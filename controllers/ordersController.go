@@ -48,7 +48,7 @@ func GetOrders(c *gin.Context) {
 		likeSearch := "%" + search + "%"
 		db = db.Where(
 			"full_name LIKE ? OR phone_number LIKE ?",
-			likeSearch, likeSearch, likeSearch,
+			likeSearch, likeSearch,
 		)
 	}
 
