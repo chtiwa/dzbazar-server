@@ -60,7 +60,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 
 	var totalOrders int64
-	if err := db.Table("orders").Count(&totalOrders).Error; err != nil {
+	if err := db.Table("orders").Where("created_at >= ? AND created_at < ?", "2026-01-01", "2027-01-01").Count(&totalOrders).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error while counting total orders", "error": err.Error()})
 		return
 	}
@@ -77,7 +77,7 @@ func GetOrdersDashboard(c *gin.Context) {
 
 	for i := range statusStats {
 		if totalOrders > 0 {
-			statusStats[i].Percentage = float64(statusStats[i].Count) * 100 / float64(totalOrders)
+			statusStats[i].Percentage = float64(statusStats[i].Count) * 100.0 / float64(totalOrders)
 		}
 	}
 
