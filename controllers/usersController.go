@@ -216,11 +216,22 @@ func Validate(c *gin.Context) {
 			"success": false,
 			"message": "Error while fetching the role",
 		})
+		return
+	}
+
+	user, ok := c.Get("user")
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error while fetching the user",
+		})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"role":    role,
+		"user":    user,
 	})
 }
 

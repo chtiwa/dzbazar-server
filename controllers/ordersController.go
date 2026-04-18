@@ -180,15 +180,15 @@ func GetOrdersBySearch(c *gin.Context) {
 
 func CreateOrder(c *gin.Context) {
 	var body struct {
-		ShopName         string
-		FullName         string
-		PhoneNumber      string
-		State            string
-		StateNumber      string
-		StateId          string
-		City             string
-		CityId           string
-		HubId            string
+		ShopName    string
+		FullName    string
+		PhoneNumber string
+		State       string
+		StateNumber string
+		// StateId          string
+		City string
+		// CityId           string
+		// HubId            string
 		ProductID        string
 		ProductName      string
 		Variant          string
@@ -242,9 +242,9 @@ func CreateOrder(c *gin.Context) {
 			State:       body.State,
 			StateNumber: body.StateNumber,
 			City:        body.City,
-			CityId:      body.CityId,
-			StateId:     body.StateId,
-			HubId:       body.HubId,
+			// CityId:      body.CityId,
+			// StateId:     body.StateId,
+			// HubId:       body.HubId,
 		},
 		ShopName:         body.ShopName,
 		ProductID:        productID,
@@ -499,7 +499,7 @@ func UpdateOrder(c *gin.Context) {
 			return err
 		}
 
-		if oldStatus != "Expedié" && newStatus == "Expedié" {
+		if oldStatus != "Expedié" && newStatus == "Expedié" && order.VariantItemId != uuid.Nil {
 			result := tx.Model(&models.VariantItem{}).
 				Where("id = ? AND quantity >= ?", order.VariantItemId, order.Quantity).
 				UpdateColumn("quantity", gorm.Expr("quantity - ?", order.Quantity))
