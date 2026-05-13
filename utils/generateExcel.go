@@ -8,68 +8,83 @@ import (
 )
 
 func GenerateExcel(orders []models.Order) ([]byte, error) {
-	// Create a new Excel file
 	f := excelize.NewFile()
 
-	// Create a new sheet and set it as active
-	index, err := f.NewSheet("Orders")
+	sheetName := "Orders"
+	index, err := f.NewSheet(sheetName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Excel file: %v", err)
 	}
-	// Delete the default empty "Sheet1"
+
 	f.DeleteSheet("Sheet1")
 
-	// Add headers to the sheet
-	f.SetCellValue("Orders", "A1", "Nom Complet")
-	f.SetCellValue("Orders", "B1", "Téléphone 1")
-	f.SetCellValue("Orders", "C1", "Téléphone 2")
-	f.SetCellValue("Orders", "D1", "Produit")
-	f.SetCellValue("Orders", "E1", "Qauntité")
-	f.SetCellValue("Orders", "F1", "Adresse")
-	f.SetCellValue("Orders", "G1", "Wilaya")
-	f.SetCellValue("Orders", "H1", "WilayaCode")
-	f.SetCellValue("Orders", "I1", "Commune")
-	f.SetCellValue("Orders", "J1", "Total à ramasser")
-	f.SetCellValue("Orders", "K1", "Note")
-	f.SetCellValue("Orders", "L1", "ID")
-	f.SetCellValue("Orders", "M1", "Echange")
-	f.SetCellValue("Orders", "N1", "Stopdesk")
-
-	// Loop through the Orders and add data to the sheet
-	for i, order := range orders {
-		// Convert to row index 2 and onward
-		row := i + 2
-
-		f.SetCellValue("Orders", fmt.Sprintf("A%d", row), order.FullName)
-		f.SetCellValue("Orders", fmt.Sprintf("B%d", row), order.PhoneNumber)
-		f.SetCellValue("Orders", fmt.Sprintf("C%d", row), "")
-		f.SetCellValue("Orders", fmt.Sprintf("D%d", row), order.ProductName)
-		f.SetCellValue("Orders", fmt.Sprintf("E%d", row), order.Quantity)
-		f.SetCellValue("Orders", fmt.Sprintf("F%d", row), "")
-		f.SetCellValue("Orders", fmt.Sprintf("G%d", row), order.State)
-		f.SetCellValue("Orders", fmt.Sprintf("H%d", row), order.StateNumber)
-		f.SetCellValue("Orders", fmt.Sprintf("I%d", row), order.City)
-		f.SetCellValue("Orders", fmt.Sprintf("J%d", row), int(order.TotalPrice))
-		f.SetCellValue("Orders", fmt.Sprintf("K%d", row), "Autorisation d'ouvrir")
-		f.SetCellValue("Orders", fmt.Sprintf("L%d", row), "")
-		f.SetCellValue("Orders", fmt.Sprintf("M%d", row), "")
-		f.SetCellValue("Orders", fmt.Sprintf("N%d", row), "")
-		shippingMethod := ""
-		if order.ShippingMethod == "Stopdesk" {
-			shippingMethod = "OUI"
-		}
-		f.SetCellValue("Orders", fmt.Sprintf("M%d", row), shippingMethod)
+	headers := []string{
+		"Type De livraison",
+		"Nom De Client Destinataire",
+		"Telephone De Client Destinataire",
+		"Wilaya De Client Destinataire",
+		"De Client Destinataire Commune francais",
+		"Adress De Client Destinataire",
+		"Description de colis",
+		"Reference",
+		"Prix De Colis",
+		"Fragile",
+		"ouverable",
+		"essayable",
+		"poids",
+		"Volume",
 	}
 
-	// Set the active sheet
+	columns := []string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N"}
+
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", columns[i])
+		f.SetCellValue(sheetName, cell, header)
+	}
+
+	for i, order := range orders {
+		row := i + 2
+
+		deliveryType := "DOORSTEP"
+		if order.ShippingMethod == "Stopdesk" {
+			deliveryType = "STOPDESK"
+		}
+
+		description := order.ProductName
+		if order.Quantity > 1 {
+			description = fmt.Sprintf("%s x%d", order.ProductName, order.Quantity)
+		}
+
+		reference := order.ID
+		address := ""
+		fragile := 1
+		ouvrable := 1
+		essayable := 1
+		poids := 0.5
+		volume := 1
+
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), deliveryType)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), order.FullName)
+		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), order.PhoneNumber)
+		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), order.StateNumber)
+		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), order.City)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), address)
+		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), description)
+		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), reference)
+		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), int(order.TotalPrice))
+		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), fragile)
+		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), ouvrable)
+		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), essayable)
+		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), poids)
+		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), volume)
+	}
+
 	f.SetActiveSheet(index)
 
-	// Write the file to a buffer
 	buffer, err := f.WriteToBuffer()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Excel file: %v", err)
 	}
 
-	// Return the Excel file content as a byte slice
 	return buffer.Bytes(), nil
 }
