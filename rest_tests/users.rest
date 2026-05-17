@@ -6,26 +6,34 @@
 #     "password":"sigma",
 # }
 
-# POST http://localhost:5000/users/login
+# POST http://localhost:5000/users/signup
 # Content-Type: application/json
 
 # {
-#     "username":"chtiwa",
-#     "password":"sigma"
+#     "firstName":"Sifeddine",
+#     "lastName":"Djedid",
+#     "email":"chtiwaa@gmail.com",
+#     "phoneNumber":"0778855354",
+#     "password":"sifou2001"
 # }
+
+# POST http://localhost:5000/users/verify-user
+# Content-Type: application/json
+
+# {  
+#     "email":"chtiwaa@gmail.com",
+#     "otp":"012823"
+# }
+
+# POST http://localhost:5000/users/login
+# Content-Type: application/json
+
+# {  
+#     "email":"chtiwaa@gmail.com",
+#     "password":"sifou2001"
+# }
+
 
 # GET http://localhost:5000/users/validate
 
 # GET http://localhost:5000/users/verify
-
-
-GET http://localhost:5000/users
-
-# PATCH http://localhost:5000/users/11a46c03-8d4d-45c5-b912-7a33b240fd18
-# Content-Type: application/json
-
-# {
-#     "username":"Sifeddine",
-#     "password":"sigma",
-#     "role":"Admin"
-# }

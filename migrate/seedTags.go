@@ -3,8 +3,8 @@ package migrate
 import (
 	"log"
 
-	"github.com/chtiwa/lk-parfumo-server/initializers"
-	"github.com/chtiwa/lk-parfumo-server/models"
+	"github.com/chtiwa/dzbazar-server/initializers"
+	"github.com/chtiwa/dzbazar-server/models"
 )
 
 func SeedTags() {

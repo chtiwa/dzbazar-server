@@ -14,90 +14,51 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/chtiwa/lk-parfumo-server/dto"
-	"github.com/chtiwa/lk-parfumo-server/initializers"
-	"github.com/chtiwa/lk-parfumo-server/models"
-	"github.com/chtiwa/lk-parfumo-server/utils"
+	"github.com/chtiwa/dzbazar-server/dto"
+	"github.com/chtiwa/dzbazar-server/initializers"
+	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
-type VariantItemInput struct {
-	Value    string `json:"value"`
-	Price    int    `json:"price"`
-	Quantity int    `json:"quantity"`
+type VariantItemSimple struct {
+	ID    string `json:"id"`
+	Value string `json:"value"`
+	// Price and Quantity removed from here!
 }
 
-type TagInput struct {
-	Name string `json:"name"`
-}
-
-type VariantInput struct {
-	Title        string             `json:"title"`
-	VariantItems []VariantItemInput `json:"variantItems"`
-}
-
-type CreateProductInput struct {
-	Title       string         `json:"title"`
-	Description string         `json:"description"`
-	Price       float64        `json:"price"`
-	CategoryID  string         `json:"categoryId"`
-	Variants    []VariantInput `json:"variants"`
-	Tags        []string       `json:"tags"`
-}
-
-func GetPromoRemaining(c *gin.Context) {
-	remaining, err := initializers.RClient.Get(initializers.Ctx, "promo:pack3:remaining").Int()
-
+func CreateProductByShop(c *gin.Context) {
+	// 1. CRITICAL FIX: Extract the ShopID.
+	// Assuming your route is something like POST /shops/:shopId/products
+	shopIDParam := c.Param("shopId")
+	shopID, err := uuid.Parse(shopIDParam)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Something went wrong while retrieving the remaining amount",
-			"error":   err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid Shop ID"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success":   true,
-		"message":   "Promo count retrieved successfully",
-		"remaining": max(remaining, 0),
-	})
-}
-
-func CreateProduct(c *gin.Context) {
 	title := c.PostForm("title")
 	price := c.PostForm("price")
-	brand := c.PostForm("brand")
 	description := c.PostForm("description")
 
 	if title == "" || price == "" || description == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "error while parsing the body",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Missing required fields"})
 		return
 	}
 
 	parsedPrice, err := strconv.ParseFloat(price, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "invalid price",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid price"})
 		return
 	}
 
-	var variants []VariantInput
+	var variants []dto.VariantInput
 	variantsJson := c.PostForm("variants")
 	if variantsJson != "" {
 		if err := json.Unmarshal([]byte(variantsJson), &variants); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "invalid variants JSON",
-				"error":   err.Error(),
-			})
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid variants JSON"})
 			return
 		}
 	}
@@ -114,16 +75,14 @@ func CreateProduct(c *gin.Context) {
 	var tagNames []string
 	var tags []models.Tag
 
-	// Step 1: Parse tags JSON from form data
+	// --- TAGS LOGIC (Kept exactly as you wrote it, it is excellent) ---
 	tagsJson := c.PostForm("tags")
-
 	if tagsJson != "" {
 		if err := json.Unmarshal([]byte(tagsJson), &tagNames); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid tags JSON", "error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid tags JSON"})
 			return
 		}
 
-		// Step 2: Normalize tag names and collect unique names
 		uniqueNames := make(map[string]struct{})
 		normalizedNames := []string{}
 		for _, tagName := range tagNames {
@@ -137,72 +96,42 @@ func CreateProduct(c *gin.Context) {
 			}
 		}
 
-		if len(normalizedNames) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "no valid tags provided"})
-			return
-		}
-
-		// Step 3: Process tags inside the existing transaction
-		// Fetch existing tags in one query
-		var existingTags []models.Tag
-		if err := tx.Where("name IN ?", normalizedNames).Find(&existingTags).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to fetch tags", "error": err.Error()})
-			return
-		}
-
-		// Build a map of existing tags for quick lookup
-		existingMap := make(map[string]models.Tag)
-		for _, tag := range existingTags {
-			existingMap[tag.Name] = tag
-		}
-
-		// Determine missing tags to create
-		var tagsToCreate []models.Tag
-		for _, tagName := range normalizedNames {
-			if _, exists := existingMap[tagName]; !exists {
-				tagsToCreate = append(tagsToCreate, models.Tag{Name: tagName})
-			}
-		}
-
-		// Create missing tags in one batch
-		if len(tagsToCreate) > 0 {
-			if err := tx.Create(&tagsToCreate).Error; err != nil {
+		if len(normalizedNames) > 0 {
+			var existingTags []models.Tag
+			if err := tx.Where("name IN ?", normalizedNames).Find(&existingTags).Error; err != nil {
 				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create tags", "error": err.Error()})
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to fetch tags"})
 				return
 			}
+
+			existingMap := make(map[string]models.Tag)
+			for _, tag := range existingTags {
+				existingMap[tag.Name] = tag
+			}
+
+			var tagsToCreate []models.Tag
+			for _, tagName := range normalizedNames {
+				if _, exists := existingMap[tagName]; !exists {
+					tagsToCreate = append(tagsToCreate, models.Tag{Name: tagName})
+				}
+			}
+
+			if len(tagsToCreate) > 0 {
+				if err := tx.Create(&tagsToCreate).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create tags"})
+					return
+				}
+			}
+			tags = append(existingTags, tagsToCreate...)
 		}
-
-		// Merge existing + new tags
-		tags = append(existingTags, tagsToCreate...)
 	}
 
-	form, err := c.MultipartForm()
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "invalid form data",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	files := form.File["images"]
-	if len(files) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "no files to upload",
-		})
-		return
-	}
-
-	// urls := make([]string, 0, len(files))
-
+	// --- PRODUCT CREATION ---
 	product := models.Product{
+		ShopID:      shopID, // 2. CRITICAL FIX: Link to the shop
 		Title:       title,
 		Description: description,
-		Brand:       brand,
 		Price:       parsedPrice,
 		Tags:        tags,
 	}
@@ -213,13 +142,16 @@ func CreateProduct(c *gin.Context) {
 		return
 	}
 
-	// Upload images and store in DB should be last in case anything else fails
+	// --- IMAGE UPLOAD ---
+	form, _ := c.MultipartForm()
+	files := form.File["images"]
+
 	var productImages []models.ProductImage
 	for _, file := range files {
 		src, err := file.Open()
 		if err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "failed to open file", "error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "failed to open file"})
 			return
 		}
 
@@ -232,17 +164,15 @@ func CreateProduct(c *gin.Context) {
 			Body:        src,
 			ContentType: aws.String(file.Header.Get("Content-Type")),
 		})
-		src.Close() // close immediately after upload
+		src.Close()
 
 		if err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": fmt.Sprintf("failed to upload %s", file.Filename), "error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to upload image"})
 			return
 		}
 
 		url := fmt.Sprintf("https://%s.s3.%s.backblazeb2.com/%s", bucketName, os.Getenv("B2_REGION"), key)
-
-		// urls = append(urls, url)
 		productImages = append(productImages, models.ProductImage{
 			ProductID: product.ID,
 			URL:       url,
@@ -252,63 +182,136 @@ func CreateProduct(c *gin.Context) {
 	if len(productImages) > 0 {
 		if err := tx.Create(&productImages).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to save images", "error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to save images"})
 			return
 		}
-	}
-
-	// Create variants + items
-	for _, v := range variants {
-		variant := models.Variant{ProductID: product.ID, Title: v.Title}
-		if err := tx.Create(&variant).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create variant", "error": err.Error()})
-			return
-		}
-
-		var items []models.VariantItem
-		for _, item := range v.VariantItems {
-			items = append(items, models.VariantItem{
-				VariantID: variant.ID,
-				Value:     item.Value,
-				Price:     item.Price,
-				Quantity:  item.Quantity,
-			})
-		}
-
-		if len(items) > 0 {
-			if err := tx.Create(&items).Error; err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create variant items", "error": err.Error()})
-				return
-			}
-		}
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "transaction failed", "error": err.Error()})
-		return
 	}
 
 	product.Images = productImages
 
-	var cursor uint64
-	for {
-		var keys []string
-		var err error
-		keys, cursor, err = initializers.RClient.Scan(initializers.Ctx, cursor, "products:*", 100).Result()
-		if err != nil {
-			fmt.Printf("failed to scan keys")
+	// --- VARIANTS & COMBINATIONS ---
+
+	// 1. A map to remember the new UUIDs for each VariantItem string
+	// e.g., "Red" -> "123e4567-e89b-12d3..."
+	itemIDs := make(map[string]uuid.UUID)
+
+	for _, v := range variants {
+		variant := models.Variant{ProductID: product.ID, Title: v.Title}
+		if err := tx.Create(&variant).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create variant category"})
+			return
 		}
-		if len(keys) > 0 {
-			if err := initializers.RClient.Del(initializers.Ctx, keys...).Err(); err != nil {
-				fmt.Printf("failed to delete keys")
+
+		for _, item := range v.VariantItems {
+			vItem := models.VariantItem{
+				VariantID: variant.ID,
+				Value:     item.Value,
 			}
-		}
-		if cursor == 0 {
-			break
+
+			if err := tx.Create(&vItem).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create variant item"})
+				return
+			}
+
+			// Save the newly generated UUID into our map for later!
+			itemIDs[item.Value] = vItem.ID
 		}
 	}
+
+	// 2. Parse the Combinations from the form data
+	var combinationsInput []dto.CombinationInput
+	combinationsJson := c.PostForm("combinations")
+	if combinationsJson != "" {
+		if err := json.Unmarshal([]byte(combinationsJson), &combinationsInput); err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid combinations JSON"})
+			return
+		}
+	}
+
+	// 3. Create the actual sellable SKUs (Combinations)
+	var combinationsToSave []models.ProductVariantCombination
+
+	for _, combo := range combinationsInput {
+		var opt1ID, opt2ID, opt3ID *uuid.UUID
+		var comboStringParts []string
+
+		// Map Option 1
+		if combo.Option1 != nil && *combo.Option1 != "" {
+			if id, exists := itemIDs[*combo.Option1]; exists {
+				opt1ID = &id
+				comboStringParts = append(comboStringParts, *combo.Option1)
+			}
+		}
+		// Map Option 2
+		if combo.Option2 != nil && *combo.Option2 != "" {
+			if id, exists := itemIDs[*combo.Option2]; exists {
+				opt2ID = &id
+				comboStringParts = append(comboStringParts, *combo.Option2)
+			}
+		}
+		// Map Option 3
+		if combo.Option3 != nil && *combo.Option3 != "" {
+			if id, exists := itemIDs[*combo.Option3]; exists {
+				opt3ID = &id
+				comboStringParts = append(comboStringParts, *combo.Option3)
+			}
+		}
+
+		// Create a clean readable string like "Red / 41"
+		comboString := strings.Join(comboStringParts, " / ")
+
+		combinationsToSave = append(combinationsToSave, models.ProductVariantCombination{
+			ProductID:         product.ID,
+			SKU:               combo.SKU,
+			Price:             combo.Price,
+			Quantity:          combo.Quantity,
+			Option1ID:         opt1ID,
+			Option2ID:         opt2ID,
+			Option3ID:         opt3ID,
+			CombinationString: comboString,
+		})
+	}
+
+	// 4. Batch Insert all Combinations at once
+	if len(combinationsToSave) > 0 {
+		if err := tx.Create(&combinationsToSave).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "failed to save product combinations",
+				"error":   err.Error(),
+			})
+			return
+		}
+	}
+
+	// --- END VARIANTS & COMBINATIONS ---
+
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "transaction failed"})
+		return
+	}
+
+	// 3. IMPROVEMENT: Run Redis invalidation in the background
+	// This prevents the user from waiting for the cache to clear
+	go func() {
+		var cursor uint64
+		for {
+			var keys []string
+			var err error
+			// Note: ensure you are using a background context here, not gin.Context
+			keys, cursor, err = initializers.RClient.Scan(context.Background(), cursor, "products:*", 100).Result()
+			if err == nil && len(keys) > 0 {
+				initializers.RClient.Del(context.Background(), keys...)
+			}
+			if cursor == 0 {
+				break
+			}
+		}
+	}()
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -317,24 +320,11 @@ func CreateProduct(c *gin.Context) {
 	})
 }
 
-// func GetActiveProducts(c *gin.Context) {
-// 	var products []models.Product
-// 	result := initializers.DB.Where("active = ? ", false).Find(&products)
-// 	if result.Error != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{
-// 			"success": false,
-// 			"error":   result.Error.Error(),
-// 		})
-// 		return
-// 	}
+// get products in the admin panel
+func GetProductsByShop(c *gin.Context) {
+	// 1. Extract the SLUG from the URL instead of the UUID
+	slug := c.Param("slug")
 
-// 	c.JSON(http.StatusOK, gin.H{
-// 		"success": true,
-// 		"date":    products,
-// 	})
-// }
-
-func GetProducts(c *gin.Context) {
 	tag := c.Query("tag")
 	pageString := c.Query("page")
 	page := 1
@@ -345,13 +335,42 @@ func GetProducts(c *gin.Context) {
 		}
 	}
 
-	// redis key | the key should be different so that there won't be any erros between the admin view and the client view however when a product is updated both should be invalidate
-	cacheKey := fmt.Sprintf("products:admin:tag=%s:page=%d", tag, page)
+	// 2. RESOLVE SLUG TO UUID (Protects against fake URLs)
+	// We only select the "id" column to make this query lightning fast.
+	var shopID uuid.UUID
+	if err := initializers.DB.Model(&models.Shop{}).Select("id").Where("slug = ?", slug).First(&shopID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Shop not found",
+		})
+		return
+	}
+	userInterface, ok := c.Get("user")
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error while fetching the user from context",
+		})
+		return
+	}
+
+	user, _ := userInterface.(models.User)
+	if user.ShopID == &shopID {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Error while fetching the products",
+		})
+		return
+	}
+
+	// 3. CRITICAL FIX: Add the ShopID to the Redis cache key to prevent cross-shop data leaks
+	cacheKey := fmt.Sprintf("products:shop:%s:admin:tag=%s:page=%d", shopID.String(), tag, page)
+
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
-		var cachedReponse map[string]interface{}
-		if unmarshalErr := json.Unmarshal([]byte(val), &cachedReponse); unmarshalErr == nil {
-			c.JSON(http.StatusOK, cachedReponse)
+		var cachedResponse map[string]interface{}
+		if unmarshalErr := json.Unmarshal([]byte(val), &cachedResponse); unmarshalErr == nil {
+			c.JSON(http.StatusOK, cachedResponse)
 			return // crucial: avoid continuing to DB query
 		}
 		// if unmarshaling failed, fall through to DB fetch
@@ -359,11 +378,15 @@ func GetProducts(c *gin.Context) {
 
 	var totalRows int64
 	var products []models.Product
-	db := initializers.DB.Model(&models.Product{}).Preload("Images").Preload("Tags")
+
+	// 3. Lock the query to this specific shop immediately
+	db := initializers.DB.Model(&models.Product{}).
+		Where("products.shop_id = ?", shopID). // Use "products.shop_id" to prevent column ambiguity during JOINs
+		Preload("Images").
+		Preload("Tags")
 
 	if tag != "" {
 		// Filter products by tag name
-		// Join product_tags and tags to filter products by tag name
 		db = db.Joins("JOIN product_tags ON product_tags.product_id = products.id").
 			Joins("JOIN tags ON tags.id = product_tags.tag_id").
 			Where("LOWER(tags.name) = ?", strings.ToLower(tag))
@@ -379,12 +402,12 @@ func GetProducts(c *gin.Context) {
 		return
 	}
 
-	perPage := 8.0
+	perPage := 10.0
 	totalPages := math.Ceil(float64(totalRows) / perPage)
 
 	offset := (page - 1) * int(perPage)
 	if page > int(totalPages) {
-		offset = 0
+		offset = 0 // Optional: Or you can return an empty array if page is out of bounds
 	}
 
 	result := db.Order("products.updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&products)
@@ -415,13 +438,13 @@ func GetProducts(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func GetProductsClient(c *gin.Context) {
+func GetActiveProductsBySlug(c *gin.Context) {
+	// 1. Extract the SLUG from the URL instead of the UUID
+	slug := c.Param("slug")
+
 	tag := c.Query("tag")
-	brand := strings.TrimSpace(c.Query("brand"))
 	pageString := c.Query("page")
 	page := 1
-
-	fmt.Println("tag", tag, "brand", brand)
 
 	if pageString != "" {
 		if parsedPage, err := strconv.Atoi(pageString); err == nil && parsedPage > 0 {
@@ -429,33 +452,44 @@ func GetProductsClient(c *gin.Context) {
 		}
 	}
 
-	// redis key
-	cacheKey := fmt.Sprintf("products:tag=%s:brand=%s:page=%d", tag, brand, page)
+	// 2. Update the cache key to use the slug
+	cacheKey := fmt.Sprintf("products:slug:%s:client:tag=%s:page=%d", slug, tag, page)
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
-		var cachedReponse map[string]interface{}
-		if unmarshalErr := json.Unmarshal([]byte(val), &cachedReponse); unmarshalErr == nil {
-			c.JSON(http.StatusOK, cachedReponse)
-			return // crucial: avoid continuing to DB query
+		var cachedResponse map[string]interface{}
+		if unmarshalErr := json.Unmarshal([]byte(val), &cachedResponse); unmarshalErr == nil {
+			c.JSON(http.StatusOK, cachedResponse)
+			return
 		}
-		// if unmarshaling failed, fall through to DB fetch
+	}
+
+	// 3. RESOLVE SLUG TO UUID (Protects against fake URLs)
+	// We only select the "id" column to make this query lightning fast.
+	var shopID uuid.UUID
+	if err := initializers.DB.Model(&models.Shop{}).Select("id").Where("slug = ?", slug).First(&shopID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Shop not found",
+		})
+		return
 	}
 
 	var totalRows int64
 	var products []models.Product
-	db := initializers.DB.Model(&models.Product{}).Where("products.active = ?", true).Preload("Images").Preload("Tags")
 
-	if brand != "" {
-		db = db.Where("LOWER(TRIM(brand)) = ?", strings.ToLower(brand))
-	} else if tag != "" {
-		// Filter products by tag name
-		// Join product_tags and tags to filter products by tag name
+	// 4. Run the product query using the securely resolved shopID
+	db := initializers.DB.Model(&models.Product{}).
+		Where("products.shop_id = ?", shopID).
+		Where("products.active = ?", true).
+		Preload("Images").
+		Preload("Tags")
+
+	if tag != "" {
 		db = db.Joins("JOIN product_tags ON product_tags.product_id = products.id").
 			Joins("JOIN tags ON tags.id = product_tags.tag_id").
 			Where("LOWER(tags.name) = ?", strings.ToLower(tag))
 	}
 
-	// count total rows after applying the filter if there's any
 	if err := db.Count(&totalRows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -470,7 +504,7 @@ func GetProductsClient(c *gin.Context) {
 
 	offset := (page - 1) * int(perPage)
 	if page > int(totalPages) {
-		offset = 0
+		offset = int(totalPages) * int(perPage)
 	}
 
 	result := db.Order("products.updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&products)
@@ -501,30 +535,45 @@ func GetProductsClient(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func GetProductsBySearch(c *gin.Context) {
+func GetProductsBySearchBySlug(c *gin.Context) {
 	search := c.Query("search")
+	slug := c.Param("slug")
+
+	// 1. RESOLVE SLUG TO UUID (Fixes the Slug mismatch bug)
+	var shopID uuid.UUID
+	if err := initializers.DB.Model(&models.Shop{}).Select("id").Where("slug = ?", slug).First(&shopID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Shop not found",
+		})
+		return
+	}
 
 	var products []models.Product
 
-	query := initializers.DB.Order("updated_at DESC")
+	// 2. THE BASE SECURITY QUERY (Fixes the active=true trap)
+	query := initializers.DB.Model(&models.Product{}).
+		Where("shop_id = ?", shopID).
+		Where("active = ?", true).
+		Order("updated_at DESC")
 
+	// 3. THE SEARCH LOGIC (Fixes the Phantom Brand bug)
 	if search != "" {
 		words := strings.Fields(search)
-
 		for _, w := range words {
 			like := "%" + w + "%"
-			query = query.Where("title ILIKE ? OR description ILIKE ? OR brand ILIKE ?", like, like, like).Where("products.active = ?", true)
+			query = query.Where("title ILIKE ? OR description ILIKE ?", like, like)
 		}
 	}
+
+	// 4. EXECUTE & PRELOAD
 	result := query.
 		Limit(10).
 		Preload("Images").
-		Preload("Variants").
-		Preload("Variants.VariantItems").
 		Find(&products)
 
 	if result.Error != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Error retrieving the products",
 		})
@@ -533,24 +582,22 @@ func GetProductsBySearch(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "products were retrieved successfully",
 		"data":    products,
 	})
 }
 
-func GetProduct(c *gin.Context) {
+func IndexProductByShop(c *gin.Context) {
 	productId, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "error while parsing the product id",
-			"error":   err.Error(),
 		})
 		return
 	}
 
 	// redis key
-	cacheKey := fmt.Sprintf("product:id=%s", c.Param("id"))
+	cacheKey := fmt.Sprintf("product:id=%s", productId.String())
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
 		var cachedResponse dto.ProductResponse
@@ -566,27 +613,36 @@ func GetProduct(c *gin.Context) {
 
 	var product models.Product
 
-	result := initializers.DB.Preload("Images").Preload("Variants").Preload("Variants.VariantItems").Preload("Tags").First(&product, "id = ?", productId)
+	// CRITICAL ADDITION: .Preload("Combinations")
+	// (Ensure your models.Product struct has `Combinations []ProductVariantCombination` defined on it!)
+	result := initializers.DB.
+		Preload("Images").
+		Preload("Tags").
+		Preload("Variants").
+		Preload("Variants.VariantItems").
+		Preload("Combinations").   // The Shopify Trick Inventory!
+		Where("active = ?", true). // ONLY return if active (assuming this is for the client storefront)
+		First(&product, "id = ?", productId)
 
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusNotFound, gin.H{ // Changed from 500 to 404
 			"success": false,
-			"message": "error while retrieving the product",
-			"error":   result.Error.Error(),
+			"message": "Product not found or inactive",
 		})
 		return
 	}
 
 	response := dto.ProductResponse{
-		ID:          product.ID.String(),
-		Title:       product.Title,
-		Brand:       product.Brand,
-		Description: product.Description,
-		Price:       product.Price,
-		OldPrice:    product.OldPrice,
-		Variants:    make([]dto.VariantResponse, 0),
+		ID:           product.ID.String(),
+		Title:        product.Title,
+		Description:  product.Description,
+		Price:        product.Price,
+		OldPrice:     product.OldPrice,
+		Variants:     make([]dto.VariantResponse, 0),
+		Combinations: make([]dto.CombinationResponse, 0),
 	}
 
+	// Map Images
 	var images []dto.ProductImageResponse
 	for _, i := range product.Images {
 		images = append(images, dto.ProductImageResponse{
@@ -596,12 +652,14 @@ func GetProduct(c *gin.Context) {
 	}
 	response.Images = images
 
+	// Map Tags
 	var tags []string
 	for _, t := range product.Tags {
 		tags = append(tags, t.Name)
 	}
 	response.Tags = tags
 
+	// Map Variants & Items
 	for _, v := range product.Variants {
 		var vr dto.VariantResponse
 		vr.ID = v.ID.String()
@@ -610,15 +668,45 @@ func GetProduct(c *gin.Context) {
 
 		for _, item := range v.VariantItems {
 			vr.VariantItems = append(vr.VariantItems, dto.VariantItemSimple{
-				ID:       item.ID.String(),
-				Value:    item.Value,
-				Price:    item.Price,
-				Quantity: item.Quantity,
+				ID:    item.ID.String(),
+				Value: item.Value,
 			})
 		}
-
 		response.Variants = append(response.Variants, vr)
 	}
+
+	// CRITICAL ADDITION: Map the Sellable Inventory (Combinations)
+	var combinations []dto.CombinationResponse
+	for _, c := range product.Combinations {
+
+		// Safely convert pointers to strings
+		var opt1, opt2, opt3 *string
+		if c.Option1ID != nil {
+			str := c.Option1ID.String()
+			opt1 = &str
+		}
+		if c.Option2ID != nil {
+			str := c.Option2ID.String()
+			opt2 = &str
+		}
+		if c.Option3ID != nil {
+			str := c.Option3ID.String()
+			opt3 = &str
+		}
+
+		combinations = append(combinations, dto.CombinationResponse{
+			ID:                c.ID.String(),
+			SKU:               c.SKU,
+			Price:             c.Price,
+			Quantity:          c.Quantity,
+			Option1ID:         opt1,
+			Option2ID:         opt2,
+			Option3ID:         opt3,
+			CombinationString: c.CombinationString,
+		})
+	}
+
+	response.Combinations = combinations // Make sure this is in your ProductResponse struct!
 
 	// save the data to redis
 	jsonData, err := json.Marshal(response)
@@ -634,6 +722,7 @@ func GetProduct(c *gin.Context) {
 	})
 }
 
+// stopped here
 func UpdateProduct(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -683,9 +772,7 @@ func UpdateProduct(c *gin.Context) {
 	if body.Description != "" {
 		product.Description = body.Description
 	}
-	if body.Brand != "" {
-		product.Brand = body.Brand
-	}
+
 	if body.Price != 0 {
 		product.Price = body.Price
 		fmt.Println(product.Price, body.Price)

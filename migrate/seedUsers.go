@@ -3,8 +3,8 @@ package migrate
 import (
 	"log"
 
-	"github.com/chtiwa/lk-parfumo-server/initializers"
-	"github.com/chtiwa/lk-parfumo-server/models"
+	"github.com/chtiwa/dzbazar-server/initializers"
+	"github.com/chtiwa/dzbazar-server/models"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -16,8 +16,8 @@ func SeedUsers() {
 		hash1, _ := bcrypt.GenerateFromPassword([]byte("sigma"), 10)
 		hash2, _ := bcrypt.GenerateFromPassword([]byte("zinou2003"), 10)
 		users := []models.User{
-			{Username: "chtiwa", Password: string(hash1), Role: "Admin"},
-			{Username: "zinou", Password: string(hash2), Role: "Admin"},
+			{FirstName: "chtiwa", Password: string(hash1), Role: "Admin"},
+			{LastName: "zinou", Password: string(hash2), Role: "Admin"},
 		}
 
 		result := initializers.DB.Create(&users)

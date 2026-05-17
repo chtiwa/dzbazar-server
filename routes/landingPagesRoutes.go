@@ -1,8 +1,8 @@
 package routes
 
 import (
-	"github.com/chtiwa/lk-parfumo-server/controllers"
-	"github.com/chtiwa/lk-parfumo-server/middleware"
+	"github.com/chtiwa/dzbazar-server/controllers"
+	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/gin-gonic/gin"
 )
 

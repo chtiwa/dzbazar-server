@@ -3,7 +3,7 @@ package controllers
 import (
 	"net/http"
 
-	"github.com/chtiwa/lk-parfumo-server/initializers"
+	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/gin-gonic/gin"
 )
 

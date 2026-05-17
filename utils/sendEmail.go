@@ -10,7 +10,7 @@ import (
 	"github.com/resendlabs/resend-go"
 )
 
-func SendEmail(
+func SendOrderEmail(
 	fullName, phoneNumber, state, city, productName, variant, shippingMethod string,
 	quantity uint,
 	price, shippingPrice, totalPrice float64,
@@ -63,9 +63,9 @@ func SendEmail(
 
 	// Build the email request
 	params := &resend.SendEmailRequest{
-		From:    "LK Parfumo <contact@lkparfumo.com>",
-		To:      []string{"chtiwaa@gmail.com"},
-		Cc:      []string{"lakhalzineddine12@gmail.com"}, // Uncomment to add CC recipient
+		From: "LK Parfumo <contact@lkparfumo.com>",
+		To:   []string{"chtiwaa@gmail.com"},
+		// Cc:      []string{"lakhalzineddine12@gmail.com"}, // Uncomment to add CC recipient
 		Subject: fmt.Sprintf("Nouvelle Commande – %s – %s – %d", fullName, phoneNumber, time.Now().Unix()),
 		Html:    htmlContent,
 		Headers: map[string]string{
@@ -152,5 +152,96 @@ func SendLowStockEmail(productName, variant string, quantity int) error {
 	}
 
 	log.Printf("Low stock email sent successfully: ID %s\n", resp.Id)
+	return nil
+}
+
+func SendOTPEmail(email, otp string) error {
+	client := resend.NewClient(os.Getenv("RESEND_API_KEY"))
+	if client == nil {
+		return fmt.Errorf("failed to initialize Resend client")
+	}
+
+	htmlContent := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html lang="fr">
+	<head>
+	<meta charset="UTF-8">
+	<title>Code de vérification - LK Parfumo</title>
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			background-color: #f4f4f4;
+			padding: 20px;
+		}
+		.container {
+			max-width: 600px;
+			margin: auto;
+			background: #ffffff;
+			padding: 20px;
+			border-radius: 8px;
+			text-align: center;
+		}
+		.header {
+			background: #000000;
+			color: white;
+			padding: 15px;
+			font-size: 22px;
+			font-weight: bold;
+			border-radius: 8px 8px 0 0;
+		}
+		.content {
+			padding: 30px 20px;
+			font-size: 16px;
+			color: #333;
+		}
+		.otp {
+			font-size: 32px;
+			font-weight: bold;
+			letter-spacing: 8px;
+			margin: 20px 0;
+			color: #000000;
+		}
+		.note {
+			font-size: 14px;
+			color: #666;
+			margin-top: 20px;
+		}
+	</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="header">Vérification de votre email</div>
+			<div class="content">
+				<p>Voici votre code de vérification :</p>
+				<div class="otp">%s</div>
+				<p>Ce code expire dans 15 minutes.</p>
+				<p class="note">Si vous n'avez pas demandé ce code, ignorez cet email.</p>
+			</div>
+		</div>
+	</body>
+	</html>`, otp)
+
+	params := &resend.SendEmailRequest{
+		From:    "LK Parfumo <contact@lkparfumo.com>",
+		To:      []string{email},
+		Subject: "Votre code de vérification",
+		Html:    htmlContent,
+		Headers: map[string]string{
+			"Message-ID": fmt.Sprintf("<%d-%s@lkparfumo>", time.Now().UnixNano(), uuid.New().String()),
+		},
+	}
+
+	resp, err := client.Emails.Send(params)
+	if err != nil {
+		log.Printf("Resend error: %v\n", err)
+		return fmt.Errorf("resend error: %v", err)
+	}
+
+	if resp.Id == "" {
+		log.Printf("Resend response error: empty response ID")
+		return fmt.Errorf("resend error: failed to send email")
+	}
+
+	log.Printf("OTP email sent successfully: ID %s\n", resp.Id)
 	return nil
 }

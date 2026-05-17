@@ -1,1 +1,13 @@
-- add delivery rates
+- shop controller
+- users controller
+- products controller
+- orders controller
+- pixels controller
+
+- landingpages controller
+- dashboard controller
+
+- fix landing page creation and update
+- fix products creation and update
+- fix dashboard anayltics ( based on the shop )
+- fix user

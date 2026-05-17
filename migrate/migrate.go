@@ -1,27 +1,52 @@
 package migrate
 
 import (
-	"fmt"
 	"log"
 
-	"github.com/chtiwa/lk-parfumo-server/initializers"
-	"github.com/chtiwa/lk-parfumo-server/models"
+	"github.com/chtiwa/dzbazar-server/initializers"
+	"github.com/chtiwa/dzbazar-server/models"
 )
 
 func Migrate() {
 	initializers.DB.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`)
 	initializers.DB.Exec(`CREATE EXTENSION IF NOT EXISTS "pg_trgm";`)
 
-	err := initializers.DB.AutoMigrate(&models.BaseModel{}, &models.Order{}, &models.User{}, &models.Client{}, &models.Product{}, &models.ProductImage{}, &models.Variant{}, &models.VariantItem{}, &models.Tag{}, &models.LandingPage{}, &models.LandingPageImage{})
+	// 1. Temporarily disable Foreign Key creation on the GORM instance
+	initializers.DB.Config.DisableForeignKeyConstraintWhenMigrating = true
+
+	log.Println("🔄 Phase 1: Creating base tables without constraints...")
+	err := initializers.DB.AutoMigrate(
+		&models.User{},
+		&models.Shop{},
+	)
 	if err != nil {
-		log.Fatal("Something went wrong while migrating")
+		log.Fatalf("Phase 1 migration failed: %v", err)
 	}
 
-	status := initializers.RClient.Set(initializers.Ctx, "promo:pack3:remaining", 87, 0)
+	// 2. Re-enable Foreign Key creation so all subsequent tables link correctly
+	initializers.DB.Config.DisableForeignKeyConstraintWhenMigrating = false
 
-	fmt.Println(status)
+	log.Println("🔄 Phase 2: Building dependent tables and establishing relationships...")
+	err = initializers.DB.AutoMigrate(
+		&models.User{}, // Passing them again forces GORM to append the skipped foreign keys
+		&models.Shop{},
+		&models.ShopMember{},
+		&models.Client{},
+		&models.Tag{},
+		&models.Pixel{},
+		&models.Product{},
+		&models.ProductImage{},
+		&models.LandingPage{},
+		&models.LandingPageImage{},
+		&models.Variant{},
+		&models.VariantItem{},
+		&models.ProductVariantCombination{},
+		&models.Order{},
+		&models.OrderItem{},
+	)
+	if err != nil {
+		log.Fatalf("Phase 2 migration failed: %v", err)
+	}
 
-	SeedUsers()
-	SeedTags()
-	fmt.Println("Migration was successful!")
+	log.Println("🚀 Database schema migrated perfectly with all relations intact!")
 }

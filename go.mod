@@ -1,4 +1,4 @@
-module github.com/chtiwa/lk-parfumo-server
+module github.com/chtiwa/dzbazar-server
 
 go 1.24.1
 

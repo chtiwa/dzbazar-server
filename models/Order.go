@@ -2,38 +2,52 @@ package models
 
 import "github.com/google/uuid"
 
-type Client struct {
-	FullName     string `json:"fullName"`
-	PhoneNumber  string `json:"phoneNumber"`
-	PhoneNumber2 string `json:"phoneNumber2"`
-	State        string `json:"state"`
-	StateNumber  string `json:"stateNumber"`
-	StateId      string `json:"stateId"`
-	City         string `json:"city"`
-	CityId       string `json:"cityId"`
-	HubId        string `json:"hubId"`
-}
+type OrderStatus string
 
+// 1. The Main Order (The Box being shipped)
 type Order struct {
 	BaseModel
-	ShopName      string    `json:"shopName"` // should be shop id
-	ProductID     uuid.UUID `json:"productId"`
-	VariantItemId uuid.UUID `gorm:"omitempty" json:"variantItemId"`
-	ProductName   string    `json:"productName"`
-	Client
-	Quantity         uint    `json:"quantity"`
-	Variant          string  `json:"variant"` // 100ml
-	Price            float64 `json:"price"`
-	ShippingMethod   string  `json:"shippingMethod"`
-	ShippingPrice    float64 `json:"shippingPrice"`
-	TotalPrice       float64 `json:"totalPrice"`
-	Status           string  `gorm:"default:En attente" json:"status"`
-	Note             string  `gorm:"omitempty" json:"note"`
-	FBclid           string  `json:"fbclid"`
-	FBc              string  `json:"fbc"`
-	FBp              string  `json:"fbp"`
-	Ttclid           string  `json:"ttclid"`
-	ConversionSource string  `gorm:"binding:tiktok facebook organic auto_pending" json:"conversionSource"`
-	IsShipped        bool    `gorm:"default:false" json:"isShipped"`
-	// binding:"oneof=Pending Not Responding Confirmed Canceled Abandoned"
+	ShopID uuid.UUID `gorm:"not null;index" json:"shopId"`
+
+	// THE FIX: Link the order to the new Client model
+	ClientID uuid.UUID `gorm:"not null;index" json:"clientId"`
+	Client   Client    `gorm:"foreignKey:ClientID;references:ID" json:"client"`
+
+	// Financials & Shipping
+	ShippingMethod string  `json:"shippingMethod"`
+	ShippingPrice  float64 `json:"shippingPrice"`
+	TotalPrice     float64 `json:"totalPrice"` // Sum of all items + shipping
+	Status         string  `gorm:"default:En attente" json:"status"`
+
+	Note string `gorm:"omitempty" json:"note"`
+
+	// Marketing & COD Flags
+	TrackingNumber   string `json:"trackingNumber"`
+	Ouvrable         bool   `gorm:"default:false" json:"ouvrable"`
+	Fragile          bool   `gorm:"default:false" json:"fragile"`
+	Essayable        bool   `gorm:"default:false" json:"essayable"`
+	FBclid           string `json:"fbclid"`
+	FBc              string `json:"fbc"`
+	FBp              string `json:"fbp"`
+	ConversionSource string `json:"conversionSource"`
+	IsShipped        bool   `gorm:"default:false" json:"isShipped"`
+
+	// THE FIX: One Order has Many Items
+	Items []OrderItem `gorm:"foreignKey:OrderID;constraint:OnDelete:CASCADE" json:"items"`
+}
+
+// 2. The Contents of the Box
+type OrderItem struct {
+	BaseModel
+	OrderID uuid.UUID `gorm:"not null;index" json:"orderId"`
+
+	ProductID uuid.UUID `gorm:"not null" json:"productId"`
+	Product   Product   `gorm:"foreignKey:ProductID;references:ID" json:"product"` // Optional: to fetch product details easily
+
+	// You can store the CombinationID here, but for MVP speed,
+	// storing the human-readable string is often safer in case the admin deletes the variant later!
+	VariantString string `gorm:"not null" json:"variantString"` // e.g., "Black / 41"
+
+	Quantity uint    `gorm:"not null;default:1" json:"quantity"`
+	Price    float64 `gorm:"not null" json:"price"` // Price of this specific variant at the time of purchase
 }
