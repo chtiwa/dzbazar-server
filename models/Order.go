@@ -44,9 +44,11 @@ type OrderItem struct {
 	ProductID uuid.UUID `gorm:"not null" json:"productId"`
 	Product   Product   `gorm:"foreignKey:ProductID;references:ID" json:"product"` // Optional: to fetch product details easily
 
-	// You can store the CombinationID here, but for MVP speed,
-	// storing the human-readable string is often safer in case the admin deletes the variant later!
-	VariantString string `gorm:"not null" json:"variantString"` // e.g., "Black / 41"
+	/// 1. The Foreign Key Column (Stores the exact ID pointing to the flattened SKU row)
+	ProductVariantCombinationID uuid.UUID `gorm:"type:uuid;not null;index" json:"productVariantCombinationId"`
+
+	// 2. The Relationship Instance (Enables GORM's Preload engine to look up the data)
+	ProductVariantCombination ProductVariantCombination `gorm:"foreignKey:ProductVariantCombinationID;references:ID;constraint:OnDelete:RESTRICT" json:"productVariantCombination"`
 
 	Quantity uint    `gorm:"not null;default:1" json:"quantity"`
 	Price    float64 `gorm:"not null" json:"price"` // Price of this specific variant at the time of purchase

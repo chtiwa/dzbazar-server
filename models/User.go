@@ -13,7 +13,7 @@ type User struct {
 	PhoneNumber string `gorm:"not null" json:"phoneNumber"`
 	Email       string `gorm:"unique;not null" json:"email"`
 	Password    string `json:"password"`
-	Role        string `gorm:"default:User" json:"role" binding:"oneof=Admin Moderator User"`
+	Role        string `gorm:"default:Staff" json:"role"`
 	IsVerified  bool   `gorm:"default:false" json:"isVerified"`
 
 	EmailOTP          string     `json:"emailOtp"`
@@ -27,8 +27,9 @@ type ShopMember struct {
 	BaseModel
 	ShopID uuid.UUID `gorm:"type:uuid;not null;index;uniqueIndex:idx_shop_user" json:"shopId"`
 	UserID uuid.UUID `gorm:"type:uuid;not null;index;uniqueIndex:idx_shop_user" json:"userId"`
-	User   User      `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user"`
 
-	// Role is local to THIS shop. A user can be an 'Owner' in Shop A, but 'Logistics' in Shop B.
+	User User `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user"`
+	Shop Shop `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"shop"`
+
 	Role string `gorm:"type:text;not null;default:'Staff'" json:"role"`
 }

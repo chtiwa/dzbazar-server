@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,21 +31,20 @@ type VariantItemSimple struct {
 }
 
 func CreateProductByShop(c *gin.Context) {
-	// 1. CRITICAL FIX: Extract the ShopID.
-	// Assuming your route is something like POST /shops/:shopId/products
 	shopIDParam := c.Param("shopId")
 	shopID, err := uuid.Parse(shopIDParam)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid Shop ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid shop ID"})
 		return
 	}
 
-	title := c.PostForm("title")
-	price := c.PostForm("price")
-	description := c.PostForm("description")
+	title := strings.TrimSpace(c.PostForm("title"))
+	price := strings.TrimSpace(c.PostForm("price"))
+	oldPrice := strings.TrimSpace(c.PostForm("oldPrice"))
+	description := strings.TrimSpace(c.PostForm("description"))
 
 	if title == "" || price == "" || description == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Missing required fields"})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "missing required fields"})
 		return
 	}
 
@@ -54,103 +54,78 @@ func CreateProductByShop(c *gin.Context) {
 		return
 	}
 
+	var parsedOldPrice *float64
+	if oldPrice != "" {
+		value, err := strconv.ParseFloat(oldPrice, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid old price"})
+			return
+		}
+		parsedOldPrice = &value
+	}
+
 	var variants []dto.VariantInput
-	variantsJson := c.PostForm("variants")
-	if variantsJson != "" {
-		if err := json.Unmarshal([]byte(variantsJson), &variants); err != nil {
+	variantsJSON := c.PostForm("variants")
+	if variantsJSON != "" {
+		if err := json.Unmarshal([]byte(variantsJSON), &variants); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid variants JSON"})
 			return
 		}
 	}
 
-	// Transaction start
-	tx := initializers.DB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "internal server error"})
-		}
-	}()
-
-	var tagNames []string
-	var tags []models.Tag
-
-	// --- TAGS LOGIC (Kept exactly as you wrote it, it is excellent) ---
-	tagsJson := c.PostForm("tags")
-	if tagsJson != "" {
-		if err := json.Unmarshal([]byte(tagsJson), &tagNames); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid tags JSON"})
+	var combinationsInput []dto.CombinationInput
+	combinationsJSON := c.PostForm("combinations")
+	if combinationsJSON != "" {
+		if err := json.Unmarshal([]byte(combinationsJSON), &combinationsInput); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid combinations JSON"})
 			return
-		}
-
-		uniqueNames := make(map[string]struct{})
-		normalizedNames := []string{}
-		for _, tagName := range tagNames {
-			tagName = strings.ToLower(strings.TrimSpace(tagName))
-			if tagName == "" {
-				continue
-			}
-			if _, exists := uniqueNames[tagName]; !exists {
-				uniqueNames[tagName] = struct{}{}
-				normalizedNames = append(normalizedNames, tagName)
-			}
-		}
-
-		if len(normalizedNames) > 0 {
-			var existingTags []models.Tag
-			if err := tx.Where("name IN ?", normalizedNames).Find(&existingTags).Error; err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to fetch tags"})
-				return
-			}
-
-			existingMap := make(map[string]models.Tag)
-			for _, tag := range existingTags {
-				existingMap[tag.Name] = tag
-			}
-
-			var tagsToCreate []models.Tag
-			for _, tagName := range normalizedNames {
-				if _, exists := existingMap[tagName]; !exists {
-					tagsToCreate = append(tagsToCreate, models.Tag{Name: tagName})
-				}
-			}
-
-			if len(tagsToCreate) > 0 {
-				if err := tx.Create(&tagsToCreate).Error; err != nil {
-					tx.Rollback()
-					c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create tags"})
-					return
-				}
-			}
-			tags = append(existingTags, tagsToCreate...)
 		}
 	}
 
-	// --- PRODUCT CREATION ---
+	tx := initializers.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to start transaction"})
+		return
+	}
+	defer tx.Rollback()
+
 	product := models.Product{
-		ShopID:      shopID, // 2. CRITICAL FIX: Link to the shop
+		ShopID:      shopID,
 		Title:       title,
 		Description: description,
 		Price:       parsedPrice,
-		Tags:        tags,
+		OldPrice:    parsedOldPrice,
 	}
 
 	if err := tx.Create(&product).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create product", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "failed to create product",
+			"error":   err.Error(),
+		})
 		return
 	}
 
-	// --- IMAGE UPLOAD ---
-	form, _ := c.MultipartForm()
-	files := form.File["images"]
+	form, err := c.MultipartForm()
+	if err != nil && err != http.ErrNotMultipart {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid multipart form"})
+		return
+	}
+
+	var files []*multipart.FileHeader
+	if form != nil {
+		files = form.File["images"]
+	}
+
+	if len(files) > 5 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "maximum 5 images allowed"})
+		return
+	}
 
 	var productImages []models.ProductImage
 	for _, file := range files {
 		src, err := file.Open()
 		if err != nil {
-			tx.Rollback()
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "failed to open file"})
 			return
 		}
@@ -167,12 +142,17 @@ func CreateProductByShop(c *gin.Context) {
 		src.Close()
 
 		if err != nil {
-			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to upload image"})
 			return
 		}
 
-		url := fmt.Sprintf("https://%s.s3.%s.backblazeb2.com/%s", bucketName, os.Getenv("B2_REGION"), key)
+		url := fmt.Sprintf(
+			"https://%s.s3.%s.backblazeb2.com/%s",
+			bucketName,
+			os.Getenv("B2_REGION"),
+			key,
+		)
+
 		productImages = append(productImages, models.ProductImage{
 			ProductID: product.ID,
 			URL:       url,
@@ -181,91 +161,141 @@ func CreateProductByShop(c *gin.Context) {
 
 	if len(productImages) > 0 {
 		if err := tx.Create(&productImages).Error; err != nil {
-			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to save images"})
 			return
 		}
 	}
-
 	product.Images = productImages
 
-	// --- VARIANTS & COMBINATIONS ---
-
-	// 1. A map to remember the new UUIDs for each VariantItem string
-	// e.g., "Red" -> "123e4567-e89b-12d3..."
 	itemIDs := make(map[string]uuid.UUID)
 
+	makeItemKey := func(variantTitle, itemValue string) string {
+		return strings.ToLower(strings.TrimSpace(variantTitle)) + "::" + strings.ToLower(strings.TrimSpace(itemValue))
+	}
+
 	for _, v := range variants {
-		variant := models.Variant{ProductID: product.ID, Title: v.Title}
+		variant := models.Variant{
+			ProductID: product.ID,
+			Title:     strings.TrimSpace(v.Title),
+		}
+
 		if err := tx.Create(&variant).Error; err != nil {
-			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create variant category"})
 			return
 		}
 
 		for _, item := range v.VariantItems {
+			value := strings.TrimSpace(item.Value)
+			if value == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "variant item value cannot be empty"})
+				return
+			}
+
 			vItem := models.VariantItem{
 				VariantID: variant.ID,
-				Value:     item.Value,
+				Value:     value,
 			}
 
 			if err := tx.Create(&vItem).Error; err != nil {
-				tx.Rollback()
 				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create variant item"})
 				return
 			}
 
-			// Save the newly generated UUID into our map for later!
-			itemIDs[item.Value] = vItem.ID
+			itemIDs[makeItemKey(v.Title, value)] = vItem.ID
 		}
 	}
 
-	// 2. Parse the Combinations from the form data
-	var combinationsInput []dto.CombinationInput
-	combinationsJson := c.PostForm("combinations")
-	if combinationsJson != "" {
-		if err := json.Unmarshal([]byte(combinationsJson), &combinationsInput); err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid combinations JSON"})
-			return
-		}
+	var variantTitles []string
+	for _, v := range variants {
+		variantTitles = append(variantTitles, strings.TrimSpace(v.Title))
 	}
 
-	// 3. Create the actual sellable SKUs (Combinations)
-	var combinationsToSave []models.ProductVariantCombination
+		var combinationsToSave []models.ProductVariantCombination
 
 	for _, combo := range combinationsInput {
 		var opt1ID, opt2ID, opt3ID *uuid.UUID
 		var comboStringParts []string
 
-		// Map Option 1
-		if combo.Option1 != nil && *combo.Option1 != "" {
-			if id, exists := itemIDs[*combo.Option1]; exists {
-				opt1ID = &id
-				comboStringParts = append(comboStringParts, *combo.Option1)
-			}
-		}
-		// Map Option 2
-		if combo.Option2 != nil && *combo.Option2 != "" {
-			if id, exists := itemIDs[*combo.Option2]; exists {
-				opt2ID = &id
-				comboStringParts = append(comboStringParts, *combo.Option2)
-			}
-		}
-		// Map Option 3
-		if combo.Option3 != nil && *combo.Option3 != "" {
-			if id, exists := itemIDs[*combo.Option3]; exists {
-				opt3ID = &id
-				comboStringParts = append(comboStringParts, *combo.Option3)
-			}
+		sku := strings.TrimSpace(combo.SKU)
+		if sku == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "combination SKU cannot be empty",
+			})
+			return
 		}
 
-		// Create a clean readable string like "Red / 41"
+		if combo.Option1 != nil && strings.TrimSpace(*combo.Option1) != "" {
+			if len(variantTitles) < 1 {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": "invalid option1 mapping",
+				})
+				return
+			}
+
+			value := strings.TrimSpace(*combo.Option1)
+			id, exists := itemIDs[makeItemKey(variantTitles[0], value)]
+			if !exists {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": fmt.Sprintf("invalid option1 value: %s", value),
+				})
+				return
+			}
+			opt1ID = &id
+			comboStringParts = append(comboStringParts, value)
+		}
+
+		if combo.Option2 != nil && strings.TrimSpace(*combo.Option2) != "" {
+			if len(variantTitles) < 2 {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": "invalid option2 mapping",
+				})
+				return
+			}
+
+			value := strings.TrimSpace(*combo.Option2)
+			id, exists := itemIDs[makeItemKey(variantTitles[1], value)]
+			if !exists {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": fmt.Sprintf("invalid option2 value: %s", value),
+				})
+				return
+			}
+			opt2ID = &id
+			comboStringParts = append(comboStringParts, value)
+		}
+
+		if combo.Option3 != nil && strings.TrimSpace(*combo.Option3) != "" {
+			if len(variantTitles) < 3 {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": "invalid option3 mapping",
+				})
+				return
+			}
+
+			value := strings.TrimSpace(*combo.Option3)
+			id, exists := itemIDs[makeItemKey(variantTitles[2], value)]
+			if !exists {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": fmt.Sprintf("invalid option3 value: %s", value),
+				})
+				return
+			}
+			opt3ID = &id
+			comboStringParts = append(comboStringParts, value)
+		}
+
 		comboString := strings.Join(comboStringParts, " / ")
 
 		combinationsToSave = append(combinationsToSave, models.ProductVariantCombination{
 			ProductID:         product.ID,
-			SKU:               combo.SKU,
+			SKU:               sku,
 			Price:             combo.Price,
 			Quantity:          combo.Quantity,
 			Option1ID:         opt1ID,
@@ -275,10 +305,8 @@ func CreateProductByShop(c *gin.Context) {
 		})
 	}
 
-	// 4. Batch Insert all Combinations at once
 	if len(combinationsToSave) > 0 {
 		if err := tx.Create(&combinationsToSave).Error; err != nil {
-			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"message": "failed to save product combinations",
@@ -288,25 +316,19 @@ func CreateProductByShop(c *gin.Context) {
 		}
 	}
 
-	// --- END VARIANTS & COMBINATIONS ---
-
 	if err := tx.Commit().Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "transaction failed"})
 		return
 	}
 
-	// 3. IMPROVEMENT: Run Redis invalidation in the background
-	// This prevents the user from waiting for the cache to clear
 	go func() {
 		var cursor uint64
 		for {
-			var keys []string
-			var err error
-			// Note: ensure you are using a background context here, not gin.Context
-			keys, cursor, err = initializers.RClient.Scan(context.Background(), cursor, "products:*", 100).Result()
+			keys, nextCursor, err := initializers.RClient.Scan(context.Background(), cursor, "products:*", 100).Result()
 			if err == nil && len(keys) > 0 {
 				initializers.RClient.Del(context.Background(), keys...)
 			}
+			cursor = nextCursor
 			if cursor == 0 {
 				break
 			}
@@ -321,121 +343,158 @@ func CreateProductByShop(c *gin.Context) {
 }
 
 // get products in the admin panel
-func GetProductsByShop(c *gin.Context) {
-	// 1. Extract the SLUG from the URL instead of the UUID
-	slug := c.Param("slug")
+func GetProductsByShopAdmin(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid shop ID",
+		})
+		return
+	}
 
-	tag := c.Query("tag")
-	pageString := c.Query("page")
+	tag := strings.TrimSpace(c.Query("tag"))
+	search := strings.TrimSpace(c.Query("search"))
 	page := 1
+	perPage := 10
 
-	if pageString != "" {
-		if parsedPage, err := strconv.Atoi(pageString); err == nil && parsedPage > 0 {
-			page = parsedPage
+	if v := c.Query("page"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	if v := c.Query("perPage"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 && parsed <= 100 {
+			perPage = parsed
 		}
 	}
 
-	// 2. RESOLVE SLUG TO UUID (Protects against fake URLs)
-	// We only select the "id" column to make this query lightning fast.
-	var shopID uuid.UUID
-	if err := initializers.DB.Model(&models.Shop{}).Select("id").Where("slug = ?", slug).First(&shopID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Shop not found",
-		})
-		return
-	}
-	userInterface, ok := c.Get("user")
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Error while fetching the user from context",
-		})
-		return
-	}
-
-	user, _ := userInterface.(models.User)
-	if user.ShopID == &shopID {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": "Error while fetching the products",
-		})
-		return
-	}
-
-	// 3. CRITICAL FIX: Add the ShopID to the Redis cache key to prevent cross-shop data leaks
-	cacheKey := fmt.Sprintf("products:shop:%s:admin:tag=%s:page=%d", shopID.String(), tag, page)
+	cacheKey := fmt.Sprintf(
+		"products:shop:%s:admin:tag=%s:search=%s:page=%d:perPage=%d",
+		shopID.String(),
+		strings.ToLower(tag),
+		strings.ToLower(search),
+		page,
+		perPage,
+	)
 
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
 		var cachedResponse map[string]interface{}
 		if unmarshalErr := json.Unmarshal([]byte(val), &cachedResponse); unmarshalErr == nil {
 			c.JSON(http.StatusOK, cachedResponse)
-			return // crucial: avoid continuing to DB query
+			return
 		}
-		// if unmarshaling failed, fall through to DB fetch
 	}
 
 	var totalRows int64
 	var products []models.Product
 
-	// 3. Lock the query to this specific shop immediately
 	db := initializers.DB.Model(&models.Product{}).
-		Where("products.shop_id = ?", shopID). // Use "products.shop_id" to prevent column ambiguity during JOINs
+		Where("products.shop_id = ?", shopID).
 		Preload("Images").
-		Preload("Tags")
+		Preload("Variants").
+		Preload("Variants.VariantItems").
+		Preload("Combinations")
+
+	if search != "" {
+		words := strings.Fields(search)
+		for _, w := range words {
+			like := "%" + w + "%"
+			db = db.Where("(products.title ILIKE ? OR products.description ILIKE ?)", like, like)
+		}
+	}
 
 	if tag != "" {
-		// Filter products by tag name
 		db = db.Joins("JOIN product_tags ON product_tags.product_id = products.id").
 			Joins("JOIN tags ON tags.id = product_tags.tag_id").
 			Where("LOWER(tags.name) = ?", strings.ToLower(tag))
 	}
 
-	// count total rows after applying the filter if there's any
 	if err := db.Count(&totalRows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"message": "error while counting the products",
+			"message": "error while counting products",
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	perPage := 10.0
-	totalPages := math.Ceil(float64(totalRows) / perPage)
-
-	offset := (page - 1) * int(perPage)
-	if page > int(totalPages) {
-		offset = 0 // Optional: Or you can return an empty array if page is out of bounds
+	totalPages := int(math.Ceil(float64(totalRows) / float64(perPage)))
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	if page > totalPages {
+		page = totalPages
 	}
 
-	result := db.Order("products.updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&products)
+	offset := (page - 1) * perPage
 
-	if result.Error != nil {
+	if err := db.Order("products.updated_at DESC").
+		Limit(perPage).
+		Offset(offset).
+		Find(&products).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"message": "error while retrieving the products",
-			"error":   result.Error.Error(),
+			"message": "error while retrieving products",
+			"error":   err.Error(),
 		})
 		return
 	}
 
-	pagination := utils.GetPaginationData(page, int(totalPages), "/products")
-
 	response := gin.H{
-		"success":    true,
-		"data":       products,
-		"pagination": pagination,
+		"success": true,
+		"data":    products,
+		"pagination": gin.H{
+			"page":       page,
+			"perPage":    perPage,
+			"totalRows":  totalRows,
+			"totalPages": totalPages,
+			"hasNext":    page < totalPages,
+			"hasPrev":    page > 1,
+		},
 	}
 
-	jsonData, err := json.Marshal(response)
-	if err == nil {
+	if jsonData, err := json.Marshal(response); err == nil {
 		initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute)
 		initializers.RClient.SAdd(initializers.Ctx, "cache:products", cacheKey)
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func GetProductByIDAdmin(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	productID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid product ID"})
+		return
+	}
+
+	var product models.Product
+	err = initializers.DB.
+		Where("id = ? AND shop_id = ?", productID, shopID).
+		Preload("Images").
+		Preload("Variants").
+		Preload("Variants.VariantItems").
+		Preload("Combinations").
+		First(&product).Error
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Product not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Product retrieved successfully",
+		"data":    product,
+	})
 }
 
 func GetActiveProductsBySlug(c *gin.Context) {
@@ -586,25 +645,30 @@ func GetProductsBySearchBySlug(c *gin.Context) {
 	})
 }
 
-func IndexProductByShop(c *gin.Context) {
-	productId, err := uuid.Parse(c.Param("id"))
+func IndexProductBySlug(c *gin.Context) {
+	productID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "error while parsing the product id",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid product ID"})
 		return
 	}
 
-	// redis key
-	cacheKey := fmt.Sprintf("product:id=%s", productId.String())
+	slug := c.Param("slug")
+
+	var shop models.Shop
+	if err := initializers.DB.Select("id").Where("slug = ?", slug).First(&shop).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "shop not found"})
+		return
+	}
+
+	cacheKey := fmt.Sprintf("product:shop:%s:id=%s", shop.ID.String(), productID.String())
+
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
 		var cachedResponse dto.ProductResponse
 		if unmarshalErr := json.Unmarshal([]byte(val), &cachedResponse); unmarshalErr == nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": true,
-				"message": "product was retrieved successfully (from cache)",
+				"message": "product was retrieved successfully",
 				"data":    cachedResponse,
 			})
 			return
@@ -612,107 +676,109 @@ func IndexProductByShop(c *gin.Context) {
 	}
 
 	var product models.Product
-
-	// CRITICAL ADDITION: .Preload("Combinations")
-	// (Ensure your models.Product struct has `Combinations []ProductVariantCombination` defined on it!)
-	result := initializers.DB.
+	err = initializers.DB.
+		Where("id = ? AND shop_id = ? AND active = ?", productID, shop.ID, true).
 		Preload("Images").
-		Preload("Tags").
 		Preload("Variants").
 		Preload("Variants.VariantItems").
-		Preload("Combinations").   // The Shopify Trick Inventory!
-		Where("active = ?", true). // ONLY return if active (assuming this is for the client storefront)
-		First(&product, "id = ?", productId)
+		Preload("Combinations").
+		First(&product).Error
 
-	if result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{ // Changed from 500 to 404
-			"success": false,
-			"message": "Product not found or inactive",
-		})
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "product not found or inactive"})
 		return
 	}
 
-	response := dto.ProductResponse{
-		ID:           product.ID.String(),
-		Title:        product.Title,
-		Description:  product.Description,
-		Price:        product.Price,
-		OldPrice:     product.OldPrice,
-		Variants:     make([]dto.VariantResponse, 0),
-		Combinations: make([]dto.CombinationResponse, 0),
+	itemValueByID := make(map[uuid.UUID]string)
+	for _, v := range product.Variants {
+		for _, item := range v.VariantItems {
+			itemValueByID[item.ID] = item.Value
+		}
 	}
 
-	// Map Images
-	var images []dto.ProductImageResponse
+	response := dto.ProductResponse{
+		ID:          product.ID.String(),
+		Title:       product.Title,
+		Description: product.Description,
+		Price:       product.Price,
+		// OldPrice:     product.OldPrice,
+		Images:       []dto.ProductImageResponse{},
+		Variants:     []dto.VariantResponse{},
+		Combinations: []dto.CombinationResponse{},
+	}
+
 	for _, i := range product.Images {
-		images = append(images, dto.ProductImageResponse{
+		response.Images = append(response.Images, dto.ProductImageResponse{
 			ID:  i.ID.String(),
 			URL: i.URL,
 		})
 	}
-	response.Images = images
 
-	// Map Tags
-	var tags []string
-	for _, t := range product.Tags {
-		tags = append(tags, t.Name)
-	}
-	response.Tags = tags
-
-	// Map Variants & Items
 	for _, v := range product.Variants {
-		var vr dto.VariantResponse
-		vr.ID = v.ID.String()
-		vr.Title = v.Title
-		vr.VariantItems = make([]dto.VariantItemSimple, 0)
+		variantResponse := dto.VariantResponse{
+			ID:           v.ID.String(),
+			Title:        v.Title,
+			VariantItems: []dto.VariantItemSimple{},
+		}
 
 		for _, item := range v.VariantItems {
-			vr.VariantItems = append(vr.VariantItems, dto.VariantItemSimple{
+			variantResponse.VariantItems = append(variantResponse.VariantItems, dto.VariantItemSimple{
 				ID:    item.ID.String(),
 				Value: item.Value,
 			})
 		}
-		response.Variants = append(response.Variants, vr)
+
+		response.Variants = append(response.Variants, variantResponse)
 	}
 
-	// CRITICAL ADDITION: Map the Sellable Inventory (Combinations)
-	var combinations []dto.CombinationResponse
-	for _, c := range product.Combinations {
+	for _, combo := range product.Combinations {
+		var opt1ID, opt2ID, opt3ID *string
+		var opt1Value, opt2Value, opt3Value *string
 
-		// Safely convert pointers to strings
-		var opt1, opt2, opt3 *string
-		if c.Option1ID != nil {
-			str := c.Option1ID.String()
-			opt1 = &str
+		if combo.Option1ID != nil {
+			s := combo.Option1ID.String()
+			opt1ID = &s
 		}
-		if c.Option2ID != nil {
-			str := c.Option2ID.String()
-			opt2 = &str
+		if combo.Option2ID != nil {
+			s := combo.Option2ID.String()
+			opt2ID = &s
 		}
-		if c.Option3ID != nil {
-			str := c.Option3ID.String()
-			opt3 = &str
+		if combo.Option3ID != nil {
+			s := combo.Option3ID.String()
+			opt3ID = &s
 		}
 
-		combinations = append(combinations, dto.CombinationResponse{
-			ID:                c.ID.String(),
-			SKU:               c.SKU,
-			Price:             c.Price,
-			Quantity:          c.Quantity,
-			Option1ID:         opt1,
-			Option2ID:         opt2,
-			Option3ID:         opt3,
-			CombinationString: c.CombinationString,
+		if combo.Option1 != nil {
+			s := combo.Option1.Value
+			opt1Value = &s
+		}
+		if combo.Option2 != nil {
+			s := combo.Option2.Value
+			opt2Value = &s
+		}
+		if combo.Option3 != nil {
+			s := combo.Option3.Value
+			opt3Value = &s
+		}
+
+		response.Combinations = append(response.Combinations, dto.CombinationResponse{
+			ID:                combo.ID.String(),
+			SKU:               combo.SKU,
+			Price:             combo.Price,
+			Quantity:          combo.Quantity,
+			Option1ID:         opt1ID,
+			Option2ID:         opt2ID,
+			Option3ID:         opt3ID,
+			Option1Value:      opt1Value,
+			Option2Value:      opt2Value,
+			Option3Value:      opt3Value,
+			CombinationString: combo.CombinationString,
 		})
 	}
 
-	response.Combinations = combinations // Make sure this is in your ProductResponse struct!
-
-	// save the data to redis
-	jsonData, err := json.Marshal(response)
-	if err == nil {
-		initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute)
-		initializers.RClient.SAdd(initializers.Ctx, "cache:product:id", cacheKey)
+	if jsonData, err := json.Marshal(response); err == nil {
+		_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
+		_ = initializers.RClient.SAdd(initializers.Ctx, "cache:product:id", cacheKey).Err()
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -722,89 +788,126 @@ func IndexProductByShop(c *gin.Context) {
 	})
 }
 
-// stopped here
-func UpdateProduct(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
+func UpdateProductByShop(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "error while parsing the id",
+			"message": "Invalid shop ID",
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	var body struct {
-		Title       string   `json:"title"`
-		Description string   `json:"description"`
-		Brand       string   `json:"brand"`
-		Price       float64  `json:"price"`
-		OldPrice    float64  `json:"oldPrice"`
-		Active      bool     `json:"active"`
-		Tags        []string `json:"tags"` // this should of type uuid
+	productID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid product ID",
+			"error":   err.Error(),
+		})
+		return
 	}
 
-	err = c.ShouldBindJSON(&body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+	type UpdateProductBody struct {
+		Title       *string  `json:"title"`
+		Description *string  `json:"description"`
+		Price       *float64 `json:"price"`
+		OldPrice    *float64 `json:"oldPrice"`
+		Active      *bool    `json:"active"`
+	}
+
+	var body UpdateProductBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "error while parsing the body",
+			"message": "Invalid request body",
 			"error":   err.Error(),
 		})
 		return
 	}
 
 	var product models.Product
-	result := initializers.DB.First(&product, id)
-
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+	if err := initializers.DB.
+		Where("id = ? AND shop_id = ?", productID, shopID).
+		First(&product).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
-			"message": "error while retrieving the product",
-			"error":   result.Error.Error(),
+			"message": "Product not found",
+			"error":   err.Error(),
 		})
 		return
 	}
 
-	if body.Title != "" {
-		product.Title = body.Title
-	}
-	if body.Description != "" {
-		product.Description = body.Description
-	}
+	updates := map[string]interface{}{}
 
-	if body.Price != 0 {
-		product.Price = body.Price
-		fmt.Println(product.Price, body.Price)
-	}
-	if body.OldPrice != 0 {
-		product.OldPrice = body.OldPrice
-	}
-	if body.Active != product.Active {
-		product.Active = body.Active
-	}
-
-	// ensures that there are no duplicates (sets)
-	tagNameSet := make(map[string]struct{})
-	for _, t := range body.Tags {
-		cleaned := strings.ToLower(strings.TrimSpace(t))
-		if cleaned != "" {
-			tagNameSet[cleaned] = struct{}{}
+	if body.Title != nil {
+		title := strings.TrimSpace(*body.Title)
+		if title == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Title cannot be empty",
+			})
+			return
 		}
+		updates["title"] = title
 	}
 
-	// convert the set to a slice in order to map through
-	uniqueTagNames := make([]string, 0, len(tagNameSet))
-	for name := range tagNameSet {
-		uniqueTagNames = append(uniqueTagNames, name)
+	if body.Description != nil {
+		description := strings.TrimSpace(*body.Description)
+		if description == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Description cannot be empty",
+			})
+			return
+		}
+		updates["description"] = description
 	}
 
-	// star the transaction
-	tx := initializers.DB.Begin()
-	if tx.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to start transaction"})
+	if body.Price != nil {
+		if *body.Price < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Price cannot be negative",
+			})
+			return
+		}
+		updates["price"] = *body.Price
+	}
+
+	if body.OldPrice != nil {
+		if *body.OldPrice < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Old price cannot be negative",
+			})
+			return
+		}
+		updates["old_price"] = *body.OldPrice
+	}
+
+	if body.Active != nil {
+		updates["active"] = *body.Active
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "No fields provided for update",
+		})
 		return
 	}
+
+	tx := initializers.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to start transaction",
+		})
+		return
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -812,70 +915,42 @@ func UpdateProduct(c *gin.Context) {
 		}
 	}()
 
-	if err := tx.Save(&product).Error; err != nil {
+	if err := tx.Model(&product).Updates(updates).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to update product fields", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to update product",
+			"error":   err.Error(),
+		})
 		return
 	}
 
-	// fetch existing tags in the a single query
-	var existingTags []models.Tag
-	if err := tx.Where("name IN ?", uniqueTagNames).Find(&existingTags).Error; err != nil {
+	if err := tx.
+		Preload("Images").
+		Preload("Variants").
+		Preload("Variants.VariantItems").
+		Preload("Combinations").
+		Where("id = ? AND shop_id = ?", productID, shopID).
+		First(&product).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to fetch existing tags", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to reload updated product",
+			"error":   err.Error(),
+		})
 		return
 	}
 
-	// build a map of existing tags
-	existingTagMap := make(map[string]models.Tag)
-	for _, tag := range existingTags {
-		existingTagMap[tag.Name] = tag
-	}
-
-	// create missing tags if there are any
-	var allTags []models.Tag
-	for _, name := range uniqueTagNames {
-		if existingTag, found := existingTagMap[name]; found {
-			allTags = append(allTags, existingTag)
-			continue
-		}
-		newTag := models.Tag{Name: name}
-		if err := tx.Create(&newTag).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to create tag", "error": err.Error()})
-			return
-		}
-		allTags = append(allTags, newTag)
-	}
-
-	// replace the product tags in one go
-	if err := tx.Model(&product).Association("Tags").Replace(allTags); err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to update product tags", "error": err.Error()})
-		return
-	}
-
-	// commit the transaction
 	if err := tx.Commit().Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to commit transaction", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to commit transaction",
+			"error":   err.Error(),
+		})
 		return
 	}
 
-	go func() {
-		productsKeys, _ := initializers.RClient.SMembers(initializers.Ctx, "cache:products").Result()
-		for _, key := range productsKeys {
-			initializers.RClient.Del(initializers.Ctx, key)
-		}
-
-		productKeys, _ := initializers.RClient.SMembers(initializers.Ctx, "cache:product:id").Result()
-		for _, key := range productKeys {
-			initializers.RClient.Del(initializers.Ctx, key)
-		}
-
-		// clear the set itself
-		initializers.RClient.Del(initializers.Ctx, "cache:products")
-		initializers.RClient.Del(initializers.Ctx, "cache:product:id")
-	}()
+	invalidateProductCaches(productID, shopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -884,354 +959,698 @@ func UpdateProduct(c *gin.Context) {
 	})
 }
 
-func UpdateProductImages(c *gin.Context) {
-	// get the product images sent from the front end and check if they have been modified (e.g : sending 2 images when the db has 4)
-	// if the product images exist on the database but not on the data received then delete them based on the id (some filtering mecanisim using ids)
-	// get the new images from the formData
-	// upload them to the s3 bucket
-	// return a success message
-
-	// get the product id
-	productId, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while parsing the id",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	// get the product images from the db using the product id
-	var images []models.ProductImage
-	result := initializers.DB.Where("product_id = ?", productId).Find(&images)
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while retrieving the product images",
-			"error":   result.Error.Error(),
-		})
-		return
-	}
-
-	// get the images from the request and decode the data
-	existingImagesJson := c.PostForm("existingImages")
-	var existingImages []dto.UpdateProductsImageInput
-	if existingImagesJson != "" {
-		err := json.Unmarshal([]byte(existingImagesJson), &existingImages)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "invalid images JSON",
-				"error":   err.Error(),
-			})
-			return
-		}
-	}
-
-	// map through the existing images1
-	var deletedImages []dto.UpdateProductsImageInput
-	for _, dbImage := range images {
-		found := false
-		for _, existingImage := range existingImages {
-			if dbImage.ID.String() == existingImage.ID {
-				found = true
-				break
-			}
-		}
-		if !found {
-			deletedImages = append(deletedImages, dto.UpdateProductsImageInput{ID: dbImage.ID.String()})
-		}
-	}
-
-	// Transaction start
-	tx := initializers.DB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "internal server error",
-			})
-		}
-	}()
-
-	// map through the deleted images in the front and deleted them from the db
-	for _, deletedImage := range deletedImages {
-		parsedDeletedImageId, err := uuid.Parse(deletedImage.ID)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "invalid images id",
-				"error":   err.Error(),
-			})
-			return
-		}
-		result := tx.Delete(&models.ProductImage{}, parsedDeletedImageId)
-		if result.Error != nil {
-			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "invalid images id",
-				"error":   result.Error.Error(),
-			})
-			return
-		}
-	}
-
-	var productImages []models.ProductImage
-	// in case there are new images to be upload
-	form, err := c.MultipartForm()
-	if err == nil {
-		// get the files
-		files := form.File["images"]
-		fmt.Println("files : ", files)
-
-		// the product images max length is 5
-		if len(files)+len(existingImages) > 5 {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "The maximum number of images is 5",
-			})
-			return
-		}
-
-		for _, file := range files {
-			src, err := file.Open()
-			if err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "failed to open file", "error": err.Error()})
-				return
-			}
-
-			// TODO : save the images in a folder named after the shop name
-			// e.g : lk-parfumo/
-			key := fmt.Sprintf("uploads/%d_%s", time.Now().UnixNano(), filepath.Base(file.Filename))
-			bucketName := os.Getenv("B2_BUCKET_NAME")
-
-			_, err = initializers.S3Client.PutObject(context.TODO(), &s3.PutObjectInput{
-				Bucket:      aws.String(bucketName),
-				Key:         aws.String(key),
-				Body:        src,
-				ContentType: aws.String(file.Header.Get("Content-Type")),
-			})
-			src.Close() // close immediately after upload
-
-			if err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": fmt.Sprintf("failed to upload %s", file.Filename), "error": err.Error()})
-				return
-			}
-
-			url := fmt.Sprintf("https://%s.s3.%s.backblazeb2.com/%s", bucketName, os.Getenv("B2_REGION"), key)
-
-			// urls = append(urls, url)
-			productImages = append(productImages, models.ProductImage{
-				ProductID: productId,
-				URL:       url,
-			})
-		}
-
-		if len(productImages) > 0 {
-			if err := tx.Create(&productImages).Error; err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to save images", "error": err.Error()})
-				return
-			}
-		}
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "failed to commit transaction",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	cacheKey := fmt.Sprintf("product:id=%s", productId)
-	if err := initializers.RClient.Del(initializers.Ctx, cacheKey, "products").Err(); err != nil {
-		fmt.Println("Failed to delete the product cache key")
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success":       true,
-		"exitingImages": existingImages,
-		"images":        productImages,
-	})
-}
-
-func UpdateVariant(c *gin.Context) {
-	variantId, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid variant ID", "error": err.Error()})
-		return
-	}
-
-	// Parse request body
-	var body dto.UpdateVariantDTO
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
-		return
-	}
-
-	// Retrieve the variant (and preload existing items if you want to verify)
-	var variant models.Variant
-	if err := initializers.DB.First(&variant, "id = ?", variantId).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Variant not found", "error": err.Error()})
-		return
-	}
-
-	// Update title if changed
-	if body.Title != "" && body.Title != variant.Title {
-		if err := initializers.DB.Model(&variant).Update("title", body.Title).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update variant title", "error": err.Error()})
-			return
-		}
-	}
-
-	// Update variant items
-	// take into consideration the variants that weren't created at first but were later created in the editing phase
-	for _, item := range body.VariantItems {
-		// You only need the ID to update directly
-		updateData := map[string]interface{}{
-			"value":    item.Value,
-			"quantity": item.Quantity,
-			"price":    item.Price,
-		}
-
-		// check if the variant item id exists, if not then create the new variant item
-		// else
-		// simply modify the existing variant item
-
-		if err := initializers.DB.Model(&models.VariantItem{}).Where("id = ?", item.ID).
-			Updates(updateData).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": fmt.Sprintf("Failed to update variant item ID: %s", item.ID),
-				"error":   err.Error(),
-			})
-			return
-		}
-	}
-
-	cacheKey := fmt.Sprintf("product:id=%s", variant.ProductID)
-	if err := initializers.RClient.Del(initializers.Ctx, cacheKey, "products").Err(); err != nil {
-		fmt.Println("Failed to delete the product cache key")
-	}
-
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Variant and items updated successfully"})
-}
-
-func DeleteProduct(c *gin.Context) {
-	// 1) Parse product UUID
-	id, err := uuid.Parse(c.Param("id"))
+func UpdateProductImagesByShop(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "invalid product ID format",
+			"message": "Invalid shop ID",
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	// 2) Start transaction
+	productID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid product ID",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	var product models.Product
+	if err := initializers.DB.
+		Where("id = ? AND shop_id = ?", productID, shopID).
+		First(&product).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Product not found",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	var currentImages []models.ProductImage
+	if err := initializers.DB.
+		Where("product_id = ?", productID).
+		Order("order_index ASC, created_at ASC").
+		Find(&currentImages).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to retrieve product images",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	existingImagesJSON := c.PostForm("existingImages")
+	var existingImages []dto.UpdateProductsImageInput
+	if existingImagesJSON != "" {
+		if err := json.Unmarshal([]byte(existingImagesJSON), &existingImages); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Invalid existingImages JSON",
+				"error":   err.Error(),
+			})
+			return
+		}
+	}
+
+	keptImageIDs := make(map[string]struct{}, len(existingImages))
+	for _, img := range existingImages {
+		if img.ID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Existing image ID cannot be empty",
+			})
+			return
+		}
+		keptImageIDs[img.ID] = struct{}{}
+	}
+
+	currentImageIDs := make(map[string]models.ProductImage, len(currentImages))
+	for _, img := range currentImages {
+		currentImageIDs[img.ID.String()] = img
+	}
+
+	for keptID := range keptImageIDs {
+		if _, exists := currentImageIDs[keptID]; !exists {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "One or more existing image IDs do not belong to this product",
+			})
+			return
+		}
+	}
+
+	var imagesToDelete []models.ProductImage
+	for _, dbImage := range currentImages {
+		if _, keep := keptImageIDs[dbImage.ID.String()]; !keep {
+			imagesToDelete = append(imagesToDelete, dbImage)
+		}
+	}
+
+	form, err := c.MultipartForm()
+	if err != nil && err != http.ErrNotMultipart {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid multipart form data",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	var files []*multipart.FileHeader
+	if form != nil && form.File != nil {
+		files = form.File["images"]
+	}
+
+	if len(existingImages)+len(files) > 5 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "The maximum number of images is 5",
+		})
+		return
+	}
+
+	var uploadedKeys []string
+	var newProductImages []models.ProductImage
+
 	tx := initializers.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to start transaction",
+		})
+		return
+	}
 
-	// 3) Delete product-tag associations (product_tags join table)
-	if err := tx.Exec("DELETE FROM product_tags WHERE product_id = ?", id).Error; err != nil {
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	for _, img := range imagesToDelete {
+		if err := tx.Where("id = ? AND product_id = ?", img.ID, productID).Delete(&models.ProductImage{}).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to delete removed images",
+				"error":   err.Error(),
+			})
+			return
+		}
+	}
+
+	bucketName := os.Getenv("B2_BUCKET_NAME")
+	region := os.Getenv("B2_REGION")
+
+	for _, file := range files {
+		src, err := file.Open()
+		if err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Failed to open uploaded file",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		key := fmt.Sprintf("uploads/products/%s/%d_%s", shopID.String(), time.Now().UnixNano(), filepath.Base(file.Filename))
+
+		_, err = initializers.S3Client.PutObject(context.Background(), &s3.PutObjectInput{
+			Bucket:      aws.String(bucketName),
+			Key:         aws.String(key),
+			Body:        src,
+			ContentType: aws.String(file.Header.Get("Content-Type")),
+		})
+		src.Close()
+
+		if err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": fmt.Sprintf("Failed to upload %s", file.Filename),
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		uploadedKeys = append(uploadedKeys, key)
+
+		url := fmt.Sprintf("https://%s.s3.%s.backblazeb2.com/%s", bucketName, region, key)
+		newProductImages = append(newProductImages, models.ProductImage{
+			ProductID: productID,
+			URL:       url,
+		})
+	}
+
+	if len(newProductImages) > 0 {
+		if err := tx.Create(&newProductImages).Error; err != nil {
+			tx.Rollback()
+
+			for _, key := range uploadedKeys {
+				_, _ = initializers.S3Client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
+					Bucket: aws.String(bucketName),
+					Key:    aws.String(key),
+				})
+			}
+
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to save new product images",
+				"error":   err.Error(),
+			})
+			return
+		}
+	}
+
+	var finalImages []models.ProductImage
+	if err := tx.
+		Where("product_id = ?", productID).
+		Order("order_index ASC, created_at ASC").
+		Find(&finalImages).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"message": "failed to delete product-tag associations",
+			"message": "Failed to reload product images",
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	// 4) Delete the product itself
-	if err := tx.Delete(&models.Product{}, "id = ?", id).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "failed to delete product",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	// 5) Commit transaction
 	if err := tx.Commit().Error; err != nil {
+		for _, key := range uploadedKeys {
+			_, _ = initializers.S3Client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
+				Bucket: aws.String(bucketName),
+				Key:    aws.String(key),
+			})
+		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"message": "failed to commit transaction",
+			"message": "Failed to commit transaction",
 			"error":   err.Error(),
 		})
 		return
 	}
+
+	invalidateProductCaches(productID, shopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "product was deleted successfully",
+		"message": "Product images updated successfully",
+		"data": gin.H{
+			"productId": productID,
+			"images":    finalImages,
+		},
 	})
 }
 
-func GetTags(c *gin.Context) {
-	var tags []models.Tag
-	result := initializers.DB.Find(&tags)
-	if result.Error != nil {
-		c.JSON(http.StatusOK, gin.H{
+func DeleteProductByShop(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"message": "Error while retrieving the tags",
+			"message": "Invalid shop ID",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	productID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid product ID",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	var product models.Product
+	if err := initializers.DB.
+		Where("id = ? AND shop_id = ?", productID, shopID).
+		First(&product).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Product not found",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	tx := initializers.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to start transaction",
+			"error":   tx.Error.Error(),
+		})
+		return
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	result := tx.Where("id = ? AND shop_id = ?", productID, shopID).Delete(&models.Product{})
+	if result.Error != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to delete product",
 			"error":   result.Error.Error(),
 		})
 		return
 	}
 
-	var formattedTags []string
-	if len(tags) > 0 {
-		for _, tag := range tags {
-			formattedTags = append(formattedTags, tag.Name)
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "tags were retrieved successfully",
-		"data":    formattedTags,
-	})
-}
-
-func GetAllTags(c *gin.Context) {
-	var tags []models.Tag
-
-	initializers.DB.Find(&tags)
-
-	c.JSON(http.StatusOK, gin.H{
-		"data": tags,
-	})
-}
-
-func DeleteTag(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+	if result.RowsAffected == 0 {
+		tx.Rollback()
+		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
-			"message": "error",
+			"message": "Product not found",
 		})
 		return
 	}
 
-	initializers.DB.Delete(&models.Tag{}, id)
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to commit transaction",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	invalidateProductCaches(productID, shopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
+		"message": "Product deleted successfully",
 	})
 }
 
-func CreateTag(c *gin.Context) {
+// Variants
+func UpdateProductVariantsByShop(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid shop ID",
+			"error":   err.Error(),
+		})
+		return
+	}
 
+	productID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid product ID",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	type VariantItemInput struct {
+		Value string `json:"value"`
+	}
+
+	type VariantInput struct {
+		Title string             `json:"title"`
+		Items []VariantItemInput `json:"items"`
+	}
+
+	type CombinationInput struct {
+		SKU          string  `json:"sku"`
+		Price        float64 `json:"price"`
+		Quantity     int     `json:"quantity"`
+		Option1Value *string `json:"option1Value"`
+		Option2Value *string `json:"option2Value"`
+		Option3Value *string `json:"option3Value"`
+	}
+
+	type UpdateProductVariantsBody struct {
+		Variants     []VariantInput     `json:"variants"`
+		Combinations []CombinationInput `json:"combinations"`
+	}
+
+	var body UpdateProductVariantsBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request body",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	var product models.Product
+	if err := initializers.DB.
+		Where("id = ? AND shop_id = ?", productID, shopID).
+		First(&product).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Product not found",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	if len(body.Variants) > 3 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "A product can have at most 3 variants",
+		})
+		return
+	}
+
+	for _, v := range body.Variants {
+		if strings.TrimSpace(v.Title) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Variant title cannot be empty",
+			})
+			return
+		}
+
+		if len(v.Items) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Each variant must contain at least one item",
+			})
+			return
+		}
+
+		itemSet := make(map[string]struct{})
+		for _, item := range v.Items {
+			value := strings.TrimSpace(item.Value)
+			if value == "" {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": "Variant item value cannot be empty",
+				})
+				return
+			}
+
+			normalized := strings.ToLower(value)
+			if _, exists := itemSet[normalized]; exists {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": fmt.Sprintf("Duplicate item value '%s' inside variant '%s'", value, v.Title),
+				})
+				return
+			}
+			itemSet[normalized] = struct{}{}
+		}
+	}
+
+	skuSet := make(map[string]struct{})
+	for _, combo := range body.Combinations {
+		if strings.TrimSpace(combo.SKU) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Combination SKU cannot be empty",
+			})
+			return
+		}
+		if combo.Price < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Combination price cannot be negative",
+			})
+			return
+		}
+		if combo.Quantity < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Combination quantity cannot be negative",
+			})
+			return
+		}
+
+		normalizedSKU := strings.ToLower(strings.TrimSpace(combo.SKU))
+		if _, exists := skuSet[normalizedSKU]; exists {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": fmt.Sprintf("Duplicate SKU '%s' in request", combo.SKU),
+			})
+			return
+		}
+		skuSet[normalizedSKU] = struct{}{}
+	}
+
+	tx := initializers.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to start transaction",
+			"error":   tx.Error.Error(),
+		})
+		return
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	if err := tx.Where("product_id = ?", productID).Delete(&models.ProductVariantCombination{}).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to clear existing combinations",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	if err := tx.Where("product_id = ?", productID).Delete(&models.Variant{}).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to clear existing variants",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	itemIDs := make(map[string]uuid.UUID)
+
+	for _, v := range body.Variants {
+		variant := models.Variant{
+			ProductID: productID,
+			Title:     strings.TrimSpace(v.Title),
+		}
+
+		if err := tx.Create(&variant).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to create variant",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		for _, item := range v.Items {
+			value := strings.TrimSpace(item.Value)
+
+			variantItem := models.VariantItem{
+				VariantID: variant.ID,
+				Value:     value,
+			}
+
+			if err := tx.Create(&variantItem).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"success": false,
+					"message": "Failed to create variant item",
+					"error":   err.Error(),
+				})
+				return
+			}
+
+			itemIDs[strings.ToLower(value)] = variantItem.ID
+		}
+	}
+
+	var combinationsToSave []models.ProductVariantCombination
+
+	for _, combo := range body.Combinations {
+		var opt1ID, opt2ID, opt3ID *uuid.UUID
+		var comboStringParts []string
+
+		if combo.Option1Value != nil && strings.TrimSpace(*combo.Option1Value) != "" {
+			value := strings.ToLower(strings.TrimSpace(*combo.Option1Value))
+			id, exists := itemIDs[value]
+			if !exists {
+				tx.Rollback()
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": fmt.Sprintf("Option1 value '%s' does not exist", *combo.Option1Value),
+				})
+				return
+			}
+			opt1ID = &id
+			comboStringParts = append(comboStringParts, strings.TrimSpace(*combo.Option1Value))
+		}
+
+		if combo.Option2Value != nil && strings.TrimSpace(*combo.Option2Value) != "" {
+			value := strings.ToLower(strings.TrimSpace(*combo.Option2Value))
+			id, exists := itemIDs[value]
+			if !exists {
+				tx.Rollback()
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": fmt.Sprintf("Option2 value '%s' does not exist", *combo.Option2Value),
+				})
+				return
+			}
+			opt2ID = &id
+			comboStringParts = append(comboStringParts, strings.TrimSpace(*combo.Option2Value))
+		}
+
+		if combo.Option3Value != nil && strings.TrimSpace(*combo.Option3Value) != "" {
+			value := strings.ToLower(strings.TrimSpace(*combo.Option3Value))
+			id, exists := itemIDs[value]
+			if !exists {
+				tx.Rollback()
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": fmt.Sprintf("Option3 value '%s' does not exist", *combo.Option3Value),
+				})
+				return
+			}
+			opt3ID = &id
+			comboStringParts = append(comboStringParts, strings.TrimSpace(*combo.Option3Value))
+		}
+
+		combinationsToSave = append(combinationsToSave, models.ProductVariantCombination{
+			ProductID:         productID,
+			SKU:               strings.TrimSpace(combo.SKU),
+			Price:             combo.Price,
+			Quantity:          combo.Quantity,
+			Option1ID:         opt1ID,
+			Option2ID:         opt2ID,
+			Option3ID:         opt3ID,
+			CombinationString: strings.Join(comboStringParts, " / "),
+		})
+	}
+
+	if len(combinationsToSave) > 0 {
+		if err := tx.Create(&combinationsToSave).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to save combinations",
+				"error":   err.Error(),
+			})
+			return
+		}
+	}
+
+	var updatedProduct models.Product
+	if err := tx.
+		Preload("Variants").
+		Preload("Variants.VariantItems").
+		Preload("Combinations").
+		Where("id = ? AND shop_id = ?", productID, shopID).
+		First(&updatedProduct).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to reload updated product",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to commit transaction",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	invalidateProductCaches(productID, shopID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Product variants updated successfully",
+		"data":    updatedProduct,
+	})
+}
+
+func invalidateProductCaches(productID uuid.UUID, shopID uuid.UUID) {
+	go func() {
+		ctx := context.Background()
+
+		productKeys, _ := initializers.RClient.SMembers(ctx, "cache:product:id").Result()
+		for _, key := range productKeys {
+			if strings.Contains(key, productID.String()) || strings.Contains(key, shopID.String()) {
+				initializers.RClient.Del(ctx, key)
+			}
+		}
+
+		productListKeys, _ := initializers.RClient.SMembers(ctx, "cache:products").Result()
+		for _, key := range productListKeys {
+			if strings.Contains(key, shopID.String()) {
+				initializers.RClient.Del(ctx, key)
+			}
+		}
+	}()
 }

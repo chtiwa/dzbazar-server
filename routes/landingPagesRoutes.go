@@ -7,7 +7,7 @@ import (
 )
 
 func LandingPagesRoutes(router *gin.Engine) {
-	landingPages := router.Group("/landing-pages")
+	landingPages := router.Group("/api/v1/landing-pages")
 	{
 		landingPages.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Admin", "Moderator"), controllers.GetLandingPages)
 		landingPages.POST("", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.CreateLandingPage)

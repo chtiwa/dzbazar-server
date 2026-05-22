@@ -58,8 +58,8 @@ func GenerateExcel(orders []models.Order) ([]byte, error) {
 		// 2. Stitch line item array slices together into a clean description string
 		var itemDescriptions []string
 		for _, item := range order.Items {
-			if item.VariantString != "" {
-				itemDescriptions = append(itemDescriptions, fmt.Sprintf("%s (%s) x%d", item.Product.Title, item.VariantString, item.Quantity))
+			if item.ProductVariantCombination.CombinationString != "" {
+				itemDescriptions = append(itemDescriptions, fmt.Sprintf("%s (%s) x%d", item.Product.Title, item.ProductVariantCombination.CombinationString, item.Quantity))
 			} else {
 				itemDescriptions = append(itemDescriptions, fmt.Sprintf("%s x%d", item.Product.Title, item.Quantity))
 			}

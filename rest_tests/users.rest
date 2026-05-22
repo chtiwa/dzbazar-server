@@ -6,7 +6,7 @@
 #     "password":"sigma",
 # }
 
-# POST http://localhost:5000/users/signup
+# POST http://localhost:5000/api/v1/users/signup
 # Content-Type: application/json
 
 # {
@@ -17,21 +17,24 @@
 #     "password":"sifou2001"
 # }
 
-# POST http://localhost:5000/users/verify-user
+# POST http://localhost:5000/api/v1/users/verify-otp
 # Content-Type: application/json
 
 # {  
 #     "email":"chtiwaa@gmail.com",
-#     "otp":"012823"
+#     "otp":"077800"
 # }
 
-# POST http://localhost:5000/users/login
+# POST http://localhost:5000/api/v1/users/login
 # Content-Type: application/json
 
 # {  
 #     "email":"chtiwaa@gmail.com",
 #     "password":"sifou2001"
 # }
+
+
+GET http://localhost:5000/api/v1/shops
 
 
 # GET http://localhost:5000/users/validate

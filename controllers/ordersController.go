@@ -20,34 +20,64 @@ import (
 	"gorm.io/gorm"
 )
 
-// ItemInput handles individual nested checkout arrays cleanly
-type ItemInput struct {
-	ProductID     string  `json:"productId" binding:"required"`
-	VariantString string  `json:"variantString" binding:"required"` // e.g., "Black / 41"
-	Quantity      uint    `json:"quantity" binding:"required,min=1"`
-	Price         float64 `json:"price" binding:"required"`
+// Replace your old CreateOrderInput with this:
+type CreateOrderInput struct {
+	ShopID           string  `json:"shopId" binding:"required"`
+	ShippingMethod   string  `json:"shippingMethod"`
+	ShippingPrice    float64 `json:"shippingPrice"`
+	TotalPrice       float64 `json:"totalPrice"`
+	Note             string  `json:"note"`
+	Ouvrable         bool    `json:"ouvrable"`
+	Fragile          bool    `json:"fragile"`
+	Essayable        bool    `json:"essayable"`
+	ConversionSource string  `json:"conversionSource"`
+	FBclid           string  `json:"fbclid"`
+	FBc              string  `json:"fbc"`
+	FBp              string  `json:"fbp"`
+
+	// Nested client object matches your new JSON payload
+	Client OrderClientInput `json:"client" binding:"required"`
+
+	// Dive validates the nested slice
+	Items []OrderItemInput `json:"items" binding:"required,min=1,dive"`
 }
 
-type CreateOrderInput struct {
-	ShopID           string      `json:"shopId" binding:"required"`
-	FullName         string      `json:"fullName" binding:"required"`
-	PhoneNumber      string      `json:"phoneNumber" binding:"required"`
-	State            string      `json:"state" binding:"required"` // e.g., Wilaya
-	StateCode        string      `json:"stateCode"`
-	City             string      `json:"city" binding:"required"` // e.g., Commune
-	ShippingMethod   string      `json:"shippingMethod"`
-	ShippingPrice    float64     `json:"shippingPrice"`
-	ConversionSource string      `json:"conversionSource"`
-	Note             string      `json:"note"`
-	FBclid           string      `json:"fbclid"`
-	FBc              string      `json:"fbc"`
-	FBp              string      `json:"fbp"`
-	Ttclid           string      `json:"ttclid"`
-	Items            []ItemInput `json:"items" binding:"required,dive"`
+// Add this new struct for the client
+type OrderClientInput struct {
+	FullName    string `json:"fullName" binding:"required"`
+	PhoneNumber string `json:"phoneNumber" binding:"required"`
+	State       string `json:"state" binding:"required"`
+	StateCode   string `json:"stateCode"`
+	City        string `json:"city" binding:"required"`
+}
+
+// Replace your old item struct with this
+type OrderItemInput struct {
+	ProductID                   string  `json:"productId" binding:"required"`
+	ProductVariantCombinationID string  `json:"productVariantCombinationID" binding:"required"` // Match JSON exactly
+	Quantity                    uint    `json:"quantity" binding:"required,min=1"`
+	Price                       float64 `json:"price" binding:"required"`
 }
 
 func GetOrdersByShopID(c *gin.Context) {
-	// 1. Enforce Multi-Tenancy: Extract and validate ShopID from route parameters or context middleware
+	user, ok := c.Get("user")
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to retrieve authenticated session user",
+		})
+		return
+	}
+
+	userData, ok := user.(models.User)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Invalid session user structure context",
+		})
+		return
+	}
+
 	shopIDStr := c.Param("shopId")
 	shopID, err := uuid.Parse(shopIDStr)
 	if err != nil {
@@ -58,29 +88,17 @@ func GetOrdersByShopID(c *gin.Context) {
 		return
 	}
 
-	// get the user
-	userInterface, ok := c.Get("user")
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
+	var membership models.ShopMember
+	if err := initializers.DB.
+		Where("shop_id = ? AND user_id = ?", shopID, userData.ID).
+		First(&membership).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
-			"message": "Error while fetching the user from context",
+			"message": "You do not have access to this shop",
 		})
 		return
 	}
 
-	// parse the user info
-	user, _ := userInterface.(models.User)
-
-	// check if the user belongs to the shop
-	if shopID != *user.ShopID {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": "Authentication required to access the shop info",
-		})
-		return
-	}
-
-	// 2. Parse and sanitize pagination parameters
 	page := 1
 	perPage := 10
 
@@ -99,25 +117,19 @@ func GetOrdersByShopID(c *gin.Context) {
 	status := c.Query("status")
 	search := strings.TrimSpace(c.Query("search"))
 
-	// 3. Thread-Safe Query Building: Scope everything cleanly to a local instance
-	// Always enforce the tenant boundary right at initialization
 	query := initializers.DB.Model(&models.Order{}).Where("shop_id = ?", shopID)
 
-	// Apply optional filters
 	if status != "" && status != "Tous" {
 		query = query.Where("status = ?", status)
 	}
 
 	if search != "" {
 		likeSearch := "%" + search + "%"
-		// Using ILIKE for Postgres case-insensitive text search matching adjusted schema names
-		query = query.Where(
-			"client.full_name ILIKE ? OR client.phone_number LIKE ?",
-			likeSearch, likeSearch,
-		)
+		query = query.
+			Joins("JOIN clients client ON client.id = orders.client_id").
+			Where("client.full_name ILIKE ? OR client.phone_number LIKE ?", likeSearch, likeSearch)
 	}
 
-	// 4. Execute safe count query
 	var totalRows int64
 	if err := query.Count(&totalRows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -128,7 +140,6 @@ func GetOrdersByShopID(c *gin.Context) {
 		return
 	}
 
-	// 5. Calculate structural pagination boundaries
 	totalPages := int(math.Ceil(float64(totalRows) / float64(perPage)))
 	if totalPages == 0 {
 		totalPages = 1
@@ -140,9 +151,25 @@ func GetOrdersByShopID(c *gin.Context) {
 
 	offset := (page - 1) * perPage
 
-	// 6. Retrieve records safely matching exact parameters
 	var orders []models.Order
-	if err := query.Order("updated_at DESC").
+	if err := initializers.DB.
+		Where("shop_id = ?", shopID).
+		Scopes(func(db *gorm.DB) *gorm.DB {
+			if status != "" && status != "Tous" {
+				db = db.Where("status = ?", status)
+			}
+			if search != "" {
+				likeSearch := "%" + search + "%"
+				db = db.Joins("JOIN clients client ON client.id = orders.client_id").
+					Where("client.full_name ILIKE ? OR client.phone_number LIKE ?", likeSearch, likeSearch)
+			}
+			return db
+		}).
+		Preload("Client").
+		Preload("Items").
+		Preload("Items.Product").
+		Preload("Items.ProductVariantCombination").
+		Order("updated_at DESC").
 		Limit(perPage).
 		Offset(offset).
 		Find(&orders).Error; err != nil {
@@ -164,7 +191,7 @@ func GetOrdersByShopID(c *gin.Context) {
 	})
 }
 
-func CreateOrder(c *gin.Context) {
+func CreateOrderByShopID(c *gin.Context) {
 	var body CreateOrderInput
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -185,61 +212,69 @@ func CreateOrder(c *gin.Context) {
 	clientUserAgent := c.Request.UserAgent()
 	clientIP := c.ClientIP()
 
-	// Use an ACID Transaction block to securely update tables together
+	// 1. ACID Transaction block to securely update tables together
 	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
-		// 1. Resolve or Create the Client based on phone matching parameters
 		var client models.Client
-		err := tx.Where("phone_number = ?", body.PhoneNumber).First(&client).Error
+		// FIX 1: Search for the client by phone number AND the specific Shop ID
+		err := tx.Where("phone_number = ? AND shop_id = ?", body.Client.PhoneNumber, parsedShopID).First(&client).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				client = models.Client{
-					FullName:    body.FullName,
-					PhoneNumber: body.PhoneNumber,
-					State:       body.State,
-					StateCode:   body.StateCode,
-					City:        body.City,
+					// FIX 2: Assign the ShopID to the new client!
+					ShopID:      parsedShopID,
+					FullName:    body.Client.FullName,
+					PhoneNumber: body.Client.PhoneNumber,
+					State:       body.Client.State,
+					StateCode:   body.Client.StateCode,
+					City:        body.Client.City,
 				}
 				if createErr := tx.Create(&client).Error; createErr != nil {
-					return createErr
+					return createErr // This will no longer fail!
 				}
 			} else {
 				return err
 			}
 		}
 
-		// 2. Loop and map checkout lines into database OrderItems array structures
 		var orderItems []models.OrderItem
 		var calculatedTotalPrice float64
 
+		// 2. Loop and map checkout lines into database OrderItems structures
 		for _, item := range body.Items {
 			prodID, parseErr := uuid.Parse(item.ProductID)
 			if parseErr != nil {
 				return fmt.Errorf("invalid product uuid provided: %s", item.ProductID)
 			}
 
+			prodVarComID, parseErr := uuid.Parse(item.ProductVariantCombinationID)
+			if parseErr != nil {
+				return fmt.Errorf("invalid combination uuid provided: %s", item.ProductVariantCombinationID)
+			}
+
 			orderItems = append(orderItems, models.OrderItem{
-				ProductID:     prodID,
-				VariantString: item.VariantString,
-				Quantity:      item.Quantity,
-				Price:         item.Price,
+				ProductID:                   prodID,
+				ProductVariantCombinationID: prodVarComID,
+				Quantity:                    item.Quantity,
+				Price:                       item.Price,
 			})
 
 			calculatedTotalPrice += item.Price * float64(item.Quantity)
 		}
 
-		// Append regional logistical metrics to complete calculations
 		calculatedTotalPrice += body.ShippingPrice
 
-		// 3. Assemble and build out structural Order model context boundaries
 		order = models.Order{
-			ShopID:           parsedShopID,
-			ClientID:         client.ID,
-			Client:           client, // Pre-assign for safe passing downstream to worker routines
-			ShippingMethod:   body.ShippingMethod,
-			ShippingPrice:    body.ShippingPrice,
-			TotalPrice:       calculatedTotalPrice,
-			Status:           "En attente",
-			Note:             body.Note,
+			ShopID:         parsedShopID,
+			ClientID:       client.ID,
+			ShippingMethod: body.ShippingMethod,
+			ShippingPrice:  body.ShippingPrice,
+			TotalPrice:     calculatedTotalPrice,
+			Status:         "En attente",
+			Note:           body.Note,
+			// FIX 3: Map the missing boolean flags from the body
+			Ouvrable:         body.Ouvrable,
+			Fragile:          body.Fragile,
+			Essayable:        body.Essayable,
 			FBclid:           body.FBclid,
 			FBc:              body.FBc,
 			FBp:              body.FBp,
@@ -247,7 +282,7 @@ func CreateOrder(c *gin.Context) {
 			Items:            orderItems,
 		}
 
-		if createOrderErr := tx.Create(&order).Error; createOrderErr != nil {
+		if createOrderErr := tx.Omit("Client", "Items.Product", "Items.ProductVariantCombination").Create(&order).Error; createOrderErr != nil {
 			return createOrderErr
 		}
 
@@ -263,64 +298,77 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	// 4. Fire-and-Forget Asynchronous Micro-tasks (Safely passed by deep copied value)
-	go func(o models.Order, ua, ip string) {
+	// 3. Asynchronous Micro-tasks (Safe fire-and-forget routines)
+	go func(orderID uuid.UUID, ua, ip string) {
 		defer func() {
 			if r := recover(); r != nil {
 				fmt.Printf("Recovered from panic inside order async tasks routine: %v\n", r)
 			}
 		}()
 
-		testCode := os.Getenv("FACEBOOK_TEST_CODE")
+		var fullOrder models.Order
+		preloadErr := initializers.DB.
+			Preload("Client").
+			Preload("Items").
+			Preload("Items.ProductVariantCombination").
+			First(&fullOrder, "id = ?", orderID).Error
 
-		// Prepare a readable summary string for legacy email tracking channels
-		mainProductName := "Multi-item Order"
-		if len(o.Items) > 0 {
-			mainProductName = fmt.Sprintf("%s (%s)", o.Items[0].VariantString, o.Items[0].ProductID.String())
+		if preloadErr != nil {
+			fmt.Printf("Error hydrating order details context for async tasks: %v\n", preloadErr)
+			return
 		}
 
-		if testCode == "" && o.Status != "Confirmé" {
+		testCode := os.Getenv("FACEBOOK_TEST_CODE")
+
+		mainProductName := "Multi-item Order"
+		if len(fullOrder.Items) > 0 {
+			comboStr := fullOrder.Items[0].ProductVariantCombination.CombinationString
+			if comboStr == "" {
+				comboStr = "Standard"
+			}
+			mainProductName = fmt.Sprintf("Product SKU Variant: %s", comboStr)
+		}
+
+		if testCode == "" && fullOrder.Status != "Confirmé" {
 			if emailErr := utils.SendOrderEmail(
-				o.Client.FullName,
-				o.Client.PhoneNumber,
-				o.Client.State,
-				o.Client.City,
+				fullOrder.Client.FullName,
+				fullOrder.Client.PhoneNumber,
+				fullOrder.Client.State,
+				fullOrder.Client.City,
 				mainProductName,
 				"See order components explicitly",
-				o.ShippingMethod,
-				1, // Normalized count metrics
-				o.TotalPrice,
-				o.ShippingPrice,
-				o.TotalPrice,
+				fullOrder.ShippingMethod,
+				1,
+				fullOrder.TotalPrice,
+				fullOrder.ShippingPrice,
+				fullOrder.TotalPrice,
 			); emailErr != nil {
 				fmt.Println("Error sending notification alert email flow:", emailErr)
 			}
 		}
 
-		if o.Status == "Abandonné" {
+		if fullOrder.Status == "Abandonné" {
 			return
 		}
 
-		// Broadcast reactive event triggers through internal websockets pipelines
 		realtime.Broadcast <- realtime.Message{
 			Event: "order_created",
 			Data: map[string]interface{}{
 				"productName": mainProductName,
-				"totalPrice":  o.TotalPrice,
-				"itemsCount":  len(o.Items),
+				"totalPrice":  fullOrder.TotalPrice,
+				"itemsCount":  len(fullOrder.Items),
 			},
 		}
 
-		// Send exact parameters over Meta Conversions Graph Engine
-		if o.ConversionSource == "facebook" {
+		if fullOrder.ConversionSource == "facebook" {
 			fbErr := utils.SendFacebookPurchase(
-				o.BaseModel.ID.String(), // Fallback dynamically to your BaseModel identity strategy
-				o.Client.FullName,
-				o.Client.PhoneNumber,
-				o.TotalPrice,
+				fullOrder.ID.String(),
+				fullOrder.Client.FullName,
+				fullOrder.Client.PhoneNumber,
+				fullOrder.TotalPrice,
 				"DZD",
-				o.FBc,
-				o.FBp,
+				fullOrder.FBc,
+				fullOrder.FBp,
 				time.Now(),
 				ua,
 				ip,
@@ -332,12 +380,12 @@ func CreateOrder(c *gin.Context) {
 				fmt.Println("Facebook conversion parameters pushed smoothly")
 			}
 		}
-	}(order, clientUserAgent, clientIP)
+	}(order.ID, clientUserAgent, clientIP)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":  true,
 		"message":  "The order was created successfully",
-		"order_id": order.BaseModel.ID,
+		"order_id": order.ID,
 	})
 }
 
@@ -404,28 +452,6 @@ func IndexOrderByShopID(c *gin.Context) {
 		return
 	}
 
-	// get the user
-	userInterface, ok := c.Get("user")
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Error while fetching the user from context",
-		})
-		return
-	}
-
-	// parse the user info
-	user, _ := userInterface.(models.User)
-
-	// check if the user belongs to the shop
-	if shopID != *user.ShopID {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": "Authentication required to access the shop info",
-		})
-		return
-	}
-
 	// 2. Extract and validate Order ID
 	orderIDStr := c.Param("id")
 	orderID, err := uuid.Parse(orderIDStr)
@@ -468,126 +494,6 @@ func IndexOrderByShopID(c *gin.Context) {
 		"success": true,
 		"message": "Order was retrieved successfully",
 		"data":    order,
-	})
-}
-
-// func UpdateOrder(c *gin.Context) {
-// 	id, err := uuid.Parse(c.Param("id"))
-// 	if err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{
-// 			"success": false,
-// 			"message": "error while parsing the id",
-// 		})
-// 		return
-// 	}
-
-// 	var body struct {
-// 		ProductName    *string
-// 		Quantity       *uint
-// 		FullName       *string
-// 		PhoneNumber    *string
-// 		PhoneNumber2   *string
-// 		State          *string
-// 		StateNumber    *string
-// 		City           *string
-// 		Variant        *string
-// 		Price          *float64
-// 		ShippingMethod *string
-// 		ShippingPrice  *float64
-// 		TotalPrice     *float64
-// 		Status         *string
-// 		IsShipped      *bool
-// 		Note           *string
-// 	}
-
-// 	if err = c.ShouldBindJSON(&body); err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{
-// 			"success": false,
-// 			"message": "Error while parsing the body!",
-// 			"error":   err.Error(),
-// 		})
-// 		return
-// 	}
-
-// 	var order models.Order
-// 	if err := initializers.DB.First(&order, id).Error; err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{
-// 			"success": false,
-// 			"message": "Error while retrieving the order",
-// 		})
-// 		return
-// 	}
-
-// 	oldStatus := order.Status
-// 	newStatus := oldStatus
-// 	if body.Status != nil {
-// 		newStatus = *body.Status
-// 	}
-
-// 	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
-// 		if err := tx.Model(&order).Updates(body).Error; err != nil {
-// 			return err
-// 		}
-
-// 		if oldStatus != "Expedié" && newStatus == "Expedié" && order.VariantItemId != uuid.Nil {
-// 			result := tx.Model(&models.VariantItem{}).
-// 				Where("id = ? AND quantity >= ?", order.VariantItemId, order.Quantity).
-// 				UpdateColumn("quantity", gorm.Expr("quantity - ?", order.Quantity))
-
-// 			if result.Error != nil {
-// 				return result.Error
-// 			}
-
-// 			if result.RowsAffected == 0 {
-// 				return fmt.Errorf("variant item not found or insufficient quantity")
-// 			}
-// 		}
-
-// 		return nil
-// 	})
-
-// 	var variantItem models.VariantItem
-
-// 	result := initializers.DB.First(&variantItem, order.VariantItemId)
-// 	if result.Error != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{
-// 			"success": false,
-// 			"message": "Error while retrieving the variant item",
-// 			"error":   result.Error.Error(),
-// 		})
-// 		return
-// 	}
-
-// 	c.JSON(http.StatusOK, gin.H{
-// 		"success": true,
-// 		"message": "Order update was successful",
-// 		"data":    order,
-// 	})
-// }
-
-func DeleteOrder(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "error while parsing the id",
-		})
-		return
-	}
-
-	result := initializers.DB.Delete(&models.Order{}, id)
-	if result.Error != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Error while deleting the order",
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "The order was deleted successfully",
 	})
 }
 
@@ -636,119 +542,3 @@ func ExportAsExcel(c *gin.Context) {
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", result.FileName))
 	c.Data(result.StatusCode, result.MimeType, result.FileBytes)
 }
-
-// func GetOrdersBySearch(c *gin.Context) {
-// 	search := c.Query("search")
-
-// 	var orders []models.Order
-// 	query := initializers.DB.Order("updated_at DESC")
-
-// 	if search != "" {
-// 		query = query.Where("full_name ILIKE ? OR phone_number ILIKE ?", "%"+search+"%", "%"+search+"%")
-// 	}
-
-// 	result := query.Limit(10).Find(&orders)
-
-// 	if result.Error != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{
-// 			"success": false,
-// 			"message": "Error retrieving the orders",
-// 		})
-// 		return
-// 	}
-
-// 	c.JSON(http.StatusOK, gin.H{
-// 		"success": true,
-// 		"message": "Orders were retrieved successfully",
-// 		"data":    orders,
-// 	})
-// }
-
-// func GetOrdersByStatusByShopID(c *gin.Context) {
-// 	// get the shop id
-// 	shopIDStr := c.Param("shopId")
-// 	shopID, err := uuid.Parse(shopIDStr)
-// 	if err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{
-// 			"success": false,
-// 			"message": "Invalid or missing Shop ID",
-// 		})
-// 		return
-// 	}
-
-// 	// get the user
-// 	userInterface, ok := c.Get("user")
-// 	if !ok {
-// 		c.JSON(http.StatusInternalServerError, gin.H{
-// 			"success": false,
-// 			"message": "Error while fetching the user from context",
-// 		})
-// 		return
-// 	}
-
-// 	// parse the user info
-// 	user, _ := userInterface.(models.User)
-
-// 	// check if the user belongs to the shop
-// 	if shopID != user.ShopID {
-// 		c.JSON(http.StatusUnauthorized, gin.H{
-// 			"success": false,
-// 			"message": "Authentication required to access the shop info",
-// 		})
-// 		return
-// 	}
-
-// 	status := c.Query("status")
-// 	perPage := 10
-// 	page := 1
-// 	pageString := c.Query("page")
-// 	perPageString := c.Query("perPage")
-
-// 	if pageString != "" {
-// 		page, _ = strconv.Atoi(pageString)
-// 	}
-// 	if perPageString != "" {
-// 		perPage, _ = strconv.Atoi(perPageString)
-// 	}
-
-// 	db := initializers.DB.Model(&models.Order{}).Where("shop_id = ?", shopID)
-
-// 	if status != "" {
-// 		db = db.Where("status = ?", status)
-// 	}
-
-// 	var totalRows int64
-// 	result := db.Count(&totalRows)
-// 	if result.Error != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{
-// 			"success": false,
-// 			"message": "Error while counting the orders",
-// 			"error":   result.Error.Error(),
-// 		})
-// 		return
-// 	}
-
-// 	totalPages := math.Ceil(float64(totalRows) / float64(perPage))
-// 	offset := (page - 1) * int(perPage)
-
-// 	var orders []models.Order
-// 	result = db.Order("updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&orders)
-
-// 	if result.Error != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{
-// 			"success": false,
-// 			"message": "Error while fetching the orders",
-// 			"error":   result.Error.Error(),
-// 		})
-// 		return
-// 	}
-
-// 	pagination := utils.GetPaginationData(page, int(totalPages), "/orders/filters")
-
-// 	c.JSON(http.StatusOK, gin.H{
-// 		"success":    true,
-// 		"message":    "Orders were retrieved successfully",
-// 		"data":       orders,
-// 		"pagination": pagination,
-// 	})
-// }

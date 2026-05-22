@@ -7,22 +7,25 @@ import (
 )
 
 func ProductsRoutes(router *gin.Engine) {
-	products := router.Group("/products")
-
+	adminProducts := router.Group("/api/v1/shops/:shopId/products")
 	{
-		products.GET("", controllers.GetProductsByShop)
-		products.POST("", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.CreateProductByShop)
-		products.GET("/:id", controllers.IndexProductByShop)
-		products.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.UpdateProduct)
-		products.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.DeleteProduct)
-		products.PATCH("/variant/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.UpdateVariant)
-		products.PATCH("/images/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.UpdateProductImages)
-		// products.GET("/client", controllers.GetProductsClient)
-		products.GET("/search", controllers.GetProductsBySearchBySlug)
-		products.GET("/tags", controllers.GetTags)
-		products.GET("/all-tags", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.GetAllTags)
-		products.DELETE("/tags/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.DeleteTag)
-		products.POST("/tags", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.CreateTag)
-		// products.GET("/promo", controllers.GetPromoRemaining)
+		adminProducts.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.GetProductsByShopAdmin)
+		adminProducts.POST("", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.CreateProductByShop)
+		adminProducts.GET("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.GetProductByIDAdmin)
+		adminProducts.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.UpdateProductByShop)
+		adminProducts.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.DeleteProductByShop)
+		adminProducts.PATCH("/:id/images", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.UpdateProductImagesByShop)
+	}
+
+	adminVariants := router.Group("/api/v1/shops/:shopId/variants")
+	{
+		adminVariants.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.UpdateProductVariantsByShop)
+	}
+
+	storeProducts := router.Group("/api/v1/store/:slug/products")
+	{
+		storeProducts.GET("", controllers.GetActiveProductsBySlug)
+		storeProducts.GET("/search", controllers.GetProductsBySearchBySlug)
+		storeProducts.GET("/:id", controllers.IndexProductBySlug)
 	}
 }

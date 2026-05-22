@@ -7,7 +7,7 @@ import (
 )
 
 func UsersRoutes(router *gin.Engine) {
-	users := router.Group("/users")
+	users := router.Group("/api/v1/users")
 
 	{
 		users.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.GetUsersByShop)

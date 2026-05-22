@@ -115,29 +115,10 @@ func IndexPixel(c *gin.Context) {
 }
 
 func CreatePixel(c *gin.Context) {
-	// 1. Authenticate and authorize context session
-	user, ok := c.Get("user")
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Error while fetching the session user",
-		})
-		return
-	}
-
-	userData, ok := user.(models.User)
-	// Ensuring user has administrative privileges within their workspace context
-	if !ok || userData.Role != "Admin" {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": "Unauthorized access to tenant tracking controls",
-		})
-		return
-	}
-
+	shopID := c.GetHeader("X-Shop-ID")
 	// 2. Map and parse incoming JSON payload structure
 	var body struct {
-		ShopID      string `json:"shopId" binding:"required"`
+		// ShopID      string `json:"shopId" binding:"required"`
 		Platform    string `json:"platform" binding:"required"` // e.g., "facebook", "tiktok"
 		Title       string `json:"title" binding:"required"`    // Custom descriptive identifier
 		PixelID     string `json:"pixelId" binding:"required"`
@@ -154,6 +135,15 @@ func CreatePixel(c *gin.Context) {
 	}
 
 	// 3. Parse and validate UUID configurations safely
+	parsedShopID, err := uuid.Parse(shopID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid shop id",
+			"error":   err.Error(),
+		})
+		return
+	}
 
 	// Standardize platform values to lowercase to guarantee query uniformity
 	platformNormalized := strings.ToLower(strings.TrimSpace(body.Platform))
@@ -162,7 +152,7 @@ func CreatePixel(c *gin.Context) {
 
 	// 4. Build exact database model structure mapping schema constraints
 	pixel := models.Pixel{
-		ShopID:         *userData.ShopID,
+		ShopID:         parsedShopID,
 		Platform:       platformNormalized,
 		Title:          body.Title,
 		PixelID:        strings.TrimSpace(body.PixelID),
@@ -190,24 +180,7 @@ func CreatePixel(c *gin.Context) {
 }
 
 func UpdatePixel(c *gin.Context) {
-	// 1. Authenticate and authorize context session
-	user, ok := c.Get("user")
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Error while fetching the session user",
-		})
-		return
-	}
-
-	userData, ok := user.(models.User)
-	if !ok || userData.Role != "Admin" {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": "Unauthorized access to tenant tracking controls",
-		})
-		return
-	}
+	shopId := c.GetHeader("X-Shop-ID") // Passed by frontend admin panel
 
 	// 2. Extract context path parameters to enforce strict multi-tenancy boundaries
 
@@ -231,7 +204,7 @@ func UpdatePixel(c *gin.Context) {
 
 	// 4. Locate the existing tracking configuration record within tenant bounds
 	var pixel models.Pixel
-	err = initializers.DB.Where("id = ? AND shop_id = ?", pixelUUID, userData.ShopID).First(&pixel).Error
+	err = initializers.DB.Where("id = ? AND shop_id = ?", pixelUUID, shopId).First(&pixel).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{

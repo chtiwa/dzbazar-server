@@ -7,17 +7,15 @@ import (
 )
 
 func OrdersRoutes(router *gin.Engine) {
-	orders := router.Group("/orders")
+	orders := router.Group("/api/v1/shops/:shopId/orders")
 	{
-		orders.GET("", middleware.RequireAuthentication, controllers.GetOrdersByShopID)
-		orders.POST("", controllers.CreateOrder)
-		orders.POST("/proxy", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.CreateZrOrder)
-		orders.POST("/excel", middleware.RequireAuthentication, middleware.RequireRoles("Admin", "Moderator"), controllers.ExportAsExcel)
-		// orders.GET("/search", middleware.RequireAuthentication, controllers.GetOrdersBySearch)
-		// orders.GET("/filters", middleware.RequireAuthentication, middleware.RequireRoles("Admin", "User", "Moderator"), controllers.GetOrdersByStatus)
+		orders.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.GetOrdersByShopID)
+		orders.POST("", controllers.CreateOrderByShopID)
+		orders.POST("/proxy", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.CreateZrOrder)
+		orders.POST("/excel", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.ExportAsExcel)
 
 		orders.GET("/:id", middleware.RequireAuthentication, controllers.IndexOrderByShopID)
 		// orders.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin", "User", "Moderator"), controllers.UpdateOrder)
-		orders.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.DeleteOrder)
+		// orders.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.DeleteOrder)
 	}
 }

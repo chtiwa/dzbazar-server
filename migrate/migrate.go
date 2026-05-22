@@ -30,9 +30,9 @@ func Migrate() {
 	err = initializers.DB.AutoMigrate(
 		&models.User{}, // Passing them again forces GORM to append the skipped foreign keys
 		&models.Shop{},
+		&models.ShopLogoImage{},
 		&models.ShopMember{},
 		&models.Client{},
-		&models.Tag{},
 		&models.Pixel{},
 		&models.Product{},
 		&models.ProductImage{},

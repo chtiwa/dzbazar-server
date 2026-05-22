@@ -24,16 +24,17 @@ type ProductVariantCombination struct {
 	ProductID uuid.UUID `gorm:"not null;index" json:"productId"`
 
 	SKU      string  `gorm:"uniqueIndex;not null" json:"sku"`
-	Price    float64 `gorm:"not null" json:"price"` // Changed to float64 to match your Product model!
+	Price    float64 `gorm:"not null" json:"price"`
 	Quantity int     `gorm:"default:0" json:"quantity"`
 
-	// THE SHOPIFY TRICK: Hardcode up to 3 options directly on the row.
-	// These are pointers so they can be NULL if a product only has 1 or 2 options.
-	Option1ID *uuid.UUID `gorm:"index" json:"option1Id"`
-	Option2ID *uuid.UUID `gorm:"index" json:"option2Id"`
-	Option3ID *uuid.UUID `gorm:"index" json:"option3Id"`
+	Option1ID *uuid.UUID   `gorm:"index" json:"option1Id"`
+	Option1   *VariantItem `gorm:"foreignKey:Option1ID" json:"option1,omitempty"`
 
-	// Optional: Store the human-readable string here too (e.g. "Red / XL")
-	// so your Order model doesn't have to look it up!
+	Option2ID *uuid.UUID   `gorm:"index" json:"option2Id"`
+	Option2   *VariantItem `gorm:"foreignKey:Option2ID" json:"option2,omitempty"`
+
+	Option3ID *uuid.UUID   `gorm:"index" json:"option3Id"`
+	Option3   *VariantItem `gorm:"foreignKey:Option3ID" json:"option3,omitempty"`
+
 	CombinationString string `json:"combinationString"`
 }

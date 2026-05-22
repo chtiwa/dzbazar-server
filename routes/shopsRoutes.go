@@ -7,10 +7,11 @@ import (
 )
 
 func ShopsRoutes(router *gin.Engine) {
-	shops := router.Group("/shops")
+	shops := router.Group("/api/v1/shops")
 	{
+		shops.GET("", middleware.RequireAuthentication, controllers.GetMyShops)
 		shops.POST("", middleware.RequireAuthentication, controllers.CreateShop)
-		shops.PATCH("/:shopId", middleware.RequireAuthentication, controllers.UpdateShop)
-		shops.DELETE("/:shopId", middleware.RequireAuthentication, controllers.DeleteShop)
+		shops.PATCH("/:shopId", middleware.RequireAuthentication, middleware.RequireShopAccess("Owner"), controllers.UpdateShop)
+		shops.DELETE("/:shopId", middleware.RequireAuthentication, middleware.RequireShopAccess("Owner"), controllers.DeleteShop)
 	}
 }

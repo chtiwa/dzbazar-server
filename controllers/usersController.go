@@ -463,7 +463,7 @@ func SignUp(c *gin.Context) {
 		Password:          string(hash),
 		EmailOTP:          otp,
 		EmailOTPExpiresAt: &expiresAt,
-		Role:              "Admin",
+		Role:              "Owner",
 	}
 
 	// 2. Consider using a DB transaction here if email sending is prone to failure
@@ -547,6 +547,38 @@ func VerifyUser(c *gin.Context) {
 	user.EmailOTP = ""
 	user.EmailOTPExpiresAt = nil
 	initializers.DB.Save(&user)
+
+	// generate the access and refresh token
+	refreshToken := utils.GenerateToken(user.ID, 60*60*24*30, user.Role)
+	accessToken := utils.GenerateToken(user.ID, 60*15, user.Role)
+
+	refreshTokenString, err := refreshToken.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{ // Changed to 500
+			"success": false,
+			"message": "Failed to create the refresh token",
+		})
+		return
+	}
+
+	accessTokenString, err := accessToken.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{ // Changed to 500
+			"success": false,
+			"message": "Failed to create the access token",
+		})
+		return
+	}
+
+	// 4. Make the Secure flag dynamic based on your environment
+	// Assuming you have an env var like APP_ENV=production
+	isProduction := os.Getenv("APP_ENV") == "production"
+
+	c.SetSameSite(http.SameSiteLaxMode)
+
+	// c.SetCookie(name, value, maxAge, path, domain, secure, httpOnly)
+	c.SetCookie("RefreshToken", refreshTokenString, 60*60*24*30, "/", "", isProduction, true)
+	c.SetCookie("AccessToken", accessTokenString, 60*15, "/", "", isProduction, true)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

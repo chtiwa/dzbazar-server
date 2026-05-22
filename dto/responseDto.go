@@ -35,14 +35,16 @@ type VariantItemSimple struct {
 	Quantity int    `json:"quantity"`
 	Price    int    `json:"price"`
 }
-
 type CombinationResponse struct {
 	ID                string  `json:"id"`
 	SKU               string  `json:"sku"`
 	Price             float64 `json:"price"`
 	Quantity          int     `json:"quantity"`
-	Option1ID         *string `json:"option1Id"`
-	Option2ID         *string `json:"option2Id"`
-	Option3ID         *string `json:"option3Id"`
+	Option1ID         *string `json:"option1Id,omitempty"`
+	Option2ID         *string `json:"option2Id,omitempty"`
+	Option3ID         *string `json:"option3Id,omitempty"`
+	Option1Value      *string `json:"option1Value,omitempty"`
+	Option2Value      *string `json:"option2Value,omitempty"`
+	Option3Value      *string `json:"option3Value,omitempty"`
 	CombinationString string  `json:"combinationString"`
 }

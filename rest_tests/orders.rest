@@ -1,35 +1,42 @@
-# PATCH http://localhost:5000/orders/68d256a1-1f23-4be0-a2a8-c01613483824
-# Content-Type: application/json
+@baseUrl = http://localhost:5000/api/v1
+@shopId = 9a24aea3-f8a1-4abe-8798-043ff42f55b7
 
-# {
-#     "status":"Not Responding"
-# }
+### Create a Normalized Order (Client + Multi-Items)
+POST {{baseUrl}}/orders
+Content-Type: application/json
 
-# POST https://procolis.com/api_v1/tarification
-# Token: e2b914224c00fe79c091141a3e4e6ce4322d57cddda165cc2119238db034d77d
-# Key: 3b7238f231ce49a5a503a2b56395328a
-# Content-Type: application/json
-
-# GET http://localhost:5000/orders
-
-# GET http://localhost:5000/orders/68d256a1-1f23-4be0-a2a8-c01613483824
-
-GET http://localhost:5000/orders/filters?status=&page=1 
-
-# POST http://localhost:5000/orders
-# Content-Type: application/json
-
-# {
-#     "fullName" :"John Doe",
-#     "phoneNumber":"0888888888",
-#     "state":"Oran",
-#     "StateNumber":"31",
-#     "city":"Es senia",
-#     "productName":"Facial hair oil",
-#     "price":2500,
-#     "quantity":2,
-#     "shippingPrice":800,
-#     "shippingMethod":"Home",
-#     "totalPrice":3200,
-#     "conversionSource":"facebook"
-# }
+{
+  "shopId": "{{shopId}}",
+  "shippingMethod": "DOORSTEP",
+  "shippingPrice": 800.00,
+  "totalPrice": 33000.00,
+  "note": "Livraison après 16h",
+  "ouvrable": false,
+  "fragile": true,
+  "essayable": true,
+  "conversionSource": "facebook",
+  "fbclid": "IwAR2Y_...",
+  "fbc": "fb.1.167...",
+  "fbp": "fb.1.167...",
+  "client": {
+    "fullName": "John Doe",
+    "phoneNumber": "0550123456",
+    "state": "Oran",
+    "stateCode": "31",
+    "city": "Es Senia"
+  },
+  "items": [
+    {
+      "productId": "5f90e239-d14c-4526-a19d-2245cc45d102",
+      "productVariantCombinationID": "bab05ae0-00f1-4080-820d-74c1bd37f8cf",
+      "quantity": 2,
+      "price": 14500.00
+    },
+    {
+      "productId": "d8980a0c-027d-4fd5-b6c0-25944aa6541f",
+      "productVariantCombinationID": "723a3f5d-a3af-4be5-9a3f-53209d85f7a6",
+      "quantity": 1,
+      "price": 3200.00
+    }
+  ]
+}
