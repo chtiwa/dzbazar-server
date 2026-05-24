@@ -45,10 +45,6 @@ type VariantItemInput struct {
 	Quantity int    `json:"quantity"`
 }
 
-type TagInput struct {
-	Name string `json:"name"`
-}
-
 type CreateProductInput struct {
 	Title       string         `json:"title"`
 	Description string         `json:"description"`

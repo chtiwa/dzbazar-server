@@ -17,11 +17,6 @@ func ProductsRoutes(router *gin.Engine) {
 		adminProducts.PATCH("/:id/images", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.UpdateProductImagesByShop)
 	}
 
-	adminVariants := router.Group("/api/v1/shops/:shopId/variants")
-	{
-		adminVariants.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.UpdateProductVariantsByShop)
-	}
-
 	storeProducts := router.Group("/api/v1/store/:slug/products")
 	{
 		storeProducts.GET("", controllers.GetActiveProductsBySlug)

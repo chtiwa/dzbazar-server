@@ -210,7 +210,7 @@ func CreateProductByShop(c *gin.Context) {
 		variantTitles = append(variantTitles, strings.TrimSpace(v.Title))
 	}
 
-		var combinationsToSave []models.ProductVariantCombination
+	var combinationsToSave []models.ProductVariantCombination
 
 	for _, combo := range combinationsInput {
 		var opt1ID, opt2ID, opt3ID *uuid.UUID
@@ -483,6 +483,9 @@ func GetProductByIDAdmin(c *gin.Context) {
 		Preload("Variants").
 		Preload("Variants.VariantItems").
 		Preload("Combinations").
+		Preload("Combinations.Option1").
+		Preload("Combinations.Option2").
+		Preload("Combinations.Option3").
 		First(&product).Error
 
 	if err != nil {
@@ -809,12 +812,32 @@ func UpdateProductByShop(c *gin.Context) {
 		return
 	}
 
+	type VariantItemInput struct {
+		Value string `json:"value"`
+	}
+
+	type VariantInput struct {
+		Title        string             `json:"title"`
+		VariantItems []VariantItemInput `json:"variantItems"`
+	}
+
+	type CombinationInput struct {
+		SKU      string  `json:"sku"`
+		Price    float64 `json:"price"`
+		Quantity int     `json:"quantity"`
+		Option1  *string `json:"option1"`
+		Option2  *string `json:"option2"`
+		Option3  *string `json:"option3"`
+	}
+
 	type UpdateProductBody struct {
-		Title       *string  `json:"title"`
-		Description *string  `json:"description"`
-		Price       *float64 `json:"price"`
-		OldPrice    *float64 `json:"oldPrice"`
-		Active      *bool    `json:"active"`
+		Title        *string            `json:"title"`
+		Description  *string            `json:"description"`
+		Price        *float64           `json:"price"`
+		OldPrice     *float64           `json:"oldPrice"`
+		Active       *bool              `json:"active"`
+		Variants     []VariantInput     `json:"variants"`
+		Combinations []CombinationInput `json:"combinations"`
 	}
 
 	var body UpdateProductBody
@@ -891,7 +914,99 @@ func UpdateProductByShop(c *gin.Context) {
 		updates["active"] = *body.Active
 	}
 
-	if len(updates) == 0 {
+	if len(body.Variants) > 3 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "A product can have at most 3 variants",
+		})
+		return
+	}
+
+	for _, v := range body.Variants {
+		title := strings.TrimSpace(v.Title)
+		if title == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Variant title cannot be empty",
+			})
+			return
+		}
+
+		if len(v.VariantItems) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Each variant must contain at least one item",
+			})
+			return
+		}
+
+		itemSet := make(map[string]struct{})
+		for _, item := range v.VariantItems {
+			value := strings.TrimSpace(item.Value)
+			if value == "" {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": "Variant item value cannot be empty",
+				})
+				return
+			}
+
+			normalized := strings.ToLower(value)
+			if _, exists := itemSet[normalized]; exists {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": fmt.Sprintf("Duplicate item value '%s' inside variant '%s'", value, title),
+				})
+				return
+			}
+			itemSet[normalized] = struct{}{}
+		}
+	}
+
+	if len(body.Variants) == 0 && len(body.Combinations) > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Combinations cannot be provided without variants",
+		})
+		return
+	}
+
+	skuSet := make(map[string]struct{})
+	for _, combo := range body.Combinations {
+		if strings.TrimSpace(combo.SKU) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Combination SKU cannot be empty",
+			})
+			return
+		}
+		if combo.Price < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Combination price cannot be negative",
+			})
+			return
+		}
+		if combo.Quantity < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Combination quantity cannot be negative",
+			})
+			return
+		}
+
+		normalizedSKU := strings.ToLower(strings.TrimSpace(combo.SKU))
+		if _, exists := skuSet[normalizedSKU]; exists {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": fmt.Sprintf("Duplicate SKU '%s' in request", combo.SKU),
+			})
+			return
+		}
+		skuSet[normalizedSKU] = struct{}{}
+	}
+
+	if len(updates) == 0 && body.Variants == nil && body.Combinations == nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "No fields provided for update",
@@ -904,6 +1019,7 @@ func UpdateProductByShop(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to start transaction",
+			"error":   tx.Error.Error(),
 		})
 		return
 	}
@@ -915,14 +1031,153 @@ func UpdateProductByShop(c *gin.Context) {
 		}
 	}()
 
-	if err := tx.Model(&product).Updates(updates).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to update product",
-			"error":   err.Error(),
-		})
-		return
+	if len(updates) > 0 {
+		if err := tx.Model(&product).Updates(updates).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to update product",
+				"error":   err.Error(),
+			})
+			return
+		}
+	}
+
+	if body.Variants != nil || body.Combinations != nil {
+		if err := tx.Where("product_id = ?", productID).Delete(&models.ProductVariantCombination{}).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to clear existing combinations",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		if err := tx.Where("product_id = ?", productID).Delete(&models.Variant{}).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to clear existing variants",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		itemIDs := make(map[string]uuid.UUID)
+
+		for _, v := range body.Variants {
+			variant := models.Variant{
+				ProductID: productID,
+				Title:     strings.TrimSpace(v.Title),
+			}
+
+			if err := tx.Create(&variant).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"success": false,
+					"message": "Failed to create variant",
+					"error":   err.Error(),
+				})
+				return
+			}
+
+			for _, item := range v.VariantItems {
+				value := strings.TrimSpace(item.Value)
+
+				variantItem := models.VariantItem{
+					VariantID: variant.ID,
+					Value:     value,
+				}
+
+				if err := tx.Create(&variantItem).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"success": false,
+						"message": "Failed to create variant item",
+						"error":   err.Error(),
+					})
+					return
+				}
+
+				itemIDs[strings.ToLower(value)] = variantItem.ID
+			}
+		}
+
+		var combinationsToSave []models.ProductVariantCombination
+
+		for _, combo := range body.Combinations {
+			var opt1ID, opt2ID, opt3ID *uuid.UUID
+			var comboStringParts []string
+
+			if combo.Option1 != nil && strings.TrimSpace(*combo.Option1) != "" {
+				value := strings.ToLower(strings.TrimSpace(*combo.Option1))
+				id, exists := itemIDs[value]
+				if !exists {
+					tx.Rollback()
+					c.JSON(http.StatusBadRequest, gin.H{
+						"success": false,
+						"message": fmt.Sprintf("Option1 value '%s' does not exist", *combo.Option1),
+					})
+					return
+				}
+				opt1ID = &id
+				comboStringParts = append(comboStringParts, strings.TrimSpace(*combo.Option1))
+			}
+
+			if combo.Option2 != nil && strings.TrimSpace(*combo.Option2) != "" {
+				value := strings.ToLower(strings.TrimSpace(*combo.Option2))
+				id, exists := itemIDs[value]
+				if !exists {
+					tx.Rollback()
+					c.JSON(http.StatusBadRequest, gin.H{
+						"success": false,
+						"message": fmt.Sprintf("Option2 value '%s' does not exist", *combo.Option2),
+					})
+					return
+				}
+				opt2ID = &id
+				comboStringParts = append(comboStringParts, strings.TrimSpace(*combo.Option2))
+			}
+
+			if combo.Option3 != nil && strings.TrimSpace(*combo.Option3) != "" {
+				value := strings.ToLower(strings.TrimSpace(*combo.Option3))
+				id, exists := itemIDs[value]
+				if !exists {
+					tx.Rollback()
+					c.JSON(http.StatusBadRequest, gin.H{
+						"success": false,
+						"message": fmt.Sprintf("Option3 value '%s' does not exist", *combo.Option3),
+					})
+					return
+				}
+				opt3ID = &id
+				comboStringParts = append(comboStringParts, strings.TrimSpace(*combo.Option3))
+			}
+
+			combinationsToSave = append(combinationsToSave, models.ProductVariantCombination{
+				ProductID:         productID,
+				SKU:               strings.TrimSpace(combo.SKU),
+				Price:             combo.Price,
+				Quantity:          combo.Quantity,
+				Option1ID:         opt1ID,
+				Option2ID:         opt2ID,
+				Option3ID:         opt3ID,
+				CombinationString: strings.Join(comboStringParts, " / "),
+			})
+		}
+
+		if len(combinationsToSave) > 0 {
+			if err := tx.Create(&combinationsToSave).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"success": false,
+					"message": "Failed to save combinations",
+					"error":   err.Error(),
+				})
+				return
+			}
+		}
 	}
 
 	if err := tx.
@@ -958,7 +1213,6 @@ func UpdateProductByShop(c *gin.Context) {
 		"data":    product,
 	})
 }
-
 func UpdateProductImagesByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {

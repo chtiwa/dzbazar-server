@@ -7,13 +7,22 @@ import (
 )
 
 func LandingPagesRoutes(router *gin.Engine) {
-	landingPages := router.Group("/api/v1/landing-pages")
+	adminShop := router.Group("/api/v1/shops")
 	{
-		landingPages.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Admin", "Moderator"), controllers.GetLandingPages)
-		landingPages.POST("", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.CreateLandingPage)
-		landingPages.GET("/:id", controllers.IndexLandingPage)
-		landingPages.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.DeleteLandingPage)
-		landingPages.PATCH("/:id/images", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.UpdateLandingPage)
-		landingPages.DELETE("/:id/images/:imageId", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.DeleteLandingPageImage)
+		adminLandingPages := adminShop.Group("/:shopId/landing-pages")
+		{
+			adminLandingPages.POST("", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.CreateLandingPageByShop)
+			adminLandingPages.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.GetLandingPagesByShop)
+			adminLandingPages.GET("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.GetLandingPageByShop)
+
+			adminLandingPages.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.UpdateLandingPageByShop)
+			adminLandingPages.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner"), controllers.DeleteLandingPageByShop)
+
+		}
+	}
+
+	publicLandingPages := adminShop.Group("/landing-pages")
+	{
+		publicLandingPages.GET("/:id", controllers.IndexLandingPage)
 	}
 }
