@@ -22,6 +22,7 @@ type CreatePixelInput struct {
 type UpdatePixelInput struct {
 	Title       *string `json:"title"`
 	PixelID     *string `json:"pixelId"`
+	IsActive    *bool   `json:"isActive"`
 	AccessToken *string `json:"accessToken"`
 	ClearToken  *bool   `json:"clearToken"`
 }
@@ -98,6 +99,53 @@ func IndexPixel(c *gin.Context) {
 			"success": false,
 			"message": "Failed to retrieve pixel",
 			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    pixel,
+	})
+}
+
+func IndexActivePixelByShop(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid shop ID",
+		})
+		return
+	}
+
+	platform := strings.ToLower(strings.TrimSpace(c.Query("platform")))
+	if platform == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Platform is required",
+		})
+		return
+	}
+
+	if platform != "facebook" && platform != "tiktok" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Unsupported platform",
+		})
+		return
+	}
+
+	var pixel models.Pixel
+	err = initializers.DB.
+		Where("shop_id = ? AND platform = ? AND is_active = ?", shopID, platform, true).
+		Order("created_at DESC").
+		First(&pixel).Error
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Active pixel not found",
 		})
 		return
 	}
@@ -209,6 +257,16 @@ func UpdatePixel(c *gin.Context) {
 		return
 	}
 
+	tx := initializers.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to start transaction",
+			"error":   tx.Error.Error(),
+		})
+		return
+	}
+
 	updateData := map[string]interface{}{}
 
 	if input.Title != nil {
@@ -230,7 +288,29 @@ func UpdatePixel(c *gin.Context) {
 		updateData["has_access_token"] = false
 	}
 
+	if input.IsActive != nil {
+		if *input.IsActive {
+			// Deactivate other active pixels in same shop + platform
+			if err := tx.Model(&models.Pixel{}).
+				Where("shop_id = ? AND platform = ? AND id <> ?", pixel.ShopID, pixel.Platform, pixel.ID).
+				Update("is_active", false).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"success": false,
+					"message": "Failed to deactivate other pixels",
+					"error":   err.Error(),
+				})
+				return
+			}
+
+			updateData["is_active"] = true
+		} else {
+			updateData["is_active"] = false
+		}
+	}
+
 	if len(updateData) == 0 {
+		tx.Rollback()
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "No changes provided",
@@ -239,10 +319,20 @@ func UpdatePixel(c *gin.Context) {
 		return
 	}
 
-	if err := initializers.DB.Model(&pixel).Updates(updateData).Error; err != nil {
+	if err := tx.Model(&pixel).Updates(updateData).Error; err != nil {
+		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to update pixel",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to commit pixel update",
 			"error":   err.Error(),
 		})
 		return

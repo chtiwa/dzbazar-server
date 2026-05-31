@@ -1,13 +1,14 @@
-- shop controller
-- users controller
-- products controller
-- orders controller
-- pixels controller
+<!-- - shop controller -->
+<!-- - users controller -->
+<!-- - products controller -->
+<!-- - orders controller -->
+<!-- - pixels controller -->
+<!-- - landingpages controller -->
+<!-- - delivery rates logic ( create delivery rates once the shop is created) -->
+- api integration with multiple platforms
 
-- landingpages controller
+- plans
 - dashboard controller
-
-- fix landing page creation and update
-- fix products creation and update
-- fix dashboard anayltics ( based on the shop )
-- fix user
+- upsell
+- cross sell
+- shop settings

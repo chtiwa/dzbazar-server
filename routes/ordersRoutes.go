@@ -15,7 +15,7 @@ func OrdersRoutes(router *gin.Engine) {
 		orders.POST("/excel", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.ExportAsExcel)
 
 		orders.GET("/:id", middleware.RequireAuthentication, controllers.IndexOrderByShopID)
-		// orders.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin", "User", "Moderator"), controllers.UpdateOrder)
-		// orders.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Admin"), controllers.DeleteOrder)
+		orders.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.UpdateOrderByShopID)
+		orders.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.DeleteOrderByShopID)
 	}
 }

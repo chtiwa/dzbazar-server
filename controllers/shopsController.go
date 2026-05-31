@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -90,6 +91,46 @@ func GetMyShops(c *gin.Context) {
 	})
 }
 
+func IndexShopBySlug(c *gin.Context) {
+	slug := strings.ToLower(strings.TrimSpace(c.Param("slug")))
+	if slug == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Shop slug is required",
+		})
+		return
+	}
+
+	var shop models.Shop
+	err := initializers.DB.
+		Preload("LogoImage").
+		Where("slug = ?", slug).
+		First(&shop).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "Shop not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to retrieve shop by slug",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Shop retrieved successfully",
+		"data":    shop,
+	})
+}
+
 func CreateShop(c *gin.Context) {
 	user, ok := c.Get("user")
 	if !ok {
@@ -120,7 +161,7 @@ func CreateShop(c *gin.Context) {
 	}
 
 	processedSlug := strings.ToLower(strings.TrimSpace(body.Slug))
-	reg, _ := regexp.Compile("[^a-z0-9-]+")
+	reg := regexp.MustCompile(`[^a-z0-9-]+`)
 	processedSlug = reg.ReplaceAllString(processedSlug, "-")
 	processedSlug = strings.Trim(processedSlug, "-")
 
@@ -141,7 +182,18 @@ func CreateShop(c *gin.Context) {
 		return
 	}
 
+	wilayas, err := initializers.GetStaticWilayas()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to load static wilayas configuration",
+			"error":   err.Error(),
+		})
+		return
+	}
+
 	var uploadedLogoURL string
+
 	file, err := c.FormFile("logoImage")
 	if err == nil && file != nil {
 		src, openErr := file.Open()
@@ -156,9 +208,17 @@ func CreateShop(c *gin.Context) {
 		defer src.Close()
 
 		buffer := make([]byte, 512)
-		n, _ := src.Read(buffer)
-		contentType := http.DetectContentType(buffer[:n])
+		n, readErr := src.Read(buffer)
+		if readErr != nil && readErr != io.EOF {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Failed to read uploaded logo image",
+				"error":   readErr.Error(),
+			})
+			return
+		}
 
+		contentType := http.DetectContentType(buffer[:n])
 		if !strings.HasPrefix(contentType, "image/") {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
@@ -167,7 +227,16 @@ func CreateShop(c *gin.Context) {
 			return
 		}
 
-		if _, seekErr := src.Seek(0, io.SeekStart); seekErr != nil {
+		seeker, ok := src.(io.Seeker)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to process uploaded logo image stream",
+			})
+			return
+		}
+
+		if _, seekErr := seeker.Seek(0, io.SeekStart); seekErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"message": "Failed to process uploaded logo image",
@@ -252,11 +321,31 @@ func CreateShop(c *gin.Context) {
 			return err
 		}
 
+		rates := make([]models.DeliveryRate, 0, len(wilayas))
+		for _, wilaya := range wilayas {
+			rates = append(rates, models.DeliveryRate{
+				ShopID:       shop.ID,
+				WilayaID:     wilaya.ID,
+				WilayaName:   wilaya.Name,
+				IsActive:     wilaya.IsActive,
+				HasDoorstep:  wilaya.HasDoorstep,
+				DoorstepRate: wilaya.DoorstepRate,
+				HasStopdesk:  wilaya.HasStopdesk,
+				StopdeskRate: wilaya.StopdeskRate,
+			})
+		}
+
+		if len(rates) > 0 {
+			if err := tx.Create(&rates).Error; err != nil {
+				return err
+			}
+		}
+
 		return nil
 	})
 
 	if err != nil {
-		if err == gorm.ErrDuplicatedKey {
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
 			c.JSON(http.StatusConflict, gin.H{
 				"success": false,
 				"message": "This storefront URL slug is already taken by another merchant",

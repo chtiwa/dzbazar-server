@@ -32,6 +32,7 @@ func Migrate() {
 		&models.Shop{},
 		&models.ShopLogoImage{},
 		&models.ShopMember{},
+		&models.DeliveryRate{},
 		&models.Client{},
 		&models.Pixel{},
 		&models.Product{},
@@ -43,6 +44,9 @@ func Migrate() {
 		&models.ProductVariantCombination{},
 		&models.Order{},
 		&models.OrderItem{},
+		&models.AvailableDeliveryCompany{},
+		&models.AvailableDeliveryCompanyImage{},
+		&models.DeliveryCompany{},
 	)
 	if err != nil {
 		log.Fatalf("Phase 2 migration failed: %v", err)

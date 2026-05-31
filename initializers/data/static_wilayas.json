@@ -1,0 +1,524 @@
+[
+  {
+    "id": 1,
+    "name": "Adrar",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 1000,
+    "hasDoorstep": true,
+    "doorstepRate": 1150
+  },
+  {
+    "id": 2,
+    "name": "Chlef",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 550,
+    "hasDoorstep": true,
+    "doorstepRate": 700
+  },
+  {
+    "id": 3,
+    "name": "Laghouat",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 650,
+    "hasDoorstep": true,
+    "doorstepRate": 800
+  },
+  {
+    "id": 4,
+    "name": "Oum El Bouaghi",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 650,
+    "hasDoorstep": true,
+    "doorstepRate": 800
+  },
+  {
+    "id": 5,
+    "name": "Batna",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 600,
+    "hasDoorstep": true,
+    "doorstepRate": 750
+  },
+  {
+    "id": 6,
+    "name": "Bejaia",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 550,
+    "hasDoorstep": true,
+    "doorstepRate": 700
+  },
+  {
+    "id": 7,
+    "name": "Biskra",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 650,
+    "hasDoorstep": true,
+    "doorstepRate": 800
+  },
+  {
+    "id": 8,
+    "name": "Bechar",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 900,
+    "hasDoorstep": true,
+    "doorstepRate": 1050
+  },
+  {
+    "id": 9,
+    "name": "Blida",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 450,
+    "hasDoorstep": true,
+    "doorstepRate": 600
+  },
+  {
+    "id": 10,
+    "name": "Bouira",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 500,
+    "hasDoorstep": true,
+    "doorstepRate": 650
+  },
+  {
+    "id": 11,
+    "name": "Tamanrasset",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 1200,
+    "hasDoorstep": true,
+    "doorstepRate": 1350
+  },
+  {
+    "id": 12,
+    "name": "Tebessa",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 700,
+    "hasDoorstep": true,
+    "doorstepRate": 850
+  },
+  {
+    "id": 13,
+    "name": "Tlemcen",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 700,
+    "hasDoorstep": true,
+    "doorstepRate": 850
+  },
+  {
+    "id": 14,
+    "name": "Tiaret",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 550,
+    "hasDoorstep": true,
+    "doorstepRate": 700
+  },
+  {
+    "id": 15,
+    "name": "Tizi Ouzou",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 500,
+    "hasDoorstep": true,
+    "doorstepRate": 650
+  },
+  {
+    "id": 16,
+    "name": "Alger",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 400,
+    "hasDoorstep": true,
+    "doorstepRate": 500
+  },
+  {
+    "id": 17,
+    "name": "Djelfa",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 600,
+    "hasDoorstep": true,
+    "doorstepRate": 750
+  },
+  {
+    "id": 18,
+    "name": "Jijel",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 600,
+    "hasDoorstep": true,
+    "doorstepRate": 750
+  },
+  {
+    "id": 19,
+    "name": "Setif",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 550,
+    "hasDoorstep": true,
+    "doorstepRate": 700
+  },
+  {
+    "id": 20,
+    "name": "Saida",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 650,
+    "hasDoorstep": true,
+    "doorstepRate": 800
+  },
+  {
+    "id": 21,
+    "name": "Skikda",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 600,
+    "hasDoorstep": true,
+    "doorstepRate": 800
+  },
+  {
+    "id": 22,
+    "name": "Sidi Bel Abbes",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 650,
+    "hasDoorstep": true,
+    "doorstepRate": 800
+  },
+  {
+    "id": 23,
+    "name": "Annaba",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 700,
+    "hasDoorstep": true,
+    "doorstepRate": 850
+  },
+  {
+    "id": 24,
+    "name": "Guelma",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 650,
+    "hasDoorstep": true,
+    "doorstepRate": 800
+  },
+  {
+    "id": 25,
+    "name": "Constantine",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 600,
+    "hasDoorstep": true,
+    "doorstepRate": 750
+  },
+  {
+    "id": 26,
+    "name": "Medea",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 450,
+    "hasDoorstep": true,
+    "doorstepRate": 600
+  },
+  {
+    "id": 27,
+    "name": "Mostaganem",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 600,
+    "hasDoorstep": true,
+    "doorstepRate": 750
+  },
+  {
+    "id": 28,
+    "name": "M'Sila",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 550,
+    "hasDoorstep": true,
+    "doorstepRate": 700
+  },
+  {
+    "id": 29,
+    "name": "Mascara",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 600,
+    "hasDoorstep": true,
+    "doorstepRate": 750
+  },
+  {
+    "id": 30,
+    "name": "Ouargla",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 800,
+    "hasDoorstep": true,
+    "doorstepRate": 950
+  },
+  {
+    "id": 31,
+    "name": "Oran",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 600,
+    "hasDoorstep": true,
+    "doorstepRate": 800
+  },
+  {
+    "id": 32,
+    "name": "El Bayadh",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 650,
+    "hasDoorstep": true,
+    "doorstepRate": 800
+  },
+  {
+    "id": 33,
+    "name": "Illizi",
+    "isActive": false,
+    "hasStopdesk": false,
+    "stopdeskRate": 0,
+    "hasDoorstep": false,
+    "doorstepRate": 0
+  },
+  {
+    "id": 34,
+    "name": "Bordj Bou Arreridj",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 550,
+    "hasDoorstep": true,
+    "doorstepRate": 700
+  },
+  {
+    "id": 35,
+    "name": "Boumerdes",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 450,
+    "hasDoorstep": true,
+    "doorstepRate": 600
+  },
+  {
+    "id": 36,
+    "name": "El Tarf",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 700,
+    "hasDoorstep": true,
+    "doorstepRate": 850
+  },
+  {
+    "id": 37,
+    "name": "Tindouf",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 1150,
+    "hasDoorstep": true,
+    "doorstepRate": 1300
+  },
+  {
+    "id": 38,
+    "name": "Tissemsilt",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 550,
+    "hasDoorstep": true,
+    "doorstepRate": 700
+  },
+  {
+    "id": 39,
+    "name": "El Oued",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 750,
+    "hasDoorstep": true,
+    "doorstepRate": 900
+  },
+  {
+    "id": 40,
+    "name": "Khenchela",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 650,
+    "hasDoorstep": true,
+    "doorstepRate": 800
+  },
+  {
+    "id": 41,
+    "name": "Souk Ahras",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 700,
+    "hasDoorstep": true,
+    "doorstepRate": 850
+  },
+  {
+    "id": 42,
+    "name": "Tipaza",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 450,
+    "hasDoorstep": true,
+    "doorstepRate": 600
+  },
+  {
+    "id": 43,
+    "name": "Mila",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 600,
+    "hasDoorstep": true,
+    "doorstepRate": 750
+  },
+  {
+    "id": 44,
+    "name": "Ain Defla",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 500,
+    "hasDoorstep": true,
+    "doorstepRate": 650
+  },
+  {
+    "id": 45,
+    "name": "Naama",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 750,
+    "hasDoorstep": true,
+    "doorstepRate": 900
+  },
+  {
+    "id": 46,
+    "name": "Ain Temouchent",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 650,
+    "hasDoorstep": true,
+    "doorstepRate": 800
+  },
+  {
+    "id": 47,
+    "name": "Ghardaia",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 750,
+    "hasDoorstep": true,
+    "doorstepRate": 900
+  },
+  {
+    "id": 48,
+    "name": "Relizane",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 600,
+    "hasDoorstep": true,
+    "doorstepRate": 750
+  },
+  {
+    "id": 49,
+    "name": "Timimoun",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 950,
+    "hasDoorstep": true,
+    "doorstepRate": 1100
+  },
+  {
+    "id": 50,
+    "name": "Bordj Badji Mokhtar",
+    "isActive": false,
+    "hasStopdesk": false,
+    "stopdeskRate": 0,
+    "hasDoorstep": false,
+    "doorstepRate": 0
+  },
+  {
+    "id": 51,
+    "name": "Ouled Djellal",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 650,
+    "hasDoorstep": true,
+    "doorstepRate": 800
+  },
+  {
+    "id": 52,
+    "name": "Béni Abbès",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 950,
+    "hasDoorstep": true,
+    "doorstepRate": 1100
+  },
+  {
+    "id": 53,
+    "name": "In Salah",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 950,
+    "hasDoorstep": true,
+    "doorstepRate": 1100
+  },
+  {
+    "id": 54,
+    "name": "In Guezzam",
+    "isActive": false,
+    "hasStopdesk": false,
+    "stopdeskRate": 0,
+    "hasDoorstep": false,
+    "doorstepRate": 0
+  },
+  {
+    "id": 55,
+    "name": "Touggourt",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 750,
+    "hasDoorstep": true,
+    "doorstepRate": 900
+  },
+  {
+    "id": 56,
+    "name": "Djanet",
+    "isActive": false,
+    "hasStopdesk": false,
+    "stopdeskRate": 0,
+    "hasDoorstep": false,
+    "doorstepRate": 0
+  },
+  {
+    "id": 57,
+    "name": "M'Ghair",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 700,
+    "hasDoorstep": true,
+    "doorstepRate": 850
+  },
+  {
+    "id": 58,
+    "name": "Meniaa",
+    "isActive": true,
+    "hasStopdesk": true,
+    "stopdeskRate": 850,
+    "hasDoorstep": true,
+    "doorstepRate": 1000
+  }
+]

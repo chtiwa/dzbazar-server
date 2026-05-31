@@ -18,7 +18,6 @@ import (
 	"github.com/chtiwa/dzbazar-server/dto"
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
-	"github.com/chtiwa/dzbazar-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -501,21 +500,17 @@ func GetProductByIDAdmin(c *gin.Context) {
 }
 
 func GetActiveProductsBySlug(c *gin.Context) {
-	// 1. Extract the SLUG from the URL instead of the UUID
-	slug := c.Param("slug")
-
-	tag := c.Query("tag")
+	slug := strings.ToLower(strings.TrimSpace(c.Param("slug")))
 	pageString := c.Query("page")
-	page := 1
 
+	page := 1
 	if pageString != "" {
 		if parsedPage, err := strconv.Atoi(pageString); err == nil && parsedPage > 0 {
 			page = parsedPage
 		}
 	}
 
-	// 2. Update the cache key to use the slug
-	cacheKey := fmt.Sprintf("products:slug:%s:client:tag=%s:page=%d", slug, tag, page)
+	cacheKey := fmt.Sprintf("products:slug:%s:client:page:%d", slug, page)
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
 		var cachedResponse map[string]interface{}
@@ -525,10 +520,19 @@ func GetActiveProductsBySlug(c *gin.Context) {
 		}
 	}
 
-	// 3. RESOLVE SLUG TO UUID (Protects against fake URLs)
-	// We only select the "id" column to make this query lightning fast.
-	var shopID uuid.UUID
-	if err := initializers.DB.Model(&models.Shop{}).Select("id").Where("slug = ?", slug).First(&shopID).Error; err != nil {
+	var shop models.Shop
+	if err := initializers.DB.
+		Select("id", "slug", "is_active").
+		Where("slug = ?", slug).
+		First(&shop).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Shop not found",
+		})
+		return
+	}
+
+	if !shop.IsActive {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
 			"message": "Shop not found",
@@ -539,18 +543,10 @@ func GetActiveProductsBySlug(c *gin.Context) {
 	var totalRows int64
 	var products []models.Product
 
-	// 4. Run the product query using the securely resolved shopID
 	db := initializers.DB.Model(&models.Product{}).
-		Where("products.shop_id = ?", shopID).
+		Where("products.shop_id = ?", shop.ID).
 		Where("products.active = ?", true).
-		Preload("Images").
-		Preload("Tags")
-
-	if tag != "" {
-		db = db.Joins("JOIN product_tags ON product_tags.product_id = products.id").
-			Joins("JOIN tags ON tags.id = product_tags.tag_id").
-			Where("LOWER(tags.name) = ?", strings.ToLower(tag))
-	}
+		Preload("Images")
 
 	if err := db.Count(&totalRows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -561,35 +557,43 @@ func GetActiveProductsBySlug(c *gin.Context) {
 		return
 	}
 
-	perPage := 8.0
-	totalPages := math.Ceil(float64(totalRows) / perPage)
-
-	offset := (page - 1) * int(perPage)
-	if page > int(totalPages) {
-		offset = int(totalPages) * int(perPage)
+	perPage := 8
+	totalPages := int(math.Ceil(float64(totalRows) / float64(perPage)))
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	if page > totalPages {
+		page = totalPages
 	}
 
-	result := db.Order("products.updated_at DESC").Limit(int(perPage)).Offset(offset).Find(&products)
+	offset := (page - 1) * perPage
 
-	if result.Error != nil {
+	if err := db.
+		Order("products.updated_at DESC").
+		Limit(perPage).
+		Offset(offset).
+		Find(&products).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "error while retrieving the products",
-			"error":   result.Error.Error(),
+			"error":   err.Error(),
 		})
 		return
 	}
 
-	pagination := utils.GetPaginationData(page, int(totalPages), "/products")
-
 	response := gin.H{
-		"success":    true,
-		"data":       products,
-		"pagination": pagination,
+		"success": true,
+		"data":    products,
+		"pagination": gin.H{
+			"page":       page,
+			"totalPages": totalPages,
+			"totalRows":  totalRows,
+			"hasNext":    page < totalPages,
+			"hasPrev":    page > 1,
+		},
 	}
 
-	jsonData, err := json.Marshal(response)
-	if err == nil {
+	if jsonData, err := json.Marshal(response); err == nil {
 		initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute)
 		initializers.RClient.SAdd(initializers.Ctx, "cache:products", cacheKey)
 	}
@@ -700,11 +704,11 @@ func IndexProductBySlug(c *gin.Context) {
 	}
 
 	response := dto.ProductResponse{
-		ID:          product.ID.String(),
-		Title:       product.Title,
-		Description: product.Description,
-		Price:       product.Price,
-		// OldPrice:     product.OldPrice,
+		ID:           product.ID.String(),
+		Title:        product.Title,
+		Description:  product.Description,
+		Price:        product.Price,
+		OldPrice:     *product.OldPrice,
 		Images:       []dto.ProductImageResponse{},
 		Variants:     []dto.VariantResponse{},
 		Combinations: []dto.CombinationResponse{},
@@ -1044,16 +1048,25 @@ func UpdateProductByShop(c *gin.Context) {
 	}
 
 	if body.Variants != nil || body.Combinations != nil {
-		if err := tx.Where("product_id = ?", productID).Delete(&models.ProductVariantCombination{}).Error; err != nil {
+		// Null out option FK columns on combinations before deleting variant_items,
+		// otherwise the FK constraint (option1_id → variant_items) blocks the delete.
+		if err := tx.Model(&models.ProductVariantCombination{}).
+			Where("product_id = ?", productID).
+			Updates(map[string]any{
+				"option1_id": nil,
+				"option2_id": nil,
+				"option3_id": nil,
+			}).Error; err != nil {
 			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
-				"message": "Failed to clear existing combinations",
+				"message": "Failed to detach variant items from combinations",
 				"error":   err.Error(),
 			})
 			return
 		}
 
+		// Now safe to delete variants (cascades to variant_items)
 		if err := tx.Where("product_id = ?", productID).Delete(&models.Variant{}).Error; err != nil {
 			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -1104,7 +1117,18 @@ func UpdateProductByShop(c *gin.Context) {
 			}
 		}
 
-		var combinationsToSave []models.ProductVariantCombination
+		// Build combinations from the new payload
+		type resolvedCombo struct {
+			sku               string
+			price             float64
+			quantity          int
+			opt1ID            *uuid.UUID
+			opt2ID            *uuid.UUID
+			opt3ID            *uuid.UUID
+			combinationString string
+		}
+
+		newSKUs := make(map[string]resolvedCombo)
 
 		for _, combo := range body.Combinations {
 			var opt1ID, opt2ID, opt3ID *uuid.UUID
@@ -1155,29 +1179,108 @@ func UpdateProductByShop(c *gin.Context) {
 				comboStringParts = append(comboStringParts, strings.TrimSpace(*combo.Option3))
 			}
 
-			combinationsToSave = append(combinationsToSave, models.ProductVariantCombination{
-				ProductID:         productID,
-				SKU:               strings.TrimSpace(combo.SKU),
-				Price:             combo.Price,
-				Quantity:          combo.Quantity,
-				Option1ID:         opt1ID,
-				Option2ID:         opt2ID,
-				Option3ID:         opt3ID,
-				CombinationString: strings.Join(comboStringParts, " / "),
-			})
-		}
-
-		if len(combinationsToSave) > 0 {
-			if err := tx.Create(&combinationsToSave).Error; err != nil {
-				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"success": false,
-					"message": "Failed to save combinations",
-					"error":   err.Error(),
-				})
-				return
+			normalizedSKU := strings.ToLower(strings.TrimSpace(combo.SKU))
+			newSKUs[normalizedSKU] = resolvedCombo{
+				sku:               strings.TrimSpace(combo.SKU),
+				price:             combo.Price,
+				quantity:          combo.Quantity,
+				opt1ID:            opt1ID,
+				opt2ID:            opt2ID,
+				opt3ID:            opt3ID,
+				combinationString: strings.Join(comboStringParts, " / "),
 			}
 		}
+
+		// Load existing combinations to decide upsert vs retire
+		var existingCombos []models.ProductVariantCombination
+		if err := tx.Where("product_id = ?", productID).Find(&existingCombos).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to load existing combinations",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		existingBySKU := make(map[string]models.ProductVariantCombination)
+		for _, ec := range existingCombos {
+			existingBySKU[strings.ToLower(ec.SKU)] = ec
+		}
+
+		// Upsert: update existing SKUs, create new ones
+		for normalizedSKU, rc := range newSKUs {
+			if existing, found := existingBySKU[normalizedSKU]; found {
+				if err := tx.Model(&existing).Updates(map[string]any{
+					"price":              rc.price,
+					"quantity":           rc.quantity,
+					"option1_id":         rc.opt1ID,
+					"option2_id":         rc.opt2ID,
+					"option3_id":         rc.opt3ID,
+					"combination_string": rc.combinationString,
+				}).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"success": false,
+						"message": fmt.Sprintf("Failed to update combination with SKU '%s'", rc.sku),
+						"error":   err.Error(),
+					})
+					return
+				}
+			} else {
+				newCombo := models.ProductVariantCombination{
+					ProductID:         productID,
+					SKU:               rc.sku,
+					Price:             rc.price,
+					Quantity:          rc.quantity,
+					Option1ID:         rc.opt1ID,
+					Option2ID:         rc.opt2ID,
+					Option3ID:         rc.opt3ID,
+					CombinationString: rc.combinationString,
+				}
+				if err := tx.Create(&newCombo).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"success": false,
+						"message": fmt.Sprintf("Failed to create combination with SKU '%s'", rc.sku),
+						"error":   err.Error(),
+					})
+					return
+				}
+			}
+		}
+
+		// Remove or retire combinations no longer in the new payload
+		for normalizedSKU, existing := range existingBySKU {
+			if _, kept := newSKUs[normalizedSKU]; kept {
+				continue
+			}
+			var refCount int64
+			tx.Model(&models.OrderItem{}).Where("product_variant_combination_id = ?", existing.ID).Count(&refCount)
+			if refCount == 0 {
+				if err := tx.Delete(&existing).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"success": false,
+						"message": fmt.Sprintf("Failed to delete combination with SKU '%s'", existing.SKU),
+						"error":   err.Error(),
+					})
+					return
+				}
+			} else {
+				// Has order references — retire it instead of deleting
+				if err := tx.Model(&existing).Update("quantity", 0).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"success": false,
+						"message": fmt.Sprintf("Failed to retire combination with SKU '%s'", existing.SKU),
+						"error":   err.Error(),
+					})
+					return
+				}
+			}
+		}
+
 	}
 
 	if err := tx.
@@ -1213,6 +1316,7 @@ func UpdateProductByShop(c *gin.Context) {
 		"data":    product,
 	})
 }
+
 func UpdateProductImagesByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {

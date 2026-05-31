@@ -59,6 +59,18 @@ type OrderItemInput struct {
 	Price                       float64 `json:"price" binding:"required"`
 }
 
+type UpdateOrderInput struct {
+	ShippingMethod string            `json:"shippingMethod"`
+	ShippingPrice  *float64          `json:"shippingPrice"`
+	Note           string            `json:"note"`
+	Status         string            `json:"status"`
+	Ouvrable       bool              `json:"ouvrable"`
+	Fragile        bool              `json:"fragile"`
+	Essayable      bool              `json:"essayable"`
+	Client         *OrderClientInput `json:"client"`
+	Items          []OrderItemInput  `json:"items"`
+}
+
 func GetOrdersByShopID(c *gin.Context) {
 	user, ok := c.Get("user")
 	if !ok {
@@ -117,21 +129,21 @@ func GetOrdersByShopID(c *gin.Context) {
 	status := c.Query("status")
 	search := strings.TrimSpace(c.Query("search"))
 
-	query := initializers.DB.Model(&models.Order{}).Where("shop_id = ?", shopID)
+	baseQuery := initializers.DB.Model(&models.Order{}).Where("orders.shop_id = ?", shopID)
 
 	if status != "" && status != "Tous" {
-		query = query.Where("status = ?", status)
+		baseQuery = baseQuery.Where("status = ?", status)
 	}
 
 	if search != "" {
 		likeSearch := "%" + search + "%"
-		query = query.
+		baseQuery = baseQuery.
 			Joins("JOIN clients client ON client.id = orders.client_id").
 			Where("client.full_name ILIKE ? OR client.phone_number LIKE ?", likeSearch, likeSearch)
 	}
 
 	var totalRows int64
-	if err := query.Count(&totalRows).Error; err != nil {
+	if err := baseQuery.Count(&totalRows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Error while counting the orders",
@@ -152,24 +164,12 @@ func GetOrdersByShopID(c *gin.Context) {
 	offset := (page - 1) * perPage
 
 	var orders []models.Order
-	if err := initializers.DB.
-		Where("shop_id = ?", shopID).
-		Scopes(func(db *gorm.DB) *gorm.DB {
-			if status != "" && status != "Tous" {
-				db = db.Where("status = ?", status)
-			}
-			if search != "" {
-				likeSearch := "%" + search + "%"
-				db = db.Joins("JOIN clients client ON client.id = orders.client_id").
-					Where("client.full_name ILIKE ? OR client.phone_number LIKE ?", likeSearch, likeSearch)
-			}
-			return db
-		}).
+	if err := baseQuery.
 		Preload("Client").
 		Preload("Items").
 		Preload("Items.Product").
 		Preload("Items.ProductVariantCombination").
-		Order("updated_at DESC").
+		Order("created_at DESC").
 		Limit(perPage).
 		Offset(offset).
 		Find(&orders).Error; err != nil {
@@ -353,7 +353,7 @@ func CreateOrderByShopID(c *gin.Context) {
 
 		realtime.Broadcast <- realtime.Message{
 			Event: "order_created",
-			Data: map[string]interface{}{
+			Data: map[string]any{
 				"productName": mainProductName,
 				"totalPrice":  fullOrder.TotalPrice,
 				"itemsCount":  len(fullOrder.Items),
@@ -441,7 +441,6 @@ func CreateZrOrder(c *gin.Context) {
 }
 
 func IndexOrderByShopID(c *gin.Context) {
-	// 1. Extract and validate Shop ID from route params or context middleware to enforce multi-tenancy boundaries
 	shopIDStr := c.Param("shopId")
 	shopID, err := uuid.Parse(shopIDStr)
 	if err != nil {
@@ -452,7 +451,6 @@ func IndexOrderByShopID(c *gin.Context) {
 		return
 	}
 
-	// 2. Extract and validate Order ID
 	orderIDStr := c.Param("id")
 	orderID, err := uuid.Parse(orderIDStr)
 	if err != nil {
@@ -465,12 +463,17 @@ func IndexOrderByShopID(c *gin.Context) {
 
 	var order models.Order
 
-	// 3. Thread-safe query execution with deep eager loading
-	// We pass .Preload("Items.Product") if you ever need to display product images/metadata on the order detail page
-	err = initializers.DB.Model(&models.Order{}).
+	err = initializers.DB.
+		Model(&models.Order{}).
 		Where("id = ? AND shop_id = ?", orderID, shopID).
 		Preload("Client").
 		Preload("Items").
+		Preload("Items.Product").
+		Preload("Items.Product.Images").
+		Preload("Items.ProductVariantCombination").
+		Preload("Items.ProductVariantCombination.Option1").
+		Preload("Items.ProductVariantCombination.Option2").
+		Preload("Items.ProductVariantCombination.Option3").
 		First(&order).Error
 
 	if err != nil {
@@ -518,8 +521,6 @@ func ExportAsExcel(c *gin.Context) {
 		return
 	}
 
-	fmt.Println(body)
-
 	// generate excel file
 	excelBytes, err := utils.GenerateExcel(body)
 	var result FileExportResponse
@@ -541,4 +542,223 @@ func ExportAsExcel(c *gin.Context) {
 	c.Header("Content-Description", "File Transfer")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", result.FileName))
 	c.Data(result.StatusCode, result.MimeType, result.FileBytes)
+}
+
+func UpdateOrderByShopID(c *gin.Context) {
+	shopIDStr := c.Param("shopId")
+	shopID, err := uuid.Parse(shopIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid or missing Shop ID",
+		})
+		return
+	}
+
+	orderIDStr := c.Param("id")
+	orderID, err := uuid.Parse(orderIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid Order ID format",
+		})
+		return
+	}
+
+	var body UpdateOrderInput
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Error while binding JSON request context",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
+		var order models.Order
+		if err := tx.
+			Preload("Client").
+			Preload("Items").
+			First(&order, "id = ? AND shop_id = ?", orderID, shopID).Error; err != nil {
+			return err
+		}
+
+		if body.Client != nil {
+			if err := tx.Model(&models.Client{}).
+				Where("id = ? AND shop_id = ?", order.ClientID, shopID).
+				Updates(map[string]any{
+					"full_name":    body.Client.FullName,
+					"phone_number": body.Client.PhoneNumber,
+					"state":        body.Client.State,
+					"state_code":   body.Client.StateCode,
+					"city":         body.Client.City,
+				}).Error; err != nil {
+				return err
+			}
+		}
+
+		shippingPrice := order.ShippingPrice
+		if body.ShippingPrice != nil {
+			shippingPrice = *body.ShippingPrice
+		}
+		calculatedTotalPrice := shippingPrice
+		newOrderItems := make([]models.OrderItem, 0)
+
+		if len(body.Items) > 0 {
+			if err := tx.Where("order_id = ?", order.ID).Delete(&models.OrderItem{}).Error; err != nil {
+				return err
+			}
+
+			for _, item := range body.Items {
+				prodID, parseErr := uuid.Parse(item.ProductID)
+				if parseErr != nil {
+					return fmt.Errorf("invalid product uuid provided: %s", item.ProductID)
+				}
+
+				prodVarComID, parseErr := uuid.Parse(item.ProductVariantCombinationID)
+				if parseErr != nil {
+					return fmt.Errorf("invalid combination uuid provided: %s", item.ProductVariantCombinationID)
+				}
+
+				newOrderItems = append(newOrderItems, models.OrderItem{
+					OrderID:                     order.ID,
+					ProductID:                   prodID,
+					ProductVariantCombinationID: prodVarComID,
+					Quantity:                    item.Quantity,
+					Price:                       item.Price,
+				})
+
+				calculatedTotalPrice += item.Price * float64(item.Quantity)
+			}
+
+			if err := tx.Create(&newOrderItems).Error; err != nil {
+				return err
+			}
+		} else {
+			var existingItems []models.OrderItem
+			if err := tx.Where("order_id = ?", order.ID).Find(&existingItems).Error; err != nil {
+				return err
+			}
+
+			for _, item := range existingItems {
+				calculatedTotalPrice += item.Price * float64(item.Quantity)
+			}
+		}
+
+		updates := map[string]any{
+			"shipping_method": body.ShippingMethod,
+			"shipping_price":  shippingPrice,
+			"total_price":     calculatedTotalPrice,
+			"note":            body.Note,
+			"ouvrable":        body.Ouvrable,
+			"fragile":         body.Fragile,
+			"essayable":       body.Essayable,
+		}
+
+		if strings.TrimSpace(body.Status) != "" {
+			updates["status"] = body.Status
+		}
+
+		if err := tx.Model(&models.Order{}).
+			Where("id = ? AND shop_id = ?", order.ID, shopID).
+			Updates(updates).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "Order not found or does not belong to this shop",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed updating order securely inside database transaction",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	var updatedOrder models.Order
+	if err := initializers.DB.
+		Preload("Client").
+		Preload("Items").
+		Preload("Items.Product").
+		Preload("Items.ProductVariantCombination").
+		First(&updatedOrder, "id = ? AND shop_id = ?", orderID, shopID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Order updated but failed to reload final payload",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Order was updated successfully",
+		"data":    updatedOrder,
+	})
+}
+
+func DeleteOrderByShopID(c *gin.Context) {
+	shopIDStr := c.Param("shopId")
+	shopID, err := uuid.Parse(shopIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid or missing Shop ID",
+		})
+		return
+	}
+
+	orderIDStr := c.Param("id")
+	orderID, err := uuid.Parse(orderIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid Order ID format",
+		})
+		return
+	}
+
+	var order models.Order
+	if err := initializers.DB.
+		First(&order, "id = ? AND shop_id = ?", orderID, shopID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "Order not found or does not belong to this shop",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Database error while finding order before deletion",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	if err := initializers.DB.Delete(&order).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to delete order",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Order was deleted successfully",
+	})
 }

@@ -10,7 +10,7 @@ type ProductResponse struct {
 	Images       []ProductImageResponse `json:"images"`
 	Variants     []VariantResponse      `json:"variants"`
 	Tags         []string               `json:"tags"`
-	Combinations []CombinationResponse
+	Combinations []CombinationResponse  `json:"combinations"`
 }
 
 type TagResponse struct {

@@ -15,6 +15,7 @@ import (
 
 func init() {
 	initializers.LoadEnvVars()
+	initializers.InitStaticData()
 	initializers.ConnectToDB()
 	initializers.InitB2()
 	initializers.InitRedis()
@@ -36,6 +37,9 @@ func main() {
 	routes.ShopsRoutes(router)
 	routes.PixelsRoutes(router)
 	routes.DashboardRoutes(router)
+	routes.DeliveryRatesRoutes(router)
+	routes.DeliveryCompaniesRoutes(router)
+	routes.ClientsRoutes(router)
 	// routes.WebSocketRoutes(router)
 
 	go realtime.StartHub()
