@@ -23,7 +23,7 @@ import (
 // Replace your old CreateOrderInput with this:
 type CreateOrderInput struct {
 	ShopID           string  `json:"shopId" binding:"required"`
-	ShippingMethod   string  `json:"shippingMethod"`
+	ShippingMethod   string  `json:"shippingMethod" binding:"required"`
 	ShippingPrice    float64 `json:"shippingPrice"`
 	TotalPrice       float64 `json:"totalPrice"`
 	Note             string  `json:"note"`
@@ -44,11 +44,12 @@ type CreateOrderInput struct {
 
 // Add this new struct for the client
 type OrderClientInput struct {
-	FullName    string `json:"fullName" binding:"required"`
-	PhoneNumber string `json:"phoneNumber" binding:"required"`
-	State       string `json:"state" binding:"required"`
-	StateCode   string `json:"stateCode"`
-	City        string `json:"city" binding:"required"`
+	FullName      string `json:"fullName" binding:"required"`
+	PhoneNumber   string `json:"phoneNumber" binding:"required"`
+	State         string `json:"state" binding:"required"`
+	StateCode     string `json:"stateCode"`
+	City          string `json:"city"`
+	StopdeskPoint string `json:"stopdeskPoint"`
 }
 
 // Replace your old item struct with this
@@ -220,13 +221,13 @@ func CreateOrderByShopID(c *gin.Context) {
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				client = models.Client{
-					// FIX 2: Assign the ShopID to the new client!
-					ShopID:      parsedShopID,
-					FullName:    body.Client.FullName,
-					PhoneNumber: body.Client.PhoneNumber,
-					State:       body.Client.State,
-					StateCode:   body.Client.StateCode,
-					City:        body.Client.City,
+					ShopID:        parsedShopID,
+					FullName:      body.Client.FullName,
+					PhoneNumber:   body.Client.PhoneNumber,
+					State:         body.Client.State,
+					StateCode:     body.Client.StateCode,
+					City:          body.Client.City,
+					StopdeskPoint: body.Client.StopdeskPoint,
 				}
 				if createErr := tx.Create(&client).Error; createErr != nil {
 					return createErr // This will no longer fail!
@@ -381,6 +382,8 @@ func CreateOrderByShopID(c *gin.Context) {
 			}
 		}
 	}(order.ID, clientUserAgent, clientIP)
+
+	InvalidateDashboardCache(parsedShopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":  true,
@@ -588,11 +591,12 @@ func UpdateOrderByShopID(c *gin.Context) {
 			if err := tx.Model(&models.Client{}).
 				Where("id = ? AND shop_id = ?", order.ClientID, shopID).
 				Updates(map[string]any{
-					"full_name":    body.Client.FullName,
-					"phone_number": body.Client.PhoneNumber,
-					"state":        body.Client.State,
-					"state_code":   body.Client.StateCode,
-					"city":         body.Client.City,
+					"full_name":      body.Client.FullName,
+					"phone_number":   body.Client.PhoneNumber,
+					"state":          body.Client.State,
+					"state_code":     body.Client.StateCode,
+					"city":           body.Client.City,
+					"stopdesk_point": body.Client.StopdeskPoint,
 				}).Error; err != nil {
 				return err
 			}
@@ -701,6 +705,8 @@ func UpdateOrderByShopID(c *gin.Context) {
 		return
 	}
 
+	InvalidateDashboardCache(shopID)
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Order was updated successfully",
@@ -756,6 +762,8 @@ func DeleteOrderByShopID(c *gin.Context) {
 		})
 		return
 	}
+
+	InvalidateDashboardCache(shopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

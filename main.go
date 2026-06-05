@@ -40,6 +40,7 @@ func main() {
 	routes.DeliveryRatesRoutes(router)
 	routes.DeliveryCompaniesRoutes(router)
 	routes.ClientsRoutes(router)
+	routes.PlansRoutes(router)
 	// routes.WebSocketRoutes(router)
 
 	go realtime.StartHub()

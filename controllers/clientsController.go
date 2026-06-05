@@ -16,30 +16,34 @@ import (
 )
 
 type CreateClientInput struct {
-	FullName     string `json:"fullName"`
-	PhoneNumber  string `json:"phoneNumber" binding:"required"`
-	PhoneNumber2 string `json:"phoneNumber2"`
-	State        string `json:"state"`
-	StateCode    string `json:"stateCode"`
-	City         string `json:"city"`
+	FullName      string `json:"fullName"`
+	PhoneNumber   string `json:"phoneNumber" binding:"required"`
+	PhoneNumber2  string `json:"phoneNumber2"`
+	State         string `json:"state"`
+	StateCode     string `json:"stateCode"`
+	City          string `json:"city"`
+	StopdeskPoint string `json:"stopdeskPoint"`
 }
 
 type UpdateClientInput struct {
-	FullName     *string `json:"fullName"`
-	PhoneNumber  *string `json:"phoneNumber"`
-	PhoneNumber2 *string `json:"phoneNumber2"`
-	State        *string `json:"state"`
-	StateCode    *string `json:"stateCode"`
-	City         *string `json:"city"`
+	FullName      *string `json:"fullName"`
+	PhoneNumber   *string `json:"phoneNumber"`
+	PhoneNumber2  *string `json:"phoneNumber2"`
+	State         *string `json:"state"`
+	StateCode     *string `json:"stateCode"`
+	City          *string `json:"city"`
+	StopdeskPoint *string `json:"stopdeskPoint"`
 }
 
-func normalizeClientInput(fullName, phoneNumber, phoneNumber2, state, stateCode, city string) (string, string, string, string, string, string) {
+// Update your normalization helper
+func normalizeClientInput(fullName, phoneNumber, phoneNumber2, state, stateCode, city, stopdeskPoint string) (string, string, string, string, string, string, string) {
 	return strings.TrimSpace(fullName),
 		strings.TrimSpace(phoneNumber),
 		strings.TrimSpace(phoneNumber2),
 		strings.TrimSpace(state),
 		strings.TrimSpace(stateCode),
-		strings.TrimSpace(city)
+		strings.TrimSpace(city),
+		strings.TrimSpace(stopdeskPoint)
 }
 
 func GetClientsByShopID(c *gin.Context) {
@@ -214,13 +218,14 @@ func CreateClientByShopID(c *gin.Context) {
 		return
 	}
 
-	fullName, phoneNumber, phoneNumber2, state, stateCode, city := normalizeClientInput(
+	fullName, phoneNumber, phoneNumber2, state, stateCode, city, stopdeskPoint := normalizeClientInput(
 		body.FullName,
 		body.PhoneNumber,
 		body.PhoneNumber2,
 		body.State,
 		body.StateCode,
 		body.City,
+		body.StopdeskPoint,
 	)
 
 	if phoneNumber == "" {
@@ -232,13 +237,14 @@ func CreateClientByShopID(c *gin.Context) {
 	}
 
 	client := models.Client{
-		ShopID:       shopID,
-		FullName:     fullName,
-		PhoneNumber:  phoneNumber,
-		PhoneNumber2: phoneNumber2,
-		State:        state,
-		StateCode:    stateCode,
-		City:         city,
+		ShopID:        shopID,
+		FullName:      fullName,
+		PhoneNumber:   phoneNumber,
+		PhoneNumber2:  phoneNumber2,
+		State:         state,
+		StateCode:     stateCode,
+		City:          city,
+		StopdeskPoint: stopdeskPoint,
 	}
 
 	if err := initializers.DB.Create(&client).Error; err != nil {
@@ -335,6 +341,10 @@ func UpdateClientByShopID(c *gin.Context) {
 	}
 	if input.City != nil {
 		updateData["city"] = strings.TrimSpace(*input.City)
+	}
+
+	if input.StopdeskPoint != nil {
+		updateData["stopdesk_point"] = strings.TrimSpace(*input.StopdeskPoint)
 	}
 
 	if len(updateData) == 0 {

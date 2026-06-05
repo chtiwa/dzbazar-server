@@ -1,11 +1,17 @@
 package controllers
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
+
+const dashboardCacheTTL = 5 * time.Minute
 
 type TimeCount struct {
 	Label string `json:"label"`
@@ -18,77 +24,148 @@ type StatusStat struct {
 	Percentage float64 `json:"percentage"`
 }
 
+type ProductConfirmationRate struct {
+	ProductID        string  `json:"productId"`
+	ProductName      string  `json:"productName"`
+	TotalOrders      int64   `json:"totalOrders"`
+	ConfirmedOrders  int64   `json:"confirmedOrders"`
+	ConfirmationRate float64 `json:"confirmationRate"`
+}
+
+type DashboardData struct {
+	Daily             []TimeCount               `json:"daily"`
+	Weekly            []TimeCount               `json:"weekly"`
+	Monthly           []TimeCount               `json:"monthly"`
+	StatusStats       []StatusStat              `json:"statusStats"`
+	TotalOrders       int64                     `json:"totalOrders"`
+	ConfirmationRates []ProductConfirmationRate  `json:"confirmationRates"`
+}
+
+func dashboardCacheKey(shopID uuid.UUID) string {
+	return fmt.Sprintf("dashboard:orders:%s", shopID)
+}
+
+func InvalidateDashboardCache(shopID uuid.UUID) {
+	initializers.RClient.Del(initializers.Ctx, dashboardCacheKey(shopID))
+}
+
 func GetOrdersDashboard(c *gin.Context) {
-	var daily []TimeCount
-	var weekly []TimeCount
-	var monthly []TimeCount
-	var statusStats []StatusStat
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	cacheKey := dashboardCacheKey(shopID)
+
+	// Cache hit
+	if cached, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Bytes(); err == nil {
+		var data DashboardData
+		if json.Unmarshal(cached, &data) == nil {
+			c.JSON(http.StatusOK, gin.H{"success": true, "cached": true, "data": data})
+			return
+		}
+	}
 
 	db := initializers.DB
+	now := time.Now()
 
+	var daily []TimeCount
 	if err := db.
 		Table("orders").
-		Where("created_at >= ? AND created_at < ?", "2026-01-01", "2027-01-01").
-		Select("DATE(created_at)::text as label, COUNT(*) as count").
+		Where("shop_id = ? AND deleted_at IS NULL AND created_at >= ?", shopID, now.AddDate(0, 0, -30)).
+		Select("DATE(created_at)::text AS label, COUNT(*) AS count").
 		Group("DATE(created_at)").
-		Order("DATE(created_at) DESC").
+		Order("DATE(created_at) ASC").
 		Scan(&daily).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error while fetching daily stats", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching daily stats", "error": err.Error()})
 		return
 	}
 
+	var weekly []TimeCount
 	if err := db.
 		Table("orders").
-		Where("created_at >= ? AND created_at < ?", "2026-01-01", "2027-01-01").
-		Select("TO_CHAR(DATE_TRUNC('week', created_at), 'IYYY-IW') as label, COUNT(*) as count").
+		Where("shop_id = ? AND deleted_at IS NULL AND created_at >= ?", shopID, now.AddDate(0, 0, -7*12)).
+		Select("TO_CHAR(DATE_TRUNC('week', created_at), 'IYYY-IW') AS label, COUNT(*) AS count").
 		Group("DATE_TRUNC('week', created_at)").
-		Order("DATE_TRUNC('week', created_at) DESC").
+		Order("DATE_TRUNC('week', created_at) ASC").
 		Scan(&weekly).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error while fetching weekly stats", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching weekly stats", "error": err.Error()})
 		return
 	}
 
+	var monthly []TimeCount
 	if err := db.
 		Table("orders").
-		Where("created_at >= ? AND created_at < ?", "2026-01-01", "2027-01-01").
-		Select("TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as label, COUNT(*) as count").
+		Where("shop_id = ? AND deleted_at IS NULL AND created_at >= ?", shopID, now.AddDate(-1, 0, 0)).
+		Select("TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS label, COUNT(*) AS count").
 		Group("DATE_TRUNC('month', created_at)").
-		Order("DATE_TRUNC('month', created_at) DESC").
+		Order("DATE_TRUNC('month', created_at) ASC").
 		Scan(&monthly).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error while fetching monthly stats", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching monthly stats", "error": err.Error()})
 		return
 	}
 
 	var totalOrders int64
-	if err := db.Table("orders").Where("created_at >= ? AND created_at < ?", "2026-01-01", "2027-01-01").Count(&totalOrders).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error while counting total orders", "error": err.Error()})
+	if err := db.Table("orders").
+		Where("shop_id = ? AND deleted_at IS NULL", shopID).
+		Count(&totalOrders).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error counting total orders", "error": err.Error()})
 		return
 	}
 
+	var statusStats []StatusStat
 	if err := db.
 		Table("orders").
-		Where("created_at >= ? AND created_at < ?", "2026-01-01", "2027-01-01").
-		Select("status, COUNT(*) as count").
+		Where("shop_id = ? AND deleted_at IS NULL", shopID).
+		Select("status, COUNT(*) AS count").
 		Group("status").
 		Scan(&statusStats).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error while fetching status stats", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching status stats", "error": err.Error()})
 		return
 	}
-
 	for i := range statusStats {
 		if totalOrders > 0 {
 			statusStats[i].Percentage = float64(statusStats[i].Count) * 100.0 / float64(totalOrders)
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"daily":       daily,
-			"weekly":      weekly,
-			"monthly":     monthly,
-			"statusStats": statusStats,
-			"totalOrders": totalOrders,
-		},
-	})
+	var confirmationRates []ProductConfirmationRate
+	if err := db.
+		Table("order_items oi").
+		Joins("JOIN orders o ON o.id = oi.order_id").
+		Joins("JOIN products p ON p.id = oi.product_id").
+		Where("o.shop_id = ? AND o.deleted_at IS NULL AND p.deleted_at IS NULL", shopID).
+		Select(`
+			p.id::text AS product_id,
+			p.title AS product_name,
+			COUNT(DISTINCT oi.order_id) AS total_orders,
+			COUNT(DISTINCT CASE WHEN o.status = 'Confirmé' THEN oi.order_id END) AS confirmed_orders,
+			ROUND(
+				COUNT(DISTINCT CASE WHEN o.status = 'Confirmé' THEN oi.order_id END) * 100.0
+				/ NULLIF(COUNT(DISTINCT oi.order_id), 0),
+			2) AS confirmation_rate
+		`).
+		Group("p.id, p.title").
+		Order("total_orders DESC").
+		Scan(&confirmationRates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching confirmation rates", "error": err.Error()})
+		return
+	}
+
+	data := DashboardData{
+		Daily:             daily,
+		Weekly:            weekly,
+		Monthly:           monthly,
+		StatusStats:       statusStats,
+		TotalOrders:       totalOrders,
+		ConfirmationRates: confirmationRates,
+	}
+
+	// Store in cache — failure is non-fatal
+	if b, err := json.Marshal(data); err == nil {
+		initializers.RClient.Set(initializers.Ctx, cacheKey, b, dashboardCacheTTL)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "cached": false, "data": data})
 }

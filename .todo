@@ -5,10 +5,10 @@
 <!-- - pixels controller -->
 <!-- - landingpages controller -->
 <!-- - delivery rates logic ( create delivery rates once the shop is created) -->
-- api integration with multiple platforms
+<!-- - dashboard controller -->
 
 - plans
-- dashboard controller
 - upsell
+- api integration with multiple platforms
 - cross sell
 - shop settings
