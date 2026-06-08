@@ -192,6 +192,14 @@ func GetOrdersByShopID(c *gin.Context) {
 	})
 }
 
+const (
+	phoneOrderWindow = 30 * time.Minute
+)
+
+func phoneOrderKey(shopID uuid.UUID, phone string) string {
+	return fmt.Sprintf("ratelimit:order:phone:%s:%s", shopID, phone)
+}
+
 func CreateOrderByShopID(c *gin.Context) {
 	var body CreateOrderInput
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -206,6 +214,18 @@ func CreateOrderByShopID(c *gin.Context) {
 	parsedShopID, err := uuid.Parse(body.ShopID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid Shop ID payload format"})
+		return
+	}
+
+	// Phone-per-shop rate limit: 1 order per 30 min. Silent drop on breach.
+	phoneKey := phoneOrderKey(parsedShopID, body.Client.PhoneNumber)
+	set, redisErr := initializers.RClient.SetNX(initializers.Ctx, phoneKey, 1, phoneOrderWindow).Result()
+	if redisErr == nil && !set {
+		// Key already exists — this phone already ordered within the window.
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Order received successfully",
+		})
 		return
 	}
 
