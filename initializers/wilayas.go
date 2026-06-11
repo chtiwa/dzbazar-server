@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-//go:embed data/static_wilayas.json
+//go:embed data/static_wilayas.json data/osen_municipalities.json
 
 var staticFiles embed.FS
 
@@ -43,5 +43,8 @@ func GetStaticWilayas() ([]WilayaSeed, error) {
 func InitStaticData() {
 	if _, err := GetStaticWilayas(); err != nil {
 		log.Fatalf("failed to initialize static wilayas: %v", err)
+	}
+	if _, err := GetOsenMunicipalities(); err != nil {
+		log.Fatalf("failed to initialize osen municipalities: %v", err)
 	}
 }

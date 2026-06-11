@@ -7,7 +7,7 @@ import (
 )
 
 func UsersRoutes(router *gin.Engine) {
-	users := router.Group("/api/v1/users")
+	users := router.Group("/v1/users")
 	{
 		users.POST("/login", controllers.Login)
 		users.POST("/signup", controllers.SignUp)
@@ -18,7 +18,7 @@ func UsersRoutes(router *gin.Engine) {
 		users.GET("/verify", middleware.RequireAuthentication)
 	}
 
-	shopUsers := router.Group("/api/v1/shops/:shopId/users")
+	shopUsers := router.Group("/v1/shops/:shopId/users")
 	shopUsers.Use(middleware.RequireAuthentication, middleware.RequireRoles("Owner"))
 	{
 		shopUsers.GET("", controllers.GetUsersByShop)

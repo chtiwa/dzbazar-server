@@ -54,5 +54,11 @@ func Migrate() {
 		log.Fatalf("Phase 2 migration failed: %v", err)
 	}
 
+	// Drop legacy NOT NULL constraints on columns removed from the DeliveryCompany struct.
+	// AutoMigrate never drops columns, so old constraints must be patched manually.
+	// DB.Exec errors are silently ignored — safe if column is already nullable or absent.
+	initializers.DB.Exec(`ALTER TABLE delivery_companies ALTER COLUMN name DROP NOT NULL`)
+	initializers.DB.Exec(`ALTER TABLE delivery_companies ALTER COLUMN url DROP NOT NULL`)
+
 	log.Println("🚀 Database schema migrated perfectly with all relations intact!")
 }

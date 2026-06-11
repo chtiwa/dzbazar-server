@@ -7,7 +7,7 @@ import (
 )
 
 func ClientsRoutes(router *gin.Engine) {
-	clients := router.Group("/api/v1/shops/:shopId/clients")
+	clients := router.Group("/v1/shops/:shopId/clients")
 	{
 		clients.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.GetClientsByShopID)
 		clients.GET("/search", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.GetClientsBySearch)

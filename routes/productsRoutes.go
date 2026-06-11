@@ -7,7 +7,7 @@ import (
 )
 
 func ProductsRoutes(router *gin.Engine) {
-	adminProducts := router.Group("/api/v1/shops/:shopId/products")
+	adminProducts := router.Group("/v1/shops/:shopId/products")
 	{
 		adminProducts.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.GetProductsByShopAdmin)
 		adminProducts.POST("", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.CreateProductByShop)
@@ -17,7 +17,7 @@ func ProductsRoutes(router *gin.Engine) {
 		adminProducts.PATCH("/:id/images", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.UpdateProductImagesByShop)
 	}
 
-	storeProducts := router.Group("/api/v1/store/:slug/products")
+	storeProducts := router.Group("/v1/store/:slug/products")
 	{
 		storeProducts.GET("", controllers.GetActiveProductsBySlug)
 		storeProducts.GET("/search", controllers.GetProductsBySearchBySlug)

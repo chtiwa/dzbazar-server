@@ -8,7 +8,7 @@ import (
 
 func PlansRoutes(router *gin.Engine) {
 	// Global plan catalog — read is public, write is authenticated (admin)
-	plans := router.Group("/api/v1/plans")
+	plans := router.Group("/v1/plans")
 	{
 		plans.GET("", controllers.GetPlans)
 		plans.POST("", middleware.RequireAuthentication, controllers.CreatePlan)
@@ -17,7 +17,7 @@ func PlansRoutes(router *gin.Engine) {
 	}
 
 	// Per-shop subscription
-	sub := router.Group("/api/v1/shops/:shopId/subscription")
+	sub := router.Group("/v1/shops/:shopId/subscription")
 	sub.Use(middleware.RequireAuthentication)
 	{
 		sub.GET("", controllers.GetShopSubscription)

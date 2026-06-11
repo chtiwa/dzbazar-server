@@ -7,7 +7,7 @@ import (
 )
 
 func DashboardRoutes(router *gin.Engine) {
-	dashboard := router.Group("/api/v1/shops/:shopId/dashboard")
+	dashboard := router.Group("/v1/shops/:shopId/dashboard")
 	dashboard.Use(middleware.RequireAuthentication)
 	{
 		dashboard.GET("/orders", middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.GetOrdersDashboard)

@@ -17,8 +17,8 @@ type AvailableDeliveryCompanyImage struct {
 
 type DeliveryCompany struct {
 	BaseModel
-	ShopID                     uuid.UUID                `gorm:"type:uuid;not null;index" json:"shopId"`
-	AvailableDeliveryCompanyID uuid.UUID                `gorm:"type:uuid;not null" json:"availableDeliveryCompanyId"`
+	ShopID                     uuid.UUID                `gorm:"type:uuid;not null;index;uniqueIndex:idx_shop_available_delivery_company" json:"shopId"`
+	AvailableDeliveryCompanyID uuid.UUID                `gorm:"type:uuid;not null;uniqueIndex:idx_shop_available_delivery_company" json:"availableDeliveryCompanyId"`
 	AvailableDeliveryCompany   AvailableDeliveryCompany `gorm:"foreignKey:AvailableDeliveryCompanyID;references:ID" json:"availableDeliveryCompany"`
 	Token                      string                   `json:"token"`
 	MerchantID                 string                   `json:"merchantId"`

@@ -1,0 +1,6514 @@
+[
+  {
+    "id": 3,
+    "name_latin": "Laghouat",
+    "municipalities": [
+      {
+        "id": 76,
+        "name_latin": "Hassi R'mel"
+      },
+      {
+        "id": 81,
+        "name_latin": "Oued M'zi"
+      },
+      {
+        "id": 67,
+        "name_latin": "El Beidha"
+      },
+      {
+        "id": 73,
+        "name_latin": "Gueltat Sidi Saad"
+      },
+      {
+        "id": 69,
+        "name_latin": "Brida"
+      },
+      {
+        "id": 66,
+        "name_latin": "Ain Sidi Ali"
+      },
+      {
+        "id": 85,
+        "name_latin": "Tadjemout"
+      },
+      {
+        "id": 74,
+        "name_latin": "Hadj Mechri"
+      },
+      {
+        "id": 87,
+        "name_latin": "Taouiala"
+      },
+      {
+        "id": 71,
+        "name_latin": "El Ghicha"
+      },
+      {
+        "id": 86,
+        "name_latin": "Tadjrouna"
+      },
+      {
+        "id": 82,
+        "name_latin": "Sebgag"
+      },
+      {
+        "id": 83,
+        "name_latin": "Sidi Bouzid"
+      },
+      {
+        "id": 80,
+        "name_latin": "Oued Morra"
+      },
+      {
+        "id": 79,
+        "name_latin": "Laghouat"
+      },
+      {
+        "id": 78,
+        "name_latin": "Ksar El Hirane"
+      },
+      {
+        "id": 70,
+        "name_latin": "El Assafia"
+      },
+      {
+        "id": 84,
+        "name_latin": "Sidi Makhlouf"
+      },
+      {
+        "id": 75,
+        "name_latin": "Hassi Delaa"
+      },
+      {
+        "id": 65,
+        "name_latin": "Ain Madhi"
+      },
+      {
+        "id": 72,
+        "name_latin": "El Haouaita"
+      },
+      {
+        "id": 77,
+        "name_latin": "Kheneg"
+      },
+      {
+        "id": 68,
+        "name_latin": "Benacer Benchohra"
+      },
+      {
+        "id": 64,
+        "name_latin": "Aflou"
+      }
+    ]
+  },
+  {
+    "id": 28,
+    "name_latin": "M'Sila",
+    "municipalities": [
+      {
+        "id": 1019,
+        "name_latin": "M'cif"
+      },
+      {
+        "id": 1036,
+        "name_latin": "Sidi M'hamed"
+      },
+      {
+        "id": 1024,
+        "name_latin": "M'tarfa"
+      },
+      {
+        "id": 1023,
+        "name_latin": "M'sila"
+      },
+      {
+        "id": 1008,
+        "name_latin": "Chellal"
+      },
+      {
+        "id": 1028,
+        "name_latin": "Ouled Madhi"
+      },
+      {
+        "id": 1014,
+        "name_latin": "Khettouti Sed-El-Jir"
+      },
+      {
+        "id": 1000,
+        "name_latin": "Belaiba"
+      },
+      {
+        "id": 1004,
+        "name_latin": "Berhoum"
+      },
+      {
+        "id": 1009,
+        "name_latin": "Dehahna"
+      },
+      {
+        "id": 1018,
+        "name_latin": "Magra"
+      },
+      {
+        "id": 1002,
+        "name_latin": "Beni Ilmane"
+      },
+      {
+        "id": 1007,
+        "name_latin": "Bouti Sayeh"
+      },
+      {
+        "id": 1033,
+        "name_latin": "Sidi Aissa"
+      },
+      {
+        "id": 995,
+        "name_latin": "Ain El Hadjel"
+      },
+      {
+        "id": 1035,
+        "name_latin": "Sidi Hadjeres"
+      },
+      {
+        "id": 1006,
+        "name_latin": "Bou Saada"
+      },
+      {
+        "id": 1011,
+        "name_latin": "El Hamel"
+      },
+      {
+        "id": 1032,
+        "name_latin": "Oulteme"
+      },
+      {
+        "id": 1003,
+        "name_latin": "Benzouh"
+      },
+      {
+        "id": 1030,
+        "name_latin": "Ouled Sidi Brahim"
+      },
+      {
+        "id": 1034,
+        "name_latin": "Sidi Ameur"
+      },
+      {
+        "id": 1039,
+        "name_latin": "Tamsa"
+      },
+      {
+        "id": 1001,
+        "name_latin": "Ben Srour"
+      },
+      {
+        "id": 1022,
+        "name_latin": "Mohamed Boudiaf"
+      },
+      {
+        "id": 1031,
+        "name_latin": "Ouled Slimane"
+      },
+      {
+        "id": 1041,
+        "name_latin": "Zarzour"
+      },
+      {
+        "id": 996,
+        "name_latin": "Ain El Melh"
+      },
+      {
+        "id": 997,
+        "name_latin": "Ain Fares"
+      },
+      {
+        "id": 999,
+        "name_latin": "Ain Rich"
+      },
+      {
+        "id": 1005,
+        "name_latin": "Bir Foda"
+      },
+      {
+        "id": 1020,
+        "name_latin": "Medjedel"
+      },
+      {
+        "id": 1021,
+        "name_latin": "Menaa"
+      },
+      {
+        "id": 1010,
+        "name_latin": "Djebel Messaad"
+      },
+      {
+        "id": 1037,
+        "name_latin": "Slim"
+      },
+      {
+        "id": 1013,
+        "name_latin": "Hammam Dalaa"
+      },
+      {
+        "id": 1025,
+        "name_latin": "Ouanougha"
+      },
+      {
+        "id": 1029,
+        "name_latin": "Ouled Mansour"
+      },
+      {
+        "id": 1040,
+        "name_latin": "Tarmount"
+      },
+      {
+        "id": 1016,
+        "name_latin": "Maadid"
+      },
+      {
+        "id": 1017,
+        "name_latin": "Maarif"
+      },
+      {
+        "id": 1027,
+        "name_latin": "Ouled Derradj"
+      },
+      {
+        "id": 1038,
+        "name_latin": "Souamaa"
+      },
+      {
+        "id": 1012,
+        "name_latin": "El Houamed"
+      },
+      {
+        "id": 1015,
+        "name_latin": "Khoubana"
+      },
+      {
+        "id": 998,
+        "name_latin": "Ain Khadra"
+      },
+      {
+        "id": 1026,
+        "name_latin": "Ouled Addi Guebala"
+      }
+    ]
+  },
+  {
+    "id": 4,
+    "name_latin": "Oum El Bouaghi",
+    "municipalities": [
+      {
+        "id": 93,
+        "name_latin": "Ain M'lila"
+      },
+      {
+        "id": 102,
+        "name_latin": "El Fedjoudj Boughrara Sa"
+      },
+      {
+        "id": 113,
+        "name_latin": "Rahia"
+      },
+      {
+        "id": 100,
+        "name_latin": "El Belala"
+      },
+      {
+        "id": 95,
+        "name_latin": "Behir Chergui"
+      },
+      {
+        "id": 106,
+        "name_latin": "Ksar Sbahi"
+      },
+      {
+        "id": 115,
+        "name_latin": "Souk Naamane"
+      },
+      {
+        "id": 112,
+        "name_latin": "Oum El Bouaghi"
+      },
+      {
+        "id": 88,
+        "name_latin": "Ain Babouche"
+      },
+      {
+        "id": 89,
+        "name_latin": "Ain Beida"
+      },
+      {
+        "id": 91,
+        "name_latin": "Ain Fekroun"
+      },
+      {
+        "id": 111,
+        "name_latin": "Ouled Zouai"
+      },
+      {
+        "id": 94,
+        "name_latin": "Ain Zitoun"
+      },
+      {
+        "id": 97,
+        "name_latin": "Bir Chouhada"
+      },
+      {
+        "id": 96,
+        "name_latin": "Berriche"
+      },
+      {
+        "id": 116,
+        "name_latin": "Zorg"
+      },
+      {
+        "id": 109,
+        "name_latin": "Ouled Gacem"
+      },
+      {
+        "id": 110,
+        "name_latin": "Ouled Hamla"
+      },
+      {
+        "id": 99,
+        "name_latin": "El Amiria"
+      },
+      {
+        "id": 114,
+        "name_latin": "Sigus"
+      },
+      {
+        "id": 108,
+        "name_latin": "Oued Nini"
+      },
+      {
+        "id": 90,
+        "name_latin": "Ain Diss"
+      },
+      {
+        "id": 98,
+        "name_latin": "Dhalaa"
+      },
+      {
+        "id": 101,
+        "name_latin": "El Djazia"
+      },
+      {
+        "id": 92,
+        "name_latin": "Ain Kercha"
+      },
+      {
+        "id": 103,
+        "name_latin": "El Harmilia"
+      },
+      {
+        "id": 105,
+        "name_latin": "Hanchir Toumghani"
+      },
+      {
+        "id": 104,
+        "name_latin": "Fkirina"
+      },
+      {
+        "id": 107,
+        "name_latin": "Meskiana"
+      }
+    ]
+  },
+  {
+    "id": 15,
+    "name_latin": "Tizi Ouzou",
+    "municipalities": [
+      {
+        "id": 536,
+        "name_latin": "M'kira"
+      },
+      {
+        "id": 547,
+        "name_latin": "Tizi N'tleta"
+      },
+      {
+        "id": 535,
+        "name_latin": "Mizrana"
+      },
+      {
+        "id": 522,
+        "name_latin": "Idjeur"
+      },
+      {
+        "id": 510,
+        "name_latin": "Beni-Douala"
+      },
+      {
+        "id": 512,
+        "name_latin": "Beni-Zikki"
+      },
+      {
+        "id": 527,
+        "name_latin": "Illoula Oumalou"
+      },
+      {
+        "id": 489,
+        "name_latin": "Agouni-Gueghrane"
+      },
+      {
+        "id": 493,
+        "name_latin": "Ait Bouaddou"
+      },
+      {
+        "id": 538,
+        "name_latin": "Ouadhias"
+      },
+      {
+        "id": 488,
+        "name_latin": "Aghribs"
+      },
+      {
+        "id": 498,
+        "name_latin": "Ait-Chafaa"
+      },
+      {
+        "id": 504,
+        "name_latin": "Akerrou"
+      },
+      {
+        "id": 507,
+        "name_latin": "Azeffoun"
+      },
+      {
+        "id": 525,
+        "name_latin": "Iflissen"
+      },
+      {
+        "id": 544,
+        "name_latin": "Tigzirt"
+      },
+      {
+        "id": 505,
+        "name_latin": "Assi-Youcef"
+      },
+      {
+        "id": 513,
+        "name_latin": "Boghni"
+      },
+      {
+        "id": 515,
+        "name_latin": "Bounouh"
+      },
+      {
+        "id": 533,
+        "name_latin": "Mechtras"
+      },
+      {
+        "id": 517,
+        "name_latin": "Draa-Ben-Khedda"
+      },
+      {
+        "id": 540,
+        "name_latin": "Sidi Namane"
+      },
+      {
+        "id": 543,
+        "name_latin": "Tadmait"
+      },
+      {
+        "id": 546,
+        "name_latin": "Tirmitine"
+      },
+      {
+        "id": 494,
+        "name_latin": "Ait Boumahdi"
+      },
+      {
+        "id": 501,
+        "name_latin": "Ait-Toudert"
+      },
+      {
+        "id": 509,
+        "name_latin": "Beni-Aissi"
+      },
+      {
+        "id": 537,
+        "name_latin": "Ouacif"
+      },
+      {
+        "id": 495,
+        "name_latin": "Ait Khellili"
+      },
+      {
+        "id": 534,
+        "name_latin": "Mekla"
+      },
+      {
+        "id": 541,
+        "name_latin": "Souama"
+      },
+      {
+        "id": 511,
+        "name_latin": "Beni-Yenni"
+      },
+      {
+        "id": 521,
+        "name_latin": "Iboudrarene"
+      },
+      {
+        "id": 549,
+        "name_latin": "Tizi-Ouzou"
+      },
+      {
+        "id": 487,
+        "name_latin": "Abi-Youcef"
+      },
+      {
+        "id": 490,
+        "name_latin": "Ain-El-Hammam"
+      },
+      {
+        "id": 502,
+        "name_latin": "Ait-Yahia"
+      },
+      {
+        "id": 503,
+        "name_latin": "Akbil"
+      },
+      {
+        "id": 514,
+        "name_latin": "Boudjima"
+      },
+      {
+        "id": 532,
+        "name_latin": "Makouda"
+      },
+      {
+        "id": 491,
+        "name_latin": "Ain-Zaouia"
+      },
+      {
+        "id": 496,
+        "name_latin": "Ait Yahia Moussa"
+      },
+      {
+        "id": 518,
+        "name_latin": "Draa-El-Mizan"
+      },
+      {
+        "id": 520,
+        "name_latin": "Frikat"
+      },
+      {
+        "id": 548,
+        "name_latin": "Tizi-Gheniff"
+      },
+      {
+        "id": 552,
+        "name_latin": "Yatafene"
+      },
+      {
+        "id": 526,
+        "name_latin": "Illilten"
+      },
+      {
+        "id": 528,
+        "name_latin": "Imsouhal"
+      },
+      {
+        "id": 506,
+        "name_latin": "Azazga"
+      },
+      {
+        "id": 519,
+        "name_latin": "Freha"
+      },
+      {
+        "id": 524,
+        "name_latin": "Ifigha"
+      },
+      {
+        "id": 551,
+        "name_latin": "Yakourene"
+      },
+      {
+        "id": 553,
+        "name_latin": "Zekri"
+      },
+      {
+        "id": 492,
+        "name_latin": "Ait Aggouacha"
+      },
+      {
+        "id": 529,
+        "name_latin": "Irdjen"
+      },
+      {
+        "id": 530,
+        "name_latin": "Larbaa Nath Irathen"
+      },
+      {
+        "id": 500,
+        "name_latin": "Ait-Oumalou"
+      },
+      {
+        "id": 550,
+        "name_latin": "Tizi-Rached"
+      },
+      {
+        "id": 497,
+        "name_latin": "Ait-Aissa-Mimoun"
+      },
+      {
+        "id": 539,
+        "name_latin": "Ouaguenoun"
+      },
+      {
+        "id": 545,
+        "name_latin": "Timizart"
+      },
+      {
+        "id": 531,
+        "name_latin": "Maatkas"
+      },
+      {
+        "id": 542,
+        "name_latin": "Souk-El-Tenine"
+      },
+      {
+        "id": 499,
+        "name_latin": "Ait-Mahmoud"
+      },
+      {
+        "id": 508,
+        "name_latin": "Beni Zmenzer"
+      },
+      {
+        "id": 523,
+        "name_latin": "Iferhounene"
+      },
+      {
+        "id": 516,
+        "name_latin": "Bouzeguene"
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "name_latin": "Batna",
+    "municipalities": [
+      {
+        "id": 139,
+        "name_latin": "Gosbat"
+      },
+      {
+        "id": 176,
+        "name_latin": "Timgad"
+      },
+      {
+        "id": 170,
+        "name_latin": "Taxlent"
+      },
+      {
+        "id": 161,
+        "name_latin": "Ouled Si Slimane"
+      },
+      {
+        "id": 169,
+        "name_latin": "Talkhamt"
+      },
+      {
+        "id": 172,
+        "name_latin": "Teniet El Abed"
+      },
+      {
+        "id": 136,
+        "name_latin": "Fesdis"
+      },
+      {
+        "id": 154,
+        "name_latin": "Oued Chaaba"
+      },
+      {
+        "id": 141,
+        "name_latin": "Hidoussa"
+      },
+      {
+        "id": 155,
+        "name_latin": "Oued El Ma"
+      },
+      {
+        "id": 150,
+        "name_latin": "Maafa"
+      },
+      {
+        "id": 148,
+        "name_latin": "Lemcene"
+      },
+      {
+        "id": 163,
+        "name_latin": "Rahbat"
+      },
+      {
+        "id": 160,
+        "name_latin": "Ouled Sellem"
+      },
+      {
+        "id": 123,
+        "name_latin": "Batna"
+      },
+      {
+        "id": 145,
+        "name_latin": "Ksar Bellezma"
+      },
+      {
+        "id": 152,
+        "name_latin": "Merouana"
+      },
+      {
+        "id": 147,
+        "name_latin": "Lazrou"
+      },
+      {
+        "id": 167,
+        "name_latin": "Seriana"
+      },
+      {
+        "id": 177,
+        "name_latin": "Zanet El Beida"
+      },
+      {
+        "id": 151,
+        "name_latin": "Menaa"
+      },
+      {
+        "id": 174,
+        "name_latin": "Tigharghar"
+      },
+      {
+        "id": 119,
+        "name_latin": "Ain Yagout"
+      },
+      {
+        "id": 128,
+        "name_latin": "Boumia"
+      },
+      {
+        "id": 132,
+        "name_latin": "Djerma"
+      },
+      {
+        "id": 162,
+        "name_latin": "Ouyoun El Assafir"
+      },
+      {
+        "id": 171,
+        "name_latin": "Tazoult"
+      },
+      {
+        "id": 164,
+        "name_latin": "Ras El Aioun"
+      },
+      {
+        "id": 127,
+        "name_latin": "Boumagueur"
+      },
+      {
+        "id": 153,
+        "name_latin": "N Gaous"
+      },
+      {
+        "id": 165,
+        "name_latin": "Sefiane"
+      },
+      {
+        "id": 120,
+        "name_latin": "Arris"
+      },
+      {
+        "id": 173,
+        "name_latin": "Tighanimine"
+      },
+      {
+        "id": 117,
+        "name_latin": "Ain Djasser"
+      },
+      {
+        "id": 134,
+        "name_latin": "El Hassi"
+      },
+      {
+        "id": 166,
+        "name_latin": "Seggana"
+      },
+      {
+        "id": 175,
+        "name_latin": "Tilatou"
+      },
+      {
+        "id": 137,
+        "name_latin": "Foum Toub"
+      },
+      {
+        "id": 142,
+        "name_latin": "Ichemoul"
+      },
+      {
+        "id": 143,
+        "name_latin": "Inoughissen"
+      },
+      {
+        "id": 129,
+        "name_latin": "Bouzina"
+      },
+      {
+        "id": 146,
+        "name_latin": "Larbaa"
+      },
+      {
+        "id": 126,
+        "name_latin": "Boulhilat"
+      },
+      {
+        "id": 130,
+        "name_latin": "Chemora"
+      },
+      {
+        "id": 122,
+        "name_latin": "Barika"
+      },
+      {
+        "id": 125,
+        "name_latin": "Bitam"
+      },
+      {
+        "id": 149,
+        "name_latin": "M Doukal"
+      },
+      {
+        "id": 121,
+        "name_latin": "Azil Abedelkader"
+      },
+      {
+        "id": 133,
+        "name_latin": "Djezzar"
+      },
+      {
+        "id": 157,
+        "name_latin": "Ouled Ammar"
+      },
+      {
+        "id": 138,
+        "name_latin": "Ghassira"
+      },
+      {
+        "id": 144,
+        "name_latin": "Kimmel"
+      },
+      {
+        "id": 168,
+        "name_latin": "T Kout"
+      },
+      {
+        "id": 118,
+        "name_latin": "Ain Touta"
+      },
+      {
+        "id": 124,
+        "name_latin": "Beni Foudhala El Hakania"
+      },
+      {
+        "id": 159,
+        "name_latin": "Ouled Fadel"
+      },
+      {
+        "id": 158,
+        "name_latin": "Ouled Aouf"
+      },
+      {
+        "id": 131,
+        "name_latin": "Chir"
+      },
+      {
+        "id": 156,
+        "name_latin": "Oued Taga"
+      },
+      {
+        "id": 140,
+        "name_latin": "Guigba"
+      },
+      {
+        "id": 135,
+        "name_latin": "El Madher"
+      }
+    ]
+  },
+  {
+    "id": 6,
+    "name_latin": "Béjaïa",
+    "municipalities": [
+      {
+        "id": 179,
+        "name_latin": "Ait R'zine"
+      },
+      {
+        "id": 189,
+        "name_latin": "Beni K'sila"
+      },
+      {
+        "id": 208,
+        "name_latin": "M'cisna"
+      },
+      {
+        "id": 228,
+        "name_latin": "Tizi-N'berber"
+      },
+      {
+        "id": 212,
+        "name_latin": "Sidi Ayad"
+      },
+      {
+        "id": 186,
+        "name_latin": "Barbacha"
+      },
+      {
+        "id": 199,
+        "name_latin": "Leflaye"
+      },
+      {
+        "id": 206,
+        "name_latin": "Kendira"
+      },
+      {
+        "id": 213,
+        "name_latin": "Sidi-Aich"
+      },
+      {
+        "id": 225,
+        "name_latin": "Tifra"
+      },
+      {
+        "id": 227,
+        "name_latin": "Tinebdar"
+      },
+      {
+        "id": 200,
+        "name_latin": "El Kseur"
+      },
+      {
+        "id": 201,
+        "name_latin": "Fenaia Il Maten"
+      },
+      {
+        "id": 229,
+        "name_latin": "Toudja"
+      },
+      {
+        "id": 198,
+        "name_latin": "Dra El Caid"
+      },
+      {
+        "id": 207,
+        "name_latin": "Kherrata"
+      },
+      {
+        "id": 187,
+        "name_latin": "Bejaia"
+      },
+      {
+        "id": 210,
+        "name_latin": "Oued Ghir"
+      },
+      {
+        "id": 191,
+        "name_latin": "Benimaouche"
+      },
+      {
+        "id": 188,
+        "name_latin": "Beni Djellil"
+      },
+      {
+        "id": 202,
+        "name_latin": "Feraoun"
+      },
+      {
+        "id": 214,
+        "name_latin": "Smaoun"
+      },
+      {
+        "id": 226,
+        "name_latin": "Timezrit"
+      },
+      {
+        "id": 209,
+        "name_latin": "Melbou"
+      },
+      {
+        "id": 215,
+        "name_latin": "Souk El Tenine"
+      },
+      {
+        "id": 219,
+        "name_latin": "Tamridjet"
+      },
+      {
+        "id": 194,
+        "name_latin": "Boukhelifa"
+      },
+      {
+        "id": 217,
+        "name_latin": "Tala Hamza"
+      },
+      {
+        "id": 224,
+        "name_latin": "Tichy"
+      },
+      {
+        "id": 204,
+        "name_latin": "Ighil-Ali"
+      },
+      {
+        "id": 180,
+        "name_latin": "Ait-Smail"
+      },
+      {
+        "id": 197,
+        "name_latin": "Darguina"
+      },
+      {
+        "id": 221,
+        "name_latin": "Taskriout"
+      },
+      {
+        "id": 185,
+        "name_latin": "Aokas"
+      },
+      {
+        "id": 178,
+        "name_latin": "Adekar"
+      },
+      {
+        "id": 220,
+        "name_latin": "Taourit Ighil"
+      },
+      {
+        "id": 181,
+        "name_latin": "Akbou"
+      },
+      {
+        "id": 195,
+        "name_latin": "Chellata"
+      },
+      {
+        "id": 205,
+        "name_latin": "Ighram"
+      },
+      {
+        "id": 218,
+        "name_latin": "Tamokra"
+      },
+      {
+        "id": 183,
+        "name_latin": "Amalou"
+      },
+      {
+        "id": 193,
+        "name_latin": "Bouhamza"
+      },
+      {
+        "id": 211,
+        "name_latin": "Seddouk"
+      },
+      {
+        "id": 190,
+        "name_latin": "Beni-Mallikeche"
+      },
+      {
+        "id": 192,
+        "name_latin": "Boudjellil"
+      },
+      {
+        "id": 222,
+        "name_latin": "Tazmalt"
+      },
+      {
+        "id": 182,
+        "name_latin": "Akfadou"
+      },
+      {
+        "id": 196,
+        "name_latin": "Chemini"
+      },
+      {
+        "id": 216,
+        "name_latin": "Souk Oufella"
+      },
+      {
+        "id": 223,
+        "name_latin": "Tibane"
+      },
+      {
+        "id": 203,
+        "name_latin": "Ouzellaguen"
+      },
+      {
+        "id": 184,
+        "name_latin": "Amizour"
+      }
+    ]
+  },
+  {
+    "id": 1,
+    "name_latin": "Adrar",
+    "municipalities": [
+      {
+        "id": 22,
+        "name_latin": "Timekten"
+      },
+      {
+        "id": 6,
+        "name_latin": "Bouda"
+      },
+      {
+        "id": 13,
+        "name_latin": "Ouled Ahmed Timmi"
+      },
+      {
+        "id": 1,
+        "name_latin": "Adrar"
+      },
+      {
+        "id": 9,
+        "name_latin": "Fenoughil"
+      },
+      {
+        "id": 10,
+        "name_latin": "In Zghmir"
+      },
+      {
+        "id": 16,
+        "name_latin": "Reggane"
+      },
+      {
+        "id": 17,
+        "name_latin": "Sali"
+      },
+      {
+        "id": 18,
+        "name_latin": "Sebaa"
+      },
+      {
+        "id": 27,
+        "name_latin": "Tsabit"
+      },
+      {
+        "id": 21,
+        "name_latin": "Tamest"
+      },
+      {
+        "id": 20,
+        "name_latin": "Tamantit"
+      },
+      {
+        "id": 26,
+        "name_latin": "Tit"
+      },
+      {
+        "id": 28,
+        "name_latin": "Zaouiet Kounta"
+      },
+      {
+        "id": 2,
+        "name_latin": "Akabli"
+      },
+      {
+        "id": 4,
+        "name_latin": "Aoulef"
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "name_latin": "Chlef",
+    "municipalities": [
+      {
+        "id": 60,
+        "name_latin": "Talassa"
+      },
+      {
+        "id": 63,
+        "name_latin": "Zeboudja"
+      },
+      {
+        "id": 41,
+        "name_latin": "El Hadjadj"
+      },
+      {
+        "id": 52,
+        "name_latin": "Ouled Ben Abdelkader"
+      },
+      {
+        "id": 30,
+        "name_latin": "Ain Merane"
+      },
+      {
+        "id": 37,
+        "name_latin": "Breira"
+      },
+      {
+        "id": 51,
+        "name_latin": "Ouled Abbes"
+      },
+      {
+        "id": 48,
+        "name_latin": "Oued Fodda"
+      },
+      {
+        "id": 34,
+        "name_latin": "Beni Rached"
+      },
+      {
+        "id": 45,
+        "name_latin": "Herenfa"
+      },
+      {
+        "id": 59,
+        "name_latin": "Tadjena"
+      },
+      {
+        "id": 43,
+        "name_latin": "El Marsa"
+      },
+      {
+        "id": 39,
+        "name_latin": "Chlef"
+      },
+      {
+        "id": 54,
+        "name_latin": "Oum Drou"
+      },
+      {
+        "id": 55,
+        "name_latin": "Sendjas"
+      },
+      {
+        "id": 56,
+        "name_latin": "Sidi Abderrahmane"
+      },
+      {
+        "id": 57,
+        "name_latin": "Sidi Akkacha"
+      },
+      {
+        "id": 62,
+        "name_latin": "Tenes"
+      },
+      {
+        "id": 32,
+        "name_latin": "Beni  Bouattab"
+      },
+      {
+        "id": 42,
+        "name_latin": "El Karimia"
+      },
+      {
+        "id": 44,
+        "name_latin": "Harchoun"
+      },
+      {
+        "id": 36,
+        "name_latin": "Bouzeghaia"
+      },
+      {
+        "id": 61,
+        "name_latin": "Taougrit"
+      },
+      {
+        "id": 33,
+        "name_latin": "Beni Haoua"
+      },
+      {
+        "id": 29,
+        "name_latin": "Abou El Hassane"
+      },
+      {
+        "id": 49,
+        "name_latin": "Oued Goussine"
+      },
+      {
+        "id": 38,
+        "name_latin": "Chettia"
+      },
+      {
+        "id": 47,
+        "name_latin": "Moussadek"
+      },
+      {
+        "id": 53,
+        "name_latin": "Ouled Fares"
+      },
+      {
+        "id": 35,
+        "name_latin": "Boukadir"
+      },
+      {
+        "id": 50,
+        "name_latin": "Oued Sly"
+      },
+      {
+        "id": 58,
+        "name_latin": "Sobha"
+      },
+      {
+        "id": 31,
+        "name_latin": "Benairia"
+      },
+      {
+        "id": 46,
+        "name_latin": "Labiod Medjadja"
+      },
+      {
+        "id": 40,
+        "name_latin": "Dahra"
+      }
+    ]
+  },
+  {
+    "id": 7,
+    "name_latin": "Biskra",
+    "municipalities": [
+      {
+        "id": 254,
+        "name_latin": "M'lili"
+      },
+      {
+        "id": 251,
+        "name_latin": "M'chouneche"
+      },
+      {
+        "id": 241,
+        "name_latin": "El Feidh"
+      },
+      {
+        "id": 249,
+        "name_latin": "Lichana"
+      },
+      {
+        "id": 235,
+        "name_latin": "Bouchakroun"
+      },
+      {
+        "id": 252,
+        "name_latin": "Mekhadma"
+      },
+      {
+        "id": 239,
+        "name_latin": "Djemorah"
+      },
+      {
+        "id": 236,
+        "name_latin": "Branis"
+      },
+      {
+        "id": 246,
+        "name_latin": "El Outaya"
+      },
+      {
+        "id": 245,
+        "name_latin": "El Kantara"
+      },
+      {
+        "id": 248,
+        "name_latin": "Khenguet Sidi Nadji"
+      },
+      {
+        "id": 231,
+        "name_latin": "Ain Zaatout"
+      },
+      {
+        "id": 262,
+        "name_latin": "Zeribet El Oued"
+      },
+      {
+        "id": 253,
+        "name_latin": "Meziraa"
+      },
+      {
+        "id": 233,
+        "name_latin": "Biskra"
+      },
+      {
+        "id": 243,
+        "name_latin": "El Hadjab"
+      },
+      {
+        "id": 247,
+        "name_latin": "Foughala"
+      },
+      {
+        "id": 242,
+        "name_latin": "El Ghrous"
+      },
+      {
+        "id": 234,
+        "name_latin": "Bordj Ben Azzouz"
+      },
+      {
+        "id": 257,
+        "name_latin": "Ourlal"
+      },
+      {
+        "id": 256,
+        "name_latin": "Oumache"
+      },
+      {
+        "id": 230,
+        "name_latin": "Ain Naga"
+      },
+      {
+        "id": 238,
+        "name_latin": "Chetma"
+      },
+      {
+        "id": 244,
+        "name_latin": "El Haouch"
+      },
+      {
+        "id": 260,
+        "name_latin": "Sidi Okba"
+      },
+      {
+        "id": 250,
+        "name_latin": "Lioua"
+      },
+      {
+        "id": 261,
+        "name_latin": "Tolga"
+      }
+    ]
+  },
+  {
+    "id": 10,
+    "name_latin": "Bouira",
+    "municipalities": [
+      {
+        "id": 353,
+        "name_latin": "Z'barbar (El Isseri )"
+      },
+      {
+        "id": 312,
+        "name_latin": "Ain Laloui"
+      },
+      {
+        "id": 334,
+        "name_latin": "Hadjera Zerga"
+      },
+      {
+        "id": 342,
+        "name_latin": "Mezdour"
+      },
+      {
+        "id": 351,
+        "name_latin": "Taguedite"
+      },
+      {
+        "id": 346,
+        "name_latin": "Ridane"
+      },
+      {
+        "id": 341,
+        "name_latin": "Maamora"
+      },
+      {
+        "id": 331,
+        "name_latin": "El-Hakimia"
+      },
+      {
+        "id": 310,
+        "name_latin": "Ahl El Ksar"
+      },
+      {
+        "id": 325,
+        "name_latin": "Dirah"
+      },
+      {
+        "id": 324,
+        "name_latin": "Dechmia"
+      },
+      {
+        "id": 317,
+        "name_latin": "Bechloul"
+      },
+      {
+        "id": 352,
+        "name_latin": "Ath Mansour"
+      },
+      {
+        "id": 347,
+        "name_latin": "Saharidj"
+      },
+      {
+        "id": 327,
+        "name_latin": "El Adjiba"
+      },
+      {
+        "id": 328,
+        "name_latin": "El Asnam"
+      },
+      {
+        "id": 339,
+        "name_latin": "M Chedallah"
+      },
+      {
+        "id": 319,
+        "name_latin": "Bordj Okhriss"
+      },
+      {
+        "id": 349,
+        "name_latin": "Sour El Ghozlane"
+      },
+      {
+        "id": 336,
+        "name_latin": "Hanif"
+      },
+      {
+        "id": 323,
+        "name_latin": "Chorfa"
+      },
+      {
+        "id": 344,
+        "name_latin": "Ouled Rached"
+      },
+      {
+        "id": 311,
+        "name_latin": "Ain El Hadjar"
+      },
+      {
+        "id": 309,
+        "name_latin": "Aghbalou"
+      },
+      {
+        "id": 345,
+        "name_latin": "Raouraoua"
+      },
+      {
+        "id": 330,
+        "name_latin": "El Khabouzia"
+      },
+      {
+        "id": 318,
+        "name_latin": "Bir Ghbalou"
+      },
+      {
+        "id": 321,
+        "name_latin": "Bouira"
+      },
+      {
+        "id": 313,
+        "name_latin": "Ain Turk"
+      },
+      {
+        "id": 315,
+        "name_latin": "Ait Laaziz"
+      },
+      {
+        "id": 314,
+        "name_latin": "Ain-Bessem"
+      },
+      {
+        "id": 332,
+        "name_latin": "El-Mokrani"
+      },
+      {
+        "id": 348,
+        "name_latin": "Souk El Khemis"
+      },
+      {
+        "id": 316,
+        "name_latin": "Aomar"
+      },
+      {
+        "id": 326,
+        "name_latin": "Djebahia"
+      },
+      {
+        "id": 329,
+        "name_latin": "El Hachimia"
+      },
+      {
+        "id": 335,
+        "name_latin": "Haizer"
+      },
+      {
+        "id": 350,
+        "name_latin": "Taghzout"
+      },
+      {
+        "id": 320,
+        "name_latin": "Bouderbala"
+      },
+      {
+        "id": 322,
+        "name_latin": "Boukram"
+      },
+      {
+        "id": 333,
+        "name_latin": "Guerrouma"
+      },
+      {
+        "id": 338,
+        "name_latin": "Lakhdaria"
+      },
+      {
+        "id": 340,
+        "name_latin": "Maala"
+      },
+      {
+        "id": 337,
+        "name_latin": "Kadiria"
+      },
+      {
+        "id": 343,
+        "name_latin": "Oued El Berdi"
+      }
+    ]
+  },
+  {
+    "id": 13,
+    "name_latin": "Tlemcen",
+    "municipalities": [
+      {
+        "id": 426,
+        "name_latin": "M'sirda Fouaga"
+      },
+      {
+        "id": 425,
+        "name_latin": "Marsa Ben M'hidi"
+      },
+      {
+        "id": 400,
+        "name_latin": "Bab El Assa"
+      },
+      {
+        "id": 441,
+        "name_latin": "Terny Beni Hediel"
+      },
+      {
+        "id": 424,
+        "name_latin": "Mansourah"
+      },
+      {
+        "id": 404,
+        "name_latin": "Beni Mester"
+      },
+      {
+        "id": 394,
+        "name_latin": "Ain Ghoraba"
+      },
+      {
+        "id": 411,
+        "name_latin": "Chetouane"
+      },
+      {
+        "id": 399,
+        "name_latin": "Amieur"
+      },
+      {
+        "id": 393,
+        "name_latin": "Ain Fezza"
+      },
+      {
+        "id": 422,
+        "name_latin": "Honnaine"
+      },
+      {
+        "id": 403,
+        "name_latin": "Beni Khellad"
+      },
+      {
+        "id": 436,
+        "name_latin": "Sidi Djillali"
+      },
+      {
+        "id": 410,
+        "name_latin": "Bouihi"
+      },
+      {
+        "id": 427,
+        "name_latin": "Nedroma"
+      },
+      {
+        "id": 437,
+        "name_latin": "Sidi Medjahed"
+      },
+      {
+        "id": 402,
+        "name_latin": "Beni Boussaid"
+      },
+      {
+        "id": 434,
+        "name_latin": "Sebdou"
+      },
+      {
+        "id": 417,
+        "name_latin": "El Gor"
+      },
+      {
+        "id": 414,
+        "name_latin": "El Aricha"
+      },
+      {
+        "id": 409,
+        "name_latin": "Bouhlou"
+      },
+      {
+        "id": 423,
+        "name_latin": "Maghnia"
+      },
+      {
+        "id": 420,
+        "name_latin": "Hammam Boughrara"
+      },
+      {
+        "id": 444,
+        "name_latin": "Zenata"
+      },
+      {
+        "id": 430,
+        "name_latin": "Ouled Riyah"
+      },
+      {
+        "id": 421,
+        "name_latin": "Hennaya"
+      },
+      {
+        "id": 435,
+        "name_latin": "Sidi Abdelli"
+      },
+      {
+        "id": 440,
+        "name_latin": "Souk Tleta"
+      },
+      {
+        "id": 408,
+        "name_latin": "Bensekrane"
+      },
+      {
+        "id": 418,
+        "name_latin": "Fellaoucene"
+      },
+      {
+        "id": 395,
+        "name_latin": "Ain Kebira"
+      },
+      {
+        "id": 392,
+        "name_latin": "Ain Fetah"
+      },
+      {
+        "id": 443,
+        "name_latin": "Tlemcen"
+      },
+      {
+        "id": 396,
+        "name_latin": "Ain Nehala"
+      },
+      {
+        "id": 397,
+        "name_latin": "Ain Tellout"
+      },
+      {
+        "id": 398,
+        "name_latin": "Ain Youcef"
+      },
+      {
+        "id": 405,
+        "name_latin": "Beni Ouarsous"
+      },
+      {
+        "id": 416,
+        "name_latin": "El Fehoul"
+      },
+      {
+        "id": 431,
+        "name_latin": "Remchi"
+      },
+      {
+        "id": 433,
+        "name_latin": "Sebbaa Chioukh"
+      },
+      {
+        "id": 439,
+        "name_latin": "Souani"
+      },
+      {
+        "id": 432,
+        "name_latin": "Sabra"
+      },
+      {
+        "id": 412,
+        "name_latin": "Dar Yaghmoracen"
+      },
+      {
+        "id": 419,
+        "name_latin": "Ghazaouet"
+      },
+      {
+        "id": 438,
+        "name_latin": "Souahlia"
+      },
+      {
+        "id": 442,
+        "name_latin": "Tianet"
+      },
+      {
+        "id": 406,
+        "name_latin": "Beni Smiel"
+      },
+      {
+        "id": 428,
+        "name_latin": "Oued Lakhdar"
+      },
+      {
+        "id": 429,
+        "name_latin": "Ouled Mimoun"
+      },
+      {
+        "id": 401,
+        "name_latin": "Beni Bahdel"
+      },
+      {
+        "id": 407,
+        "name_latin": "Beni Snous"
+      },
+      {
+        "id": 415,
+        "name_latin": "Azail"
+      },
+      {
+        "id": 413,
+        "name_latin": "Djebala"
+      }
+    ]
+  },
+  {
+    "id": 16,
+    "name_latin": "Alger",
+    "municipalities": [
+      {
+        "id": 605,
+        "name_latin": "Sidi M'hamed"
+      },
+      {
+        "id": 588,
+        "name_latin": "Hussein Dey"
+      },
+      {
+        "id": 592,
+        "name_latin": "Les Eucalyptus"
+      },
+      {
+        "id": 606,
+        "name_latin": "Sidi Moussa"
+      },
+      {
+        "id": 591,
+        "name_latin": "Kouba"
+      },
+      {
+        "id": 594,
+        "name_latin": "Mohamed Belouzdad"
+      },
+      {
+        "id": 555,
+        "name_latin": "Ain Taya"
+      },
+      {
+        "id": 558,
+        "name_latin": "Bab Ezzouar"
+      },
+      {
+        "id": 569,
+        "name_latin": "Bordj El Kiffan"
+      },
+      {
+        "id": 574,
+        "name_latin": "Dar El Beida"
+      },
+      {
+        "id": 584,
+        "name_latin": "El Marsa"
+      },
+      {
+        "id": 595,
+        "name_latin": "Mohammadia"
+      },
+      {
+        "id": 566,
+        "name_latin": "Bir Touta"
+      },
+      {
+        "id": 598,
+        "name_latin": "Ouled Chebel"
+      },
+      {
+        "id": 609,
+        "name_latin": "Tessala El Merdja"
+      },
+      {
+        "id": 587,
+        "name_latin": "Herraoua"
+      },
+      {
+        "id": 602,
+        "name_latin": "Reghaia"
+      },
+      {
+        "id": 603,
+        "name_latin": "Rouiba"
+      },
+      {
+        "id": 593,
+        "name_latin": "Maalma"
+      },
+      {
+        "id": 600,
+        "name_latin": "Rahmania"
+      },
+      {
+        "id": 607,
+        "name_latin": "Souidania"
+      },
+      {
+        "id": 608,
+        "name_latin": "Staoueli"
+      },
+      {
+        "id": 610,
+        "name_latin": "Zeralda"
+      },
+      {
+        "id": 559,
+        "name_latin": "Baba Hassen"
+      },
+      {
+        "id": 577,
+        "name_latin": "Douira"
+      },
+      {
+        "id": 578,
+        "name_latin": "Draria"
+      },
+      {
+        "id": 579,
+        "name_latin": "El Achour"
+      },
+      {
+        "id": 590,
+        "name_latin": "Khraissia"
+      },
+      {
+        "id": 554,
+        "name_latin": "Ain Benian"
+      },
+      {
+        "id": 573,
+        "name_latin": "Cheraga"
+      },
+      {
+        "id": 575,
+        "name_latin": "Dely Ibrahim"
+      },
+      {
+        "id": 586,
+        "name_latin": "Hammamet"
+      },
+      {
+        "id": 599,
+        "name_latin": "Ouled Fayet"
+      },
+      {
+        "id": 556,
+        "name_latin": "Alger Centre"
+      },
+      {
+        "id": 582,
+        "name_latin": "El Madania"
+      },
+      {
+        "id": 585,
+        "name_latin": "El Mouradia"
+      },
+      {
+        "id": 604,
+        "name_latin": "Sehaoula"
+      },
+      {
+        "id": 567,
+        "name_latin": "Bologhine Ibnou Ziri"
+      },
+      {
+        "id": 572,
+        "name_latin": "Casbah"
+      },
+      {
+        "id": 596,
+        "name_latin": "Oued Koriche"
+      },
+      {
+        "id": 601,
+        "name_latin": "Rais Hamidou"
+      },
+      {
+        "id": 564,
+        "name_latin": "Bir Mourad Rais"
+      },
+      {
+        "id": 565,
+        "name_latin": "Birkhadem"
+      },
+      {
+        "id": 576,
+        "name_latin": "Djasr Kasentina"
+      },
+      {
+        "id": 589,
+        "name_latin": "Hydra"
+      },
+      {
+        "id": 583,
+        "name_latin": "El Magharia"
+      },
+      {
+        "id": 562,
+        "name_latin": "Ben Aknoun"
+      },
+      {
+        "id": 563,
+        "name_latin": "Beni Messous"
+      },
+      {
+        "id": 571,
+        "name_latin": "Bouzareah"
+      },
+      {
+        "id": 580,
+        "name_latin": "El Biar"
+      },
+      {
+        "id": 560,
+        "name_latin": "Bachedjerah"
+      },
+      {
+        "id": 570,
+        "name_latin": "Bourouba"
+      },
+      {
+        "id": 581,
+        "name_latin": "El Harrach"
+      },
+      {
+        "id": 597,
+        "name_latin": "Oued Smar"
+      },
+      {
+        "id": 561,
+        "name_latin": "Baraki"
+      },
+      {
+        "id": 568,
+        "name_latin": "Bordj El Bahri"
+      },
+      {
+        "id": 557,
+        "name_latin": "Bab El Oued"
+      }
+    ]
+  },
+  {
+    "id": 17,
+    "name_latin": "Djelfa",
+    "municipalities": [
+      {
+        "id": 637,
+        "name_latin": "M'liliha"
+      },
+      {
+        "id": 634,
+        "name_latin": "Hassi El Euch"
+      },
+      {
+        "id": 612,
+        "name_latin": "Ain El Ibel"
+      },
+      {
+        "id": 626,
+        "name_latin": "El Guedid"
+      },
+      {
+        "id": 621,
+        "name_latin": "Charef"
+      },
+      {
+        "id": 618,
+        "name_latin": "Benyagoub"
+      },
+      {
+        "id": 642,
+        "name_latin": "Sidi Baizid"
+      },
+      {
+        "id": 622,
+        "name_latin": "Dar Chioukh"
+      },
+      {
+        "id": 644,
+        "name_latin": "Taadmit"
+      },
+      {
+        "id": 632,
+        "name_latin": "Had Sahary"
+      },
+      {
+        "id": 620,
+        "name_latin": "Bouira Lahdab"
+      },
+      {
+        "id": 613,
+        "name_latin": "Ain Fekka"
+      },
+      {
+        "id": 643,
+        "name_latin": "Sidi Laadjel"
+      },
+      {
+        "id": 635,
+        "name_latin": "Hassi Fedoul"
+      },
+      {
+        "id": 628,
+        "name_latin": "El Khemis"
+      },
+      {
+        "id": 641,
+        "name_latin": "Selmana"
+      },
+      {
+        "id": 640,
+        "name_latin": "Sed Rahal"
+      },
+      {
+        "id": 636,
+        "name_latin": "Messaad"
+      },
+      {
+        "id": 631,
+        "name_latin": "Guettara"
+      },
+      {
+        "id": 623,
+        "name_latin": "Deldoul"
+      },
+      {
+        "id": 646,
+        "name_latin": "Zaccar"
+      },
+      {
+        "id": 625,
+        "name_latin": "Douis"
+      },
+      {
+        "id": 627,
+        "name_latin": "El Idrissia"
+      },
+      {
+        "id": 611,
+        "name_latin": "Ain Chouhada"
+      },
+      {
+        "id": 624,
+        "name_latin": "Djelfa"
+      },
+      {
+        "id": 619,
+        "name_latin": "Birine"
+      },
+      {
+        "id": 639,
+        "name_latin": "Oum Laadham"
+      },
+      {
+        "id": 629,
+        "name_latin": "Faidh El Botma"
+      },
+      {
+        "id": 616,
+        "name_latin": "Amourah"
+      },
+      {
+        "id": 645,
+        "name_latin": "Zaafrane"
+      },
+      {
+        "id": 630,
+        "name_latin": "Guernini"
+      },
+      {
+        "id": 615,
+        "name_latin": "Ain Oussera"
+      },
+      {
+        "id": 617,
+        "name_latin": "Benhar"
+      },
+      {
+        "id": 614,
+        "name_latin": "Ain Maabed"
+      },
+      {
+        "id": 633,
+        "name_latin": "Hassi Bahbah"
+      },
+      {
+        "id": 638,
+        "name_latin": "Moudjebara"
+      }
+    ]
+  },
+  {
+    "id": 8,
+    "name_latin": "Béchar",
+    "municipalities": [
+      {
+        "id": 264,
+        "name_latin": "Bechar"
+      },
+      {
+        "id": 268,
+        "name_latin": "Boukais"
+      },
+      {
+        "id": 275,
+        "name_latin": "Lahmar"
+      },
+      {
+        "id": 278,
+        "name_latin": "Mogheul"
+      },
+      {
+        "id": 277,
+        "name_latin": "Meridja"
+      },
+      {
+        "id": 281,
+        "name_latin": "Taghit"
+      },
+      {
+        "id": 263,
+        "name_latin": "Abadla"
+      },
+      {
+        "id": 270,
+        "name_latin": "Erg-Ferradj"
+      },
+      {
+        "id": 276,
+        "name_latin": "Machraa-Houari-Boumediene"
+      },
+      {
+        "id": 267,
+        "name_latin": "Beni-Ounif"
+      },
+      {
+        "id": 280,
+        "name_latin": "Tabelbala"
+      },
+      {
+        "id": 272,
+        "name_latin": "Kenadsa"
+      }
+    ]
+  },
+  {
+    "id": 18,
+    "name_latin": "Jijel",
+    "municipalities": [
+      {
+        "id": 647,
+        "name_latin": "Bordj T'har"
+      },
+      {
+        "id": 662,
+        "name_latin": "Jijel"
+      },
+      {
+        "id": 656,
+        "name_latin": "El Aouana"
+      },
+      {
+        "id": 668,
+        "name_latin": "Selma Benziada"
+      },
+      {
+        "id": 660,
+        "name_latin": "Erraguene Souissi"
+      },
+      {
+        "id": 650,
+        "name_latin": "Boussif Ouled Askeur"
+      },
+      {
+        "id": 674,
+        "name_latin": "Ziama Mansouriah"
+      },
+      {
+        "id": 651,
+        "name_latin": "Chahna"
+      },
+      {
+        "id": 659,
+        "name_latin": "Emir Abdelkader"
+      },
+      {
+        "id": 665,
+        "name_latin": "Oudjana"
+      },
+      {
+        "id": 672,
+        "name_latin": "Taher"
+      },
+      {
+        "id": 652,
+        "name_latin": "Chekfa"
+      },
+      {
+        "id": 657,
+        "name_latin": "El Kennar Nouchfi"
+      },
+      {
+        "id": 670,
+        "name_latin": "Sidi Abdelaziz"
+      },
+      {
+        "id": 658,
+        "name_latin": "El Milia"
+      },
+      {
+        "id": 667,
+        "name_latin": "Ouled Yahia Khadrouch"
+      },
+      {
+        "id": 666,
+        "name_latin": "Ouled Rabah"
+      },
+      {
+        "id": 671,
+        "name_latin": "Sidi Marouf"
+      },
+      {
+        "id": 661,
+        "name_latin": "Ghebala"
+      },
+      {
+        "id": 669,
+        "name_latin": "Settara"
+      },
+      {
+        "id": 649,
+        "name_latin": "Bouraoui Belhadef"
+      },
+      {
+        "id": 655,
+        "name_latin": "El Ancer"
+      },
+      {
+        "id": 664,
+        "name_latin": "Khiri Oued Adjoul"
+      },
+      {
+        "id": 654,
+        "name_latin": "Djimla"
+      },
+      {
+        "id": 663,
+        "name_latin": "Kaous"
+      },
+      {
+        "id": 673,
+        "name_latin": "Texenna"
+      },
+      {
+        "id": 648,
+        "name_latin": "Boudria Beniyadjis"
+      },
+      {
+        "id": 653,
+        "name_latin": "Djemaa Beni Habibi"
+      }
+    ]
+  },
+  {
+    "id": 19,
+    "name_latin": "Sétif",
+    "municipalities": [
+      {
+        "id": 734,
+        "name_latin": "Tizi N'bechar"
+      },
+      {
+        "id": 726,
+        "name_latin": "Rosfa"
+      },
+      {
+        "id": 721,
+        "name_latin": "Oued El Bared"
+      },
+      {
+        "id": 720,
+        "name_latin": "Mezloug"
+      },
+      {
+        "id": 709,
+        "name_latin": "Guellal"
+      },
+      {
+        "id": 717,
+        "name_latin": "Kasr El Abtal"
+      },
+      {
+        "id": 724,
+        "name_latin": "Ouled Si Ahmed"
+      },
+      {
+        "id": 684,
+        "name_latin": "Ait Naoual Mezada"
+      },
+      {
+        "id": 685,
+        "name_latin": "Ait-Tizi"
+      },
+      {
+        "id": 699,
+        "name_latin": "Bouandas"
+      },
+      {
+        "id": 701,
+        "name_latin": "Bousselam"
+      },
+      {
+        "id": 713,
+        "name_latin": "Hamam Soukhna"
+      },
+      {
+        "id": 732,
+        "name_latin": "Taya"
+      },
+      {
+        "id": 733,
+        "name_latin": "Tella"
+      },
+      {
+        "id": 680,
+        "name_latin": "Ain Oulmene"
+      },
+      {
+        "id": 702,
+        "name_latin": "Boutaleb"
+      },
+      {
+        "id": 714,
+        "name_latin": "Hamma"
+      },
+      {
+        "id": 725,
+        "name_latin": "Ouled Tebben"
+      },
+      {
+        "id": 686,
+        "name_latin": "Amoucha"
+      },
+      {
+        "id": 727,
+        "name_latin": "Salah Bey"
+      },
+      {
+        "id": 677,
+        "name_latin": "Ain Azel"
+      },
+      {
+        "id": 679,
+        "name_latin": "Ain Lahdjar"
+      },
+      {
+        "id": 689,
+        "name_latin": "Beidha Bordj"
+      },
+      {
+        "id": 697,
+        "name_latin": "Bir Haddada"
+      },
+      {
+        "id": 711,
+        "name_latin": "Guenzet"
+      },
+      {
+        "id": 716,
+        "name_latin": "Harbil"
+      },
+      {
+        "id": 682,
+        "name_latin": "Ain-Roua"
+      },
+      {
+        "id": 707,
+        "name_latin": "El Ouricia"
+      },
+      {
+        "id": 700,
+        "name_latin": "Bougaa"
+      },
+      {
+        "id": 705,
+        "name_latin": "Draa-Kebila"
+      },
+      {
+        "id": 715,
+        "name_latin": "Hammam Guergour"
+      },
+      {
+        "id": 729,
+        "name_latin": "Setif"
+      },
+      {
+        "id": 678,
+        "name_latin": "Ain El Kebira"
+      },
+      {
+        "id": 703,
+        "name_latin": "Dehamcha"
+      },
+      {
+        "id": 722,
+        "name_latin": "Ouled Addouane"
+      },
+      {
+        "id": 683,
+        "name_latin": "Ain-Sebt"
+      },
+      {
+        "id": 695,
+        "name_latin": "Beni-Aziz"
+      },
+      {
+        "id": 718,
+        "name_latin": "Maaouia"
+      },
+      {
+        "id": 690,
+        "name_latin": "Bellaa"
+      },
+      {
+        "id": 698,
+        "name_latin": "Bir-El-Arch"
+      },
+      {
+        "id": 708,
+        "name_latin": "El-Ouldja"
+      },
+      {
+        "id": 730,
+        "name_latin": "Tachouda"
+      },
+      {
+        "id": 731,
+        "name_latin": "Tala-Ifacene"
+      },
+      {
+        "id": 728,
+        "name_latin": "Serdj-El-Ghoul"
+      },
+      {
+        "id": 712,
+        "name_latin": "Guidjel"
+      },
+      {
+        "id": 723,
+        "name_latin": "Ouled Sabor"
+      },
+      {
+        "id": 688,
+        "name_latin": "Bazer-Sakra"
+      },
+      {
+        "id": 706,
+        "name_latin": "El Eulma"
+      },
+      {
+        "id": 710,
+        "name_latin": "Guelta Zerka"
+      },
+      {
+        "id": 692,
+        "name_latin": "Beni Fouda"
+      },
+      {
+        "id": 704,
+        "name_latin": "Djemila"
+      },
+      {
+        "id": 681,
+        "name_latin": "Ain-Legradj"
+      },
+      {
+        "id": 691,
+        "name_latin": "Beni Chebana"
+      },
+      {
+        "id": 693,
+        "name_latin": "Beni Ourtilane"
+      },
+      {
+        "id": 696,
+        "name_latin": "Beni-Mouhli"
+      },
+      {
+        "id": 675,
+        "name_latin": "Ain Abessa"
+      },
+      {
+        "id": 676,
+        "name_latin": "Ain Arnat"
+      },
+      {
+        "id": 687,
+        "name_latin": "Babor"
+      },
+      {
+        "id": 719,
+        "name_latin": "Maouaklane"
+      },
+      {
+        "id": 694,
+        "name_latin": "Beni Oussine"
+      }
+    ]
+  },
+  {
+    "id": 9,
+    "name_latin": "Blida",
+    "municipalities": [
+      {
+        "id": 285,
+        "name_latin": "Beni Mered"
+      },
+      {
+        "id": 305,
+        "name_latin": "Ouled Slama"
+      },
+      {
+        "id": 302,
+        "name_latin": "Mouzaia"
+      },
+      {
+        "id": 299,
+        "name_latin": "Hammam Elouane"
+      },
+      {
+        "id": 291,
+        "name_latin": "Bougara"
+      },
+      {
+        "id": 307,
+        "name_latin": "Souhane"
+      },
+      {
+        "id": 300,
+        "name_latin": "Larbaa"
+      },
+      {
+        "id": 308,
+        "name_latin": "Soumaa"
+      },
+      {
+        "id": 298,
+        "name_latin": "Guerrouaou"
+      },
+      {
+        "id": 290,
+        "name_latin": "Boufarik"
+      },
+      {
+        "id": 301,
+        "name_latin": "Meftah"
+      },
+      {
+        "id": 294,
+        "name_latin": "Chiffa"
+      },
+      {
+        "id": 284,
+        "name_latin": "Ain Romana"
+      },
+      {
+        "id": 303,
+        "name_latin": "Oued  Djer"
+      },
+      {
+        "id": 297,
+        "name_latin": "El-Affroun"
+      },
+      {
+        "id": 306,
+        "name_latin": "Ouled Yaich"
+      },
+      {
+        "id": 295,
+        "name_latin": "Chrea"
+      },
+      {
+        "id": 296,
+        "name_latin": "Djebabra"
+      },
+      {
+        "id": 304,
+        "name_latin": "Oued El Alleug"
+      },
+      {
+        "id": 287,
+        "name_latin": "Benkhelil"
+      },
+      {
+        "id": 286,
+        "name_latin": "Beni-Tamou"
+      },
+      {
+        "id": 293,
+        "name_latin": "Chebli"
+      },
+      {
+        "id": 292,
+        "name_latin": "Bouinan"
+      },
+      {
+        "id": 289,
+        "name_latin": "Bouarfa"
+      },
+      {
+        "id": 288,
+        "name_latin": "Blida"
+      }
+    ]
+  },
+  {
+    "id": 22,
+    "name_latin": "Sidi Bel Abbès",
+    "municipalities": [
+      {
+        "id": 810,
+        "name_latin": "M'cid"
+      },
+      {
+        "id": 836,
+        "name_latin": "Telagh"
+      },
+      {
+        "id": 822,
+        "name_latin": "Sidi Ali Benyoub"
+      },
+      {
+        "id": 814,
+        "name_latin": "Moulay Slissen"
+      },
+      {
+        "id": 804,
+        "name_latin": "El Hacaiba"
+      },
+      {
+        "id": 792,
+        "name_latin": "Ain Tindamine"
+      },
+      {
+        "id": 837,
+        "name_latin": "Tenira"
+      },
+      {
+        "id": 816,
+        "name_latin": "Oued Sefioun"
+      },
+      {
+        "id": 805,
+        "name_latin": "Hassi Dahou"
+      },
+      {
+        "id": 817,
+        "name_latin": "Oued Taourira"
+      },
+      {
+        "id": 798,
+        "name_latin": "Benachiba Chelia"
+      },
+      {
+        "id": 831,
+        "name_latin": "Sidi Yacoub"
+      },
+      {
+        "id": 830,
+        "name_latin": "Sidi Lahcene"
+      },
+      {
+        "id": 829,
+        "name_latin": "Sidi Khaled"
+      },
+      {
+        "id": 832,
+        "name_latin": "Tabia"
+      },
+      {
+        "id": 825,
+        "name_latin": "Sidi Brahim"
+      },
+      {
+        "id": 794,
+        "name_latin": "Amarnas"
+      },
+      {
+        "id": 801,
+        "name_latin": "Boukhanefis"
+      },
+      {
+        "id": 806,
+        "name_latin": "Hassi Zahana"
+      },
+      {
+        "id": 802,
+        "name_latin": "Chetouane Belaila"
+      },
+      {
+        "id": 797,
+        "name_latin": "Ben Badis"
+      },
+      {
+        "id": 795,
+        "name_latin": "Bedrabine El Mokrani"
+      },
+      {
+        "id": 821,
+        "name_latin": "Sfisef"
+      },
+      {
+        "id": 800,
+        "name_latin": "Boudjebaa El Bordj"
+      },
+      {
+        "id": 793,
+        "name_latin": "Ain- Adden"
+      },
+      {
+        "id": 828,
+        "name_latin": "Sidi Hamadouche"
+      },
+      {
+        "id": 826,
+        "name_latin": "Sidi Chaib"
+      },
+      {
+        "id": 808,
+        "name_latin": "Makedra"
+      },
+      {
+        "id": 789,
+        "name_latin": "Ain El Berd"
+      },
+      {
+        "id": 819,
+        "name_latin": "Redjem Demouche"
+      },
+      {
+        "id": 818,
+        "name_latin": "Ras El Ma"
+      },
+      {
+        "id": 815,
+        "name_latin": "Oued Sebaa"
+      },
+      {
+        "id": 809,
+        "name_latin": "Marhoum"
+      },
+      {
+        "id": 824,
+        "name_latin": "Sidi Bel-Abbes"
+      },
+      {
+        "id": 791,
+        "name_latin": "Ain Thrid"
+      },
+      {
+        "id": 820,
+        "name_latin": "Sehala Thaoura"
+      },
+      {
+        "id": 838,
+        "name_latin": "Tessala"
+      },
+      {
+        "id": 796,
+        "name_latin": "Belarbi"
+      },
+      {
+        "id": 813,
+        "name_latin": "Mostefa  Ben Brahim"
+      },
+      {
+        "id": 839,
+        "name_latin": "Tilmouni"
+      },
+      {
+        "id": 840,
+        "name_latin": "Zerouala"
+      },
+      {
+        "id": 803,
+        "name_latin": "Dhaya"
+      },
+      {
+        "id": 812,
+        "name_latin": "Mezaourou"
+      },
+      {
+        "id": 835,
+        "name_latin": "Teghalimet"
+      },
+      {
+        "id": 790,
+        "name_latin": "Ain Kada"
+      },
+      {
+        "id": 807,
+        "name_latin": "Lamtar"
+      },
+      {
+        "id": 823,
+        "name_latin": "Sidi Ali Boussidi"
+      },
+      {
+        "id": 827,
+        "name_latin": "Sidi Dahou Zairs"
+      },
+      {
+        "id": 799,
+        "name_latin": "Bir El Hammam"
+      },
+      {
+        "id": 811,
+        "name_latin": "Merine"
+      },
+      {
+        "id": 834,
+        "name_latin": "Tefessour"
+      },
+      {
+        "id": 833,
+        "name_latin": "Taoudmout"
+      }
+    ]
+  },
+  {
+    "id": 11,
+    "name_latin": "Tamanrasset",
+    "municipalities": [
+      {
+        "id": 362,
+        "name_latin": "Tazrouk"
+      },
+      {
+        "id": 354,
+        "name_latin": "Abelsa"
+      },
+      {
+        "id": 361,
+        "name_latin": "Tamanrasset"
+      },
+      {
+        "id": 355,
+        "name_latin": "Ain Amguel"
+      },
+      {
+        "id": 359,
+        "name_latin": "Idles"
+      }
+    ]
+  },
+  {
+    "id": 24,
+    "name_latin": "Guelma",
+    "municipalities": [
+      {
+        "id": 873,
+        "name_latin": "Hammam N'bail"
+      },
+      {
+        "id": 875,
+        "name_latin": "Nechmaya"
+      },
+      {
+        "id": 863,
+        "name_latin": "Bou Hamdane"
+      },
+      {
+        "id": 872,
+        "name_latin": "Hammam Debagh"
+      },
+      {
+        "id": 884,
+        "name_latin": "Roknia"
+      },
+      {
+        "id": 867,
+        "name_latin": "Dahouara"
+      },
+      {
+        "id": 871,
+        "name_latin": "Guelma"
+      },
+      {
+        "id": 866,
+        "name_latin": "Boumahra Ahmed"
+      },
+      {
+        "id": 853,
+        "name_latin": "Ain Ben Beida"
+      },
+      {
+        "id": 865,
+        "name_latin": "Bouchegouf"
+      },
+      {
+        "id": 878,
+        "name_latin": "Medjez Sfa"
+      },
+      {
+        "id": 881,
+        "name_latin": "Oued Ferragha"
+      },
+      {
+        "id": 864,
+        "name_latin": "Bouati Mahmoud"
+      },
+      {
+        "id": 869,
+        "name_latin": "El Fedjoudj"
+      },
+      {
+        "id": 874,
+        "name_latin": "Heliopolis"
+      },
+      {
+        "id": 877,
+        "name_latin": "Medjez Amar"
+      },
+      {
+        "id": 879,
+        "name_latin": "Houari Boumedienne"
+      },
+      {
+        "id": 883,
+        "name_latin": "Ras El Agba"
+      },
+      {
+        "id": 885,
+        "name_latin": "Sellaoua Announa"
+      },
+      {
+        "id": 868,
+        "name_latin": "Djeballah Khemissi"
+      },
+      {
+        "id": 861,
+        "name_latin": "Bordj Sabath"
+      },
+      {
+        "id": 882,
+        "name_latin": "Oued Zenati"
+      },
+      {
+        "id": 856,
+        "name_latin": "Ain Regada"
+      },
+      {
+        "id": 854,
+        "name_latin": "Ain Larbi"
+      },
+      {
+        "id": 855,
+        "name_latin": "Ain Makhlouf"
+      },
+      {
+        "id": 886,
+        "name_latin": "Tamlouka"
+      },
+      {
+        "id": 857,
+        "name_latin": "Ain Sandel"
+      },
+      {
+        "id": 862,
+        "name_latin": "Bou Hachana"
+      },
+      {
+        "id": 876,
+        "name_latin": "Khezaras"
+      },
+      {
+        "id": 858,
+        "name_latin": "Belkheir"
+      },
+      {
+        "id": 860,
+        "name_latin": "Beni Mezline"
+      },
+      {
+        "id": 870,
+        "name_latin": "Guelaat Bou Sbaa"
+      },
+      {
+        "id": 880,
+        "name_latin": "Oued Cheham"
+      },
+      {
+        "id": 859,
+        "name_latin": "Bendjarah"
+      }
+    ]
+  },
+  {
+    "id": 12,
+    "name_latin": "Tébessa",
+    "municipalities": [
+      {
+        "id": 380,
+        "name_latin": "El-Houidjbet"
+      },
+      {
+        "id": 379,
+        "name_latin": "El-Aouinet"
+      },
+      {
+        "id": 381,
+        "name_latin": "Ferkane"
+      },
+      {
+        "id": 385,
+        "name_latin": "Negrine"
+      },
+      {
+        "id": 368,
+        "name_latin": "Bir Mokkadem"
+      },
+      {
+        "id": 367,
+        "name_latin": "Bir Dheheb"
+      },
+      {
+        "id": 388,
+        "name_latin": "Saf Saf El Ouesra"
+      },
+      {
+        "id": 382,
+        "name_latin": "Guorriguer"
+      },
+      {
+        "id": 366,
+        "name_latin": "Bekkaria"
+      },
+      {
+        "id": 371,
+        "name_latin": "Boulhaf Dyr"
+      },
+      {
+        "id": 387,
+        "name_latin": "Oum Ali"
+      },
+      {
+        "id": 370,
+        "name_latin": "Boukhadra"
+      },
+      {
+        "id": 374,
+        "name_latin": "El Malabiod"
+      },
+      {
+        "id": 386,
+        "name_latin": "Ouenza"
+      },
+      {
+        "id": 375,
+        "name_latin": "El Meridj"
+      },
+      {
+        "id": 364,
+        "name_latin": "Ain Zerga"
+      },
+      {
+        "id": 389,
+        "name_latin": "Stah Guentis"
+      },
+      {
+        "id": 377,
+        "name_latin": "El Ogla"
+      },
+      {
+        "id": 376,
+        "name_latin": "El Mezeraa"
+      },
+      {
+        "id": 365,
+        "name_latin": "Bedjene"
+      },
+      {
+        "id": 384,
+        "name_latin": "Morsott"
+      },
+      {
+        "id": 391,
+        "name_latin": "Telidjen"
+      },
+      {
+        "id": 372,
+        "name_latin": "Cheria"
+      },
+      {
+        "id": 378,
+        "name_latin": "El Ogla El Malha"
+      },
+      {
+        "id": 369,
+        "name_latin": "Bir-El-Ater"
+      },
+      {
+        "id": 390,
+        "name_latin": "Tebessa"
+      },
+      {
+        "id": 383,
+        "name_latin": "Hammamet"
+      },
+      {
+        "id": 373,
+        "name_latin": "El Kouif"
+      }
+    ]
+  },
+  {
+    "id": 26,
+    "name_latin": "Médéa",
+    "municipalities": [
+      {
+        "id": 934,
+        "name_latin": "M'fatha"
+      },
+      {
+        "id": 943,
+        "name_latin": "Ouled Hellal"
+      },
+      {
+        "id": 956,
+        "name_latin": "Souagui"
+      },
+      {
+        "id": 929,
+        "name_latin": "Ksar El Boukhari"
+      },
+      {
+        "id": 947,
+        "name_latin": "Saneg"
+      },
+      {
+        "id": 920,
+        "name_latin": "El Azizia"
+      },
+      {
+        "id": 930,
+        "name_latin": "Maghraoua"
+      },
+      {
+        "id": 935,
+        "name_latin": "Mihoub"
+      },
+      {
+        "id": 909,
+        "name_latin": "Bouaiche"
+      },
+      {
+        "id": 912,
+        "name_latin": "Boughzoul"
+      },
+      {
+        "id": 914,
+        "name_latin": "Chabounia"
+      },
+      {
+        "id": 926,
+        "name_latin": "Hannacha"
+      },
+      {
+        "id": 936,
+        "name_latin": "Ouamri"
+      },
+      {
+        "id": 937,
+        "name_latin": "Oued Harbil"
+      },
+      {
+        "id": 905,
+        "name_latin": "Beni Slimane"
+      },
+      {
+        "id": 910,
+        "name_latin": "Bouaichoune"
+      },
+      {
+        "id": 939,
+        "name_latin": "Ouled Bouachra"
+      },
+      {
+        "id": 950,
+        "name_latin": "Si Mahdjoub"
+      },
+      {
+        "id": 913,
+        "name_latin": "Bouskene"
+      },
+      {
+        "id": 953,
+        "name_latin": "Sidi Rabie"
+      },
+      {
+        "id": 906,
+        "name_latin": "Berrouaghia"
+      },
+      {
+        "id": 941,
+        "name_latin": "Ouled Deid"
+      },
+      {
+        "id": 946,
+        "name_latin": "Rebaia"
+      },
+      {
+        "id": 932,
+        "name_latin": "Medjebar"
+      },
+      {
+        "id": 961,
+        "name_latin": "Tletat Ed Douair"
+      },
+      {
+        "id": 962,
+        "name_latin": "Zoubiria"
+      },
+      {
+        "id": 901,
+        "name_latin": "Aissaouia"
+      },
+      {
+        "id": 933,
+        "name_latin": "Mezerana"
+      },
+      {
+        "id": 957,
+        "name_latin": "Tablat"
+      },
+      {
+        "id": 908,
+        "name_latin": "Boghar"
+      },
+      {
+        "id": 949,
+        "name_latin": "Seghouane"
+      },
+      {
+        "id": 919,
+        "name_latin": "Draa Esmar"
+      },
+      {
+        "id": 931,
+        "name_latin": "Medea"
+      },
+      {
+        "id": 959,
+        "name_latin": "Tamesguida"
+      },
+      {
+        "id": 904,
+        "name_latin": "Ben Chicao"
+      },
+      {
+        "id": 922,
+        "name_latin": "El Hamdania"
+      },
+      {
+        "id": 945,
+        "name_latin": "Ouzera"
+      },
+      {
+        "id": 960,
+        "name_latin": "Tizi Mahdi"
+      },
+      {
+        "id": 899,
+        "name_latin": "Ain Boucif"
+      },
+      {
+        "id": 925,
+        "name_latin": "El Ouinet"
+      },
+      {
+        "id": 927,
+        "name_latin": "Kef Lakhdar"
+      },
+      {
+        "id": 942,
+        "name_latin": "Ouled Emaaraf"
+      },
+      {
+        "id": 951,
+        "name_latin": "Sidi Demed"
+      },
+      {
+        "id": 903,
+        "name_latin": "Baata"
+      },
+      {
+        "id": 924,
+        "name_latin": "El Omaria"
+      },
+      {
+        "id": 940,
+        "name_latin": "Ouled Brahim"
+      },
+      {
+        "id": 907,
+        "name_latin": "Bir Ben Laabed"
+      },
+      {
+        "id": 921,
+        "name_latin": "El Guelbelkebir"
+      },
+      {
+        "id": 948,
+        "name_latin": "Sedraya"
+      },
+      {
+        "id": 900,
+        "name_latin": "Ain Ouksir"
+      },
+      {
+        "id": 915,
+        "name_latin": "Chelalet El Adhaoura"
+      },
+      {
+        "id": 916,
+        "name_latin": "Cheniguel"
+      },
+      {
+        "id": 958,
+        "name_latin": "Tafraout"
+      },
+      {
+        "id": 911,
+        "name_latin": "Bouchrahil"
+      },
+      {
+        "id": 928,
+        "name_latin": "Khams Djouamaa"
+      },
+      {
+        "id": 952,
+        "name_latin": "Sidi Naamane"
+      },
+      {
+        "id": 902,
+        "name_latin": "Aziz"
+      },
+      {
+        "id": 917,
+        "name_latin": "Derrag"
+      },
+      {
+        "id": 944,
+        "name_latin": "Oum El Djellil"
+      },
+      {
+        "id": 918,
+        "name_latin": "Djouab"
+      },
+      {
+        "id": 954,
+        "name_latin": "Sidi Zahar"
+      },
+      {
+        "id": 955,
+        "name_latin": "Sidi Ziane"
+      },
+      {
+        "id": 938,
+        "name_latin": "Ouled Antar"
+      },
+      {
+        "id": 923,
+        "name_latin": "El Haoudane"
+      }
+    ]
+  },
+  {
+    "id": 30,
+    "name_latin": "Ouargla",
+    "municipalities": [
+      {
+        "id": 1100,
+        "name_latin": "N'goussa"
+      },
+      {
+        "id": 1101,
+        "name_latin": "Ouargla"
+      },
+      {
+        "id": 1096,
+        "name_latin": "Hassi Messaoud"
+      },
+      {
+        "id": 1089,
+        "name_latin": "Ain Beida"
+      },
+      {
+        "id": 1095,
+        "name_latin": "Hassi Ben Abdellah"
+      },
+      {
+        "id": 1103,
+        "name_latin": "Sidi Khouiled"
+      },
+      {
+        "id": 1093,
+        "name_latin": "El Borma"
+      },
+      {
+        "id": 1102,
+        "name_latin": "Rouissat"
+      }
+    ]
+  },
+  {
+    "id": 31,
+    "name_latin": "Oran",
+    "municipalities": [
+      {
+        "id": 1113,
+        "name_latin": "Arzew"
+      },
+      {
+        "id": 1134,
+        "name_latin": "Sidi Chami"
+      },
+      {
+        "id": 1116,
+        "name_latin": "Bir El Djir"
+      },
+      {
+        "id": 1124,
+        "name_latin": "Gdyel"
+      },
+      {
+        "id": 1126,
+        "name_latin": "Hassi Bounif"
+      },
+      {
+        "id": 1114,
+        "name_latin": "Ben Freha"
+      },
+      {
+        "id": 1133,
+        "name_latin": "Sidi Ben Yebka"
+      },
+      {
+        "id": 1110,
+        "name_latin": "Ain Biya"
+      },
+      {
+        "id": 1115,
+        "name_latin": "Bethioua"
+      },
+      {
+        "id": 1128,
+        "name_latin": "Marsat El Hadjadj"
+      },
+      {
+        "id": 1131,
+        "name_latin": "Oran"
+      },
+      {
+        "id": 1120,
+        "name_latin": "El Ancor"
+      },
+      {
+        "id": 1129,
+        "name_latin": "Mers El Kebir"
+      },
+      {
+        "id": 1117,
+        "name_latin": "Boufatis"
+      },
+      {
+        "id": 1121,
+        "name_latin": "El Braya"
+      },
+      {
+        "id": 1111,
+        "name_latin": "Ain Kerma"
+      },
+      {
+        "id": 1119,
+        "name_latin": "Boutlelis"
+      },
+      {
+        "id": 1130,
+        "name_latin": "Messerghin"
+      },
+      {
+        "id": 1118,
+        "name_latin": "Bousfer"
+      },
+      {
+        "id": 1135,
+        "name_latin": "Tafraoui"
+      },
+      {
+        "id": 1127,
+        "name_latin": "Hassi Mefsoukh"
+      },
+      {
+        "id": 1125,
+        "name_latin": "Hassi Ben Okba"
+      },
+      {
+        "id": 1122,
+        "name_latin": "El Kerma"
+      },
+      {
+        "id": 1123,
+        "name_latin": "Es Senia"
+      },
+      {
+        "id": 1112,
+        "name_latin": "Ain Turk"
+      },
+      {
+        "id": 1132,
+        "name_latin": "Oued Tlelat"
+      }
+    ]
+  },
+  {
+    "id": 14,
+    "name_latin": "Tiaret",
+    "municipalities": [
+      {
+        "id": 461,
+        "name_latin": "Mahdia"
+      },
+      {
+        "id": 447,
+        "name_latin": "Ain Dzarit"
+      },
+      {
+        "id": 472,
+        "name_latin": "Sebaine"
+      },
+      {
+        "id": 455,
+        "name_latin": "Faidja"
+      },
+      {
+        "id": 475,
+        "name_latin": "Si Abdelghani"
+      },
+      {
+        "id": 480,
+        "name_latin": "Sougueur"
+      },
+      {
+        "id": 485,
+        "name_latin": "Tousnina"
+      },
+      {
+        "id": 465,
+        "name_latin": "Meghila"
+      },
+      {
+        "id": 473,
+        "name_latin": "Sebt"
+      },
+      {
+        "id": 479,
+        "name_latin": "Sidi Hosni"
+      },
+      {
+        "id": 448,
+        "name_latin": "Ain El Hadid"
+      },
+      {
+        "id": 456,
+        "name_latin": "Frenda"
+      },
+      {
+        "id": 482,
+        "name_latin": "Takhemaret"
+      },
+      {
+        "id": 449,
+        "name_latin": "Ain Kermes"
+      },
+      {
+        "id": 453,
+        "name_latin": "Djebilet Rosfa"
+      },
+      {
+        "id": 460,
+        "name_latin": "Madna"
+      },
+      {
+        "id": 463,
+        "name_latin": "Medrissa"
+      },
+      {
+        "id": 476,
+        "name_latin": "Sidi Abderrahmane"
+      },
+      {
+        "id": 459,
+        "name_latin": "Ksar Chellala"
+      },
+      {
+        "id": 457,
+        "name_latin": "Guertoufa"
+      },
+      {
+        "id": 474,
+        "name_latin": "Serghine"
+      },
+      {
+        "id": 486,
+        "name_latin": "Zmalet El Emir Abdelkade"
+      },
+      {
+        "id": 469,
+        "name_latin": "Oued Lilli"
+      },
+      {
+        "id": 477,
+        "name_latin": "Sidi Ali Mellal"
+      },
+      {
+        "id": 454,
+        "name_latin": "Djillali Ben Amar"
+      },
+      {
+        "id": 462,
+        "name_latin": "Mechraa Safa"
+      },
+      {
+        "id": 481,
+        "name_latin": "Tagdempt"
+      },
+      {
+        "id": 450,
+        "name_latin": "Bougara"
+      },
+      {
+        "id": 458,
+        "name_latin": "Hamadia"
+      },
+      {
+        "id": 471,
+        "name_latin": "Rechaiga"
+      },
+      {
+        "id": 484,
+        "name_latin": "Tidda"
+      },
+      {
+        "id": 467,
+        "name_latin": "Nadorah"
+      },
+      {
+        "id": 483,
+        "name_latin": "Tiaret"
+      },
+      {
+        "id": 464,
+        "name_latin": "Medroussa"
+      },
+      {
+        "id": 466,
+        "name_latin": "Mellakou"
+      },
+      {
+        "id": 478,
+        "name_latin": "Sidi Bakhti"
+      },
+      {
+        "id": 446,
+        "name_latin": "Ain Deheb"
+      },
+      {
+        "id": 451,
+        "name_latin": "Chehaima"
+      },
+      {
+        "id": 468,
+        "name_latin": "Naima"
+      },
+      {
+        "id": 445,
+        "name_latin": "Ain Bouchekif"
+      },
+      {
+        "id": 452,
+        "name_latin": "Dahmouni"
+      },
+      {
+        "id": 470,
+        "name_latin": "Rahouia"
+      }
+    ]
+  },
+  {
+    "id": 20,
+    "name_latin": "Saïda",
+    "municipalities": [
+      {
+        "id": 745,
+        "name_latin": "Saida"
+      },
+      {
+        "id": 749,
+        "name_latin": "Tircine"
+      },
+      {
+        "id": 743,
+        "name_latin": "Ouled Brahim"
+      },
+      {
+        "id": 737,
+        "name_latin": "Ain Soltane"
+      },
+      {
+        "id": 741,
+        "name_latin": "Maamora"
+      },
+      {
+        "id": 739,
+        "name_latin": "El Hassasna"
+      },
+      {
+        "id": 736,
+        "name_latin": "Ain Sekhouna"
+      },
+      {
+        "id": 748,
+        "name_latin": "Sidi Boubekeur"
+      },
+      {
+        "id": 744,
+        "name_latin": "Ouled Khaled"
+      },
+      {
+        "id": 740,
+        "name_latin": "Hounet"
+      },
+      {
+        "id": 750,
+        "name_latin": "Youb"
+      },
+      {
+        "id": 738,
+        "name_latin": "Doui Thabet"
+      },
+      {
+        "id": 746,
+        "name_latin": "Sidi Ahmed"
+      },
+      {
+        "id": 742,
+        "name_latin": "Moulay Larbi"
+      },
+      {
+        "id": 735,
+        "name_latin": "Ain El Hadjar"
+      },
+      {
+        "id": 747,
+        "name_latin": "Sidi Amar"
+      }
+    ]
+  },
+  {
+    "id": 21,
+    "name_latin": "Skikda",
+    "municipalities": [
+      {
+        "id": 751,
+        "name_latin": "Ain Bouziane"
+      },
+      {
+        "id": 783,
+        "name_latin": "Salah Bouchaour"
+      },
+      {
+        "id": 768,
+        "name_latin": "El Hadaiek"
+      },
+      {
+        "id": 787,
+        "name_latin": "Zerdezas"
+      },
+      {
+        "id": 780,
+        "name_latin": "Ouled Habbaba"
+      },
+      {
+        "id": 759,
+        "name_latin": "Beni Oulbane"
+      },
+      {
+        "id": 784,
+        "name_latin": "Sidi Mezghiche"
+      },
+      {
+        "id": 758,
+        "name_latin": "Beni Bechir"
+      },
+      {
+        "id": 782,
+        "name_latin": "Ramdane Djamel"
+      },
+      {
+        "id": 761,
+        "name_latin": "Bin El Ouiden"
+      },
+      {
+        "id": 770,
+        "name_latin": "Emjez Edchich"
+      },
+      {
+        "id": 786,
+        "name_latin": "Tamalous"
+      },
+      {
+        "id": 753,
+        "name_latin": "Ain Kechra"
+      },
+      {
+        "id": 778,
+        "name_latin": "Ouldja Boulbalout"
+      },
+      {
+        "id": 781,
+        "name_latin": "Oum Toub"
+      },
+      {
+        "id": 767,
+        "name_latin": "El Ghedir"
+      },
+      {
+        "id": 775,
+        "name_latin": "Kerkara"
+      },
+      {
+        "id": 766,
+        "name_latin": "El Arrouch"
+      },
+      {
+        "id": 788,
+        "name_latin": "Zitouna"
+      },
+      {
+        "id": 779,
+        "name_latin": "Ouled Attia"
+      },
+      {
+        "id": 777,
+        "name_latin": "Oued Zhour"
+      },
+      {
+        "id": 764,
+        "name_latin": "Collo"
+      },
+      {
+        "id": 763,
+        "name_latin": "Cheraia"
+      },
+      {
+        "id": 760,
+        "name_latin": "Beni Zid"
+      },
+      {
+        "id": 776,
+        "name_latin": "Khenag Maoune"
+      },
+      {
+        "id": 769,
+        "name_latin": "El Marsa"
+      },
+      {
+        "id": 757,
+        "name_latin": "Ben Azzouz"
+      },
+      {
+        "id": 756,
+        "name_latin": "Bekkouche Lakhdar"
+      },
+      {
+        "id": 771,
+        "name_latin": "Es Sebt"
+      },
+      {
+        "id": 752,
+        "name_latin": "Ain Charchar"
+      },
+      {
+        "id": 755,
+        "name_latin": "Azzaba"
+      },
+      {
+        "id": 762,
+        "name_latin": "Bouchetata"
+      },
+      {
+        "id": 772,
+        "name_latin": "Filfila"
+      },
+      {
+        "id": 773,
+        "name_latin": "Hammadi Krouma"
+      },
+      {
+        "id": 785,
+        "name_latin": "Skikda"
+      },
+      {
+        "id": 754,
+        "name_latin": "Ain Zouit"
+      },
+      {
+        "id": 765,
+        "name_latin": "Djendel Saadi Mohamed"
+      },
+      {
+        "id": 774,
+        "name_latin": "Kanoua"
+      }
+    ]
+  },
+  {
+    "id": 23,
+    "name_latin": "Annaba",
+    "municipalities": [
+      {
+        "id": 842,
+        "name_latin": "Annaba"
+      },
+      {
+        "id": 850,
+        "name_latin": "Seraidi"
+      },
+      {
+        "id": 843,
+        "name_latin": "Berrahal"
+      },
+      {
+        "id": 849,
+        "name_latin": "Oued El Aneb"
+      },
+      {
+        "id": 848,
+        "name_latin": "El Hadjar"
+      },
+      {
+        "id": 851,
+        "name_latin": "Sidi Amar"
+      },
+      {
+        "id": 846,
+        "name_latin": "El Bouni"
+      },
+      {
+        "id": 841,
+        "name_latin": "Ain El Berda"
+      },
+      {
+        "id": 845,
+        "name_latin": "Cheurfa"
+      },
+      {
+        "id": 847,
+        "name_latin": "El Eulma"
+      },
+      {
+        "id": 852,
+        "name_latin": "Treat"
+      },
+      {
+        "id": 844,
+        "name_latin": "Chetaibi"
+      }
+    ]
+  },
+  {
+    "id": 25,
+    "name_latin": "Constantine",
+    "municipalities": [
+      {
+        "id": 892,
+        "name_latin": "Didouche Mourad"
+      },
+      {
+        "id": 894,
+        "name_latin": "Hamma Bouziane"
+      },
+      {
+        "id": 890,
+        "name_latin": "Beni Hamidane"
+      },
+      {
+        "id": 898,
+        "name_latin": "Zighoud Youcef"
+      },
+      {
+        "id": 888,
+        "name_latin": "Ain Smara"
+      },
+      {
+        "id": 893,
+        "name_latin": "El Khroub"
+      },
+      {
+        "id": 897,
+        "name_latin": "Ouled Rahmoun"
+      },
+      {
+        "id": 887,
+        "name_latin": "Ain Abid"
+      },
+      {
+        "id": 889,
+        "name_latin": "Ben Badis"
+      },
+      {
+        "id": 895,
+        "name_latin": "Ibn Ziad"
+      },
+      {
+        "id": 896,
+        "name_latin": "Messaoud Boudjeriou"
+      },
+      {
+        "id": 891,
+        "name_latin": "Constantine"
+      }
+    ]
+  },
+  {
+    "id": 27,
+    "name_latin": "Mostaganem",
+    "municipalities": [
+      {
+        "id": 970,
+        "name_latin": "Fornaka"
+      },
+      {
+        "id": 981,
+        "name_latin": "Oued El Kheir"
+      },
+      {
+        "id": 973,
+        "name_latin": "Hassiane"
+      },
+      {
+        "id": 972,
+        "name_latin": "Hassi Mameche"
+      },
+      {
+        "id": 992,
+        "name_latin": "Stidia"
+      },
+      {
+        "id": 967,
+        "name_latin": "Ain-Tedles"
+      },
+      {
+        "id": 987,
+        "name_latin": "Sidi Belaattar"
+      },
+      {
+        "id": 991,
+        "name_latin": "Sour"
+      },
+      {
+        "id": 964,
+        "name_latin": "Ain-Boudinar"
+      },
+      {
+        "id": 975,
+        "name_latin": "Kheir-Eddine"
+      },
+      {
+        "id": 985,
+        "name_latin": "Sayada"
+      },
+      {
+        "id": 986,
+        "name_latin": "Sidi Ali"
+      },
+      {
+        "id": 993,
+        "name_latin": "Tazgait"
+      },
+      {
+        "id": 968,
+        "name_latin": "Benabdelmalek Ramdane"
+      },
+      {
+        "id": 979,
+        "name_latin": "Mostaganem"
+      },
+      {
+        "id": 971,
+        "name_latin": "Hadjadj"
+      },
+      {
+        "id": 988,
+        "name_latin": "Sidi-Lakhdar"
+      },
+      {
+        "id": 963,
+        "name_latin": "Achaacha"
+      },
+      {
+        "id": 974,
+        "name_latin": "Khadra"
+      },
+      {
+        "id": 980,
+        "name_latin": "Nekmaria"
+      },
+      {
+        "id": 982,
+        "name_latin": "Ouled Boughalem"
+      },
+      {
+        "id": 969,
+        "name_latin": "Bouguirat"
+      },
+      {
+        "id": 984,
+        "name_latin": "Safsaf"
+      },
+      {
+        "id": 989,
+        "name_latin": "Sirat"
+      },
+      {
+        "id": 990,
+        "name_latin": "Souaflia"
+      },
+      {
+        "id": 966,
+        "name_latin": "Ain-Sidi Cherif"
+      },
+      {
+        "id": 976,
+        "name_latin": "Mansourah"
+      },
+      {
+        "id": 978,
+        "name_latin": "Mesra"
+      },
+      {
+        "id": 994,
+        "name_latin": "Touahria"
+      },
+      {
+        "id": 965,
+        "name_latin": "Ain-Nouissy"
+      },
+      {
+        "id": 983,
+        "name_latin": "Ouled-Maalah"
+      },
+      {
+        "id": 977,
+        "name_latin": "Mazagran"
+      }
+    ]
+  },
+  {
+    "id": 29,
+    "name_latin": "Mascara",
+    "municipalities": [
+      {
+        "id": 1075,
+        "name_latin": "Oued El Abtal"
+      },
+      {
+        "id": 1081,
+        "name_latin": "Sidi Abdelmoumene"
+      },
+      {
+        "id": 1078,
+        "name_latin": "Sedjerara"
+      },
+      {
+        "id": 1072,
+        "name_latin": "Mohammadia"
+      },
+      {
+        "id": 1085,
+        "name_latin": "Tighennif"
+      },
+      {
+        "id": 1071,
+        "name_latin": "Mocta-Douz"
+      },
+      {
+        "id": 1060,
+        "name_latin": "Ferraguig"
+      },
+      {
+        "id": 1054,
+        "name_latin": "El Ghomri"
+      },
+      {
+        "id": 1087,
+        "name_latin": "Zahana"
+      },
+      {
+        "id": 1053,
+        "name_latin": "El Gaada"
+      },
+      {
+        "id": 1077,
+        "name_latin": "Ras El Ain Amirouche"
+      },
+      {
+        "id": 1074,
+        "name_latin": "Oggaz"
+      },
+      {
+        "id": 1046,
+        "name_latin": "Alaimia"
+      },
+      {
+        "id": 1084,
+        "name_latin": "Sig"
+      },
+      {
+        "id": 1051,
+        "name_latin": "Chorfa"
+      },
+      {
+        "id": 1049,
+        "name_latin": "Bou Henni"
+      },
+      {
+        "id": 1058,
+        "name_latin": "El Mamounia"
+      },
+      {
+        "id": 1055,
+        "name_latin": "El Gueitena"
+      },
+      {
+        "id": 1042,
+        "name_latin": "Ain Fares"
+      },
+      {
+        "id": 1062,
+        "name_latin": "Gharrous"
+      },
+      {
+        "id": 1048,
+        "name_latin": "Benian"
+      },
+      {
+        "id": 1047,
+        "name_latin": "Aouf"
+      },
+      {
+        "id": 1064,
+        "name_latin": "Guerdjoum"
+      },
+      {
+        "id": 1045,
+        "name_latin": "Ain Frass"
+      },
+      {
+        "id": 1043,
+        "name_latin": "Ain Fekan"
+      },
+      {
+        "id": 1066,
+        "name_latin": "Khalouia"
+      },
+      {
+        "id": 1059,
+        "name_latin": "El Menaouer"
+      },
+      {
+        "id": 1052,
+        "name_latin": "El Bordj"
+      },
+      {
+        "id": 1082,
+        "name_latin": "Sidi Boussaid"
+      },
+      {
+        "id": 1070,
+        "name_latin": "Matemore"
+      },
+      {
+        "id": 1083,
+        "name_latin": "Sidi Kada"
+      },
+      {
+        "id": 1067,
+        "name_latin": "Makhda"
+      },
+      {
+        "id": 1069,
+        "name_latin": "Mascara"
+      },
+      {
+        "id": 1050,
+        "name_latin": "Bouhanifia"
+      },
+      {
+        "id": 1063,
+        "name_latin": "Ghriss"
+      },
+      {
+        "id": 1065,
+        "name_latin": "Hacine"
+      },
+      {
+        "id": 1057,
+        "name_latin": "El Keurt"
+      },
+      {
+        "id": 1061,
+        "name_latin": "Froha"
+      },
+      {
+        "id": 1086,
+        "name_latin": "Tizi"
+      },
+      {
+        "id": 1079,
+        "name_latin": "Sehailia"
+      },
+      {
+        "id": 1068,
+        "name_latin": "Maoussa"
+      },
+      {
+        "id": 1080,
+        "name_latin": "Sidi Abdeldjebar"
+      },
+      {
+        "id": 1056,
+        "name_latin": "El Hachem"
+      },
+      {
+        "id": 1073,
+        "name_latin": "Nesmot"
+      },
+      {
+        "id": 1088,
+        "name_latin": "Zelamta"
+      },
+      {
+        "id": 1044,
+        "name_latin": "Ain Ferah"
+      },
+      {
+        "id": 1076,
+        "name_latin": "Oued Taria"
+      }
+    ]
+  },
+  {
+    "id": 33,
+    "name_latin": "Illizi",
+    "municipalities": [
+      {
+        "id": 1159,
+        "name_latin": "Bordj Omar Driss"
+      },
+      {
+        "id": 1160,
+        "name_latin": "Debdeb"
+      },
+      {
+        "id": 1163,
+        "name_latin": "In Amenas"
+      },
+      {
+        "id": 1162,
+        "name_latin": "Illizi"
+      }
+    ]
+  },
+  {
+    "id": 34,
+    "name_latin": "Bordj Bou Arreridj",
+    "municipalities": [
+      {
+        "id": 1177,
+        "name_latin": "Elhammadia"
+      },
+      {
+        "id": 1189,
+        "name_latin": "Ouled Sidi-Brahim"
+      },
+      {
+        "id": 1164,
+        "name_latin": "Ain Taghrout"
+      },
+      {
+        "id": 1197,
+        "name_latin": "Tixter"
+      },
+      {
+        "id": 1167,
+        "name_latin": "Belimour"
+      },
+      {
+        "id": 1176,
+        "name_latin": "El Annasseur"
+      },
+      {
+        "id": 1180,
+        "name_latin": "Ghailasa"
+      },
+      {
+        "id": 1194,
+        "name_latin": "Taglait"
+      },
+      {
+        "id": 1170,
+        "name_latin": "Bordj Ghedir"
+      },
+      {
+        "id": 1192,
+        "name_latin": "Sidi-Embarek"
+      },
+      {
+        "id": 1183,
+        "name_latin": "Khelil"
+      },
+      {
+        "id": 1169,
+        "name_latin": "Bir Kasdali"
+      },
+      {
+        "id": 1193,
+        "name_latin": "Tefreg"
+      },
+      {
+        "id": 1178,
+        "name_latin": "El Main"
+      },
+      {
+        "id": 1173,
+        "name_latin": "Djaafra"
+      },
+      {
+        "id": 1172,
+        "name_latin": "Colla"
+      },
+      {
+        "id": 1196,
+        "name_latin": "Teniet En Nasr"
+      },
+      {
+        "id": 1184,
+        "name_latin": "Ksour"
+      },
+      {
+        "id": 1185,
+        "name_latin": "Mansoura"
+      },
+      {
+        "id": 1181,
+        "name_latin": "Haraza"
+      },
+      {
+        "id": 1190,
+        "name_latin": "Rabta"
+      },
+      {
+        "id": 1175,
+        "name_latin": "El Achir"
+      },
+      {
+        "id": 1182,
+        "name_latin": "Hasnaoua"
+      },
+      {
+        "id": 1186,
+        "name_latin": "Medjana"
+      },
+      {
+        "id": 1165,
+        "name_latin": "Ain Tesra"
+      },
+      {
+        "id": 1187,
+        "name_latin": "Ouled Brahem"
+      },
+      {
+        "id": 1191,
+        "name_latin": "Ras El Oued"
+      },
+      {
+        "id": 1171,
+        "name_latin": "Bordj Zemmoura"
+      },
+      {
+        "id": 1188,
+        "name_latin": "Ouled Dahmane"
+      },
+      {
+        "id": 1166,
+        "name_latin": "B. B. Arreridj"
+      },
+      {
+        "id": 1168,
+        "name_latin": "Ben Daoud"
+      },
+      {
+        "id": 1179,
+        "name_latin": "El M'hir"
+      },
+      {
+        "id": 1174,
+        "name_latin": "El Euch"
+      },
+      {
+        "id": 1195,
+        "name_latin": "Tassamert"
+      }
+    ]
+  },
+  {
+    "id": 35,
+    "name_latin": "Boumerdès",
+    "municipalities": [
+      {
+        "id": 1212,
+        "name_latin": "El Kharrouba"
+      },
+      {
+        "id": 1210,
+        "name_latin": "Dellys"
+      },
+      {
+        "id": 1201,
+        "name_latin": "Ben Choud"
+      },
+      {
+        "id": 1198,
+        "name_latin": "Afir"
+      },
+      {
+        "id": 1226,
+        "name_latin": "Thenia"
+      },
+      {
+        "id": 1202,
+        "name_latin": "Beni Amrane"
+      },
+      {
+        "id": 1215,
+        "name_latin": "Khemis El Khechna"
+      },
+      {
+        "id": 1199,
+        "name_latin": "Ammal"
+      },
+      {
+        "id": 1228,
+        "name_latin": "Timezrit"
+      },
+      {
+        "id": 1229,
+        "name_latin": "Zemmouri"
+      },
+      {
+        "id": 1216,
+        "name_latin": "Larbatache"
+      },
+      {
+        "id": 1214,
+        "name_latin": "Isser"
+      },
+      {
+        "id": 1208,
+        "name_latin": "Chabet El Ameur"
+      },
+      {
+        "id": 1219,
+        "name_latin": "Ouled Aissa"
+      },
+      {
+        "id": 1218,
+        "name_latin": "Naciria"
+      },
+      {
+        "id": 1207,
+        "name_latin": "Bouzegza Keddara"
+      },
+      {
+        "id": 1224,
+        "name_latin": "Souk El Had"
+      },
+      {
+        "id": 1223,
+        "name_latin": "Sidi Daoud"
+      },
+      {
+        "id": 1200,
+        "name_latin": "Baghlia"
+      },
+      {
+        "id": 1217,
+        "name_latin": "Leghata"
+      },
+      {
+        "id": 1211,
+        "name_latin": "Djinet"
+      },
+      {
+        "id": 1227,
+        "name_latin": "Tidjelabine"
+      },
+      {
+        "id": 1222,
+        "name_latin": "Si Mustapha"
+      },
+      {
+        "id": 1220,
+        "name_latin": "Ouled Hedadj"
+      },
+      {
+        "id": 1221,
+        "name_latin": "Ouled Moussa"
+      },
+      {
+        "id": 1206,
+        "name_latin": "Boumerdes"
+      },
+      {
+        "id": 1209,
+        "name_latin": "Corso"
+      },
+      {
+        "id": 1203,
+        "name_latin": "Bordj Menaiel"
+      },
+      {
+        "id": 1204,
+        "name_latin": "Boudouaou"
+      },
+      {
+        "id": 1205,
+        "name_latin": "Boudouaou El Bahri"
+      },
+      {
+        "id": 1225,
+        "name_latin": "Taourga"
+      },
+      {
+        "id": 1213,
+        "name_latin": "Hammedi"
+      }
+    ]
+  },
+  {
+    "id": 36,
+    "name_latin": "El Tarf",
+    "municipalities": [
+      {
+        "id": 1230,
+        "name_latin": "Ain El Assel"
+      },
+      {
+        "id": 1236,
+        "name_latin": "Bougous"
+      },
+      {
+        "id": 1246,
+        "name_latin": "El Tarf"
+      },
+      {
+        "id": 1253,
+        "name_latin": "Zitouna"
+      },
+      {
+        "id": 1235,
+        "name_latin": "Besbes"
+      },
+      {
+        "id": 1231,
+        "name_latin": "Ain Kerma"
+      },
+      {
+        "id": 1237,
+        "name_latin": "Bouhadjar"
+      },
+      {
+        "id": 1247,
+        "name_latin": "Hammam Beni Salah"
+      },
+      {
+        "id": 1249,
+        "name_latin": "Oued Zitoun"
+      },
+      {
+        "id": 1233,
+        "name_latin": "Ben M Hidi"
+      },
+      {
+        "id": 1234,
+        "name_latin": "Berrihane"
+      },
+      {
+        "id": 1239,
+        "name_latin": "Chebaita Mokhtar"
+      },
+      {
+        "id": 1243,
+        "name_latin": "Echatt"
+      },
+      {
+        "id": 1244,
+        "name_latin": "El Aioun"
+      },
+      {
+        "id": 1245,
+        "name_latin": "El Kala"
+      },
+      {
+        "id": 1251,
+        "name_latin": "Souarekh"
+      },
+      {
+        "id": 1252,
+        "name_latin": "Zerizer"
+      },
+      {
+        "id": 1238,
+        "name_latin": "Bouteldja"
+      },
+      {
+        "id": 1240,
+        "name_latin": "Chefia"
+      },
+      {
+        "id": 1248,
+        "name_latin": "Lac Des Oiseaux"
+      },
+      {
+        "id": 1241,
+        "name_latin": "Chihani"
+      },
+      {
+        "id": 1250,
+        "name_latin": "Raml Souk"
+      },
+      {
+        "id": 1232,
+        "name_latin": "Asfour"
+      },
+      {
+        "id": 1242,
+        "name_latin": "Drean"
+      }
+    ]
+  },
+  {
+    "id": 37,
+    "name_latin": "Tindouf",
+    "municipalities": [
+      {
+        "id": 1255,
+        "name_latin": "Tindouf"
+      },
+      {
+        "id": 1254,
+        "name_latin": "Oum El Assel"
+      }
+    ]
+  },
+  {
+    "id": 38,
+    "name_latin": "Tissemsilt",
+    "municipalities": [
+      {
+        "id": 1262,
+        "name_latin": "Khemisti"
+      },
+      {
+        "id": 1275,
+        "name_latin": "Theniet El Had"
+      },
+      {
+        "id": 1269,
+        "name_latin": "Ouled Bessam"
+      },
+      {
+        "id": 1271,
+        "name_latin": "Sidi Boutouchent"
+      },
+      {
+        "id": 1276,
+        "name_latin": "Tissemsilt"
+      },
+      {
+        "id": 1272,
+        "name_latin": "Sidi Lantri"
+      },
+      {
+        "id": 1257,
+        "name_latin": "Beni Chaib"
+      },
+      {
+        "id": 1258,
+        "name_latin": "Beni Lahcene"
+      },
+      {
+        "id": 1270,
+        "name_latin": "Sidi Abed"
+      },
+      {
+        "id": 1273,
+        "name_latin": "Sidi Slimane"
+      },
+      {
+        "id": 1261,
+        "name_latin": "Boucaid"
+      },
+      {
+        "id": 1263,
+        "name_latin": "Larbaa"
+      },
+      {
+        "id": 1266,
+        "name_latin": "Lazharia"
+      },
+      {
+        "id": 1264,
+        "name_latin": "Lardjem"
+      },
+      {
+        "id": 1268,
+        "name_latin": "Melaab"
+      },
+      {
+        "id": 1265,
+        "name_latin": "Layoune"
+      },
+      {
+        "id": 1274,
+        "name_latin": "Tamellahet"
+      },
+      {
+        "id": 1277,
+        "name_latin": "Youssoufia"
+      },
+      {
+        "id": 1260,
+        "name_latin": "Bordj El Emir Abdelkader"
+      },
+      {
+        "id": 1256,
+        "name_latin": "Ammari"
+      },
+      {
+        "id": 1267,
+        "name_latin": "Maacem"
+      },
+      {
+        "id": 1259,
+        "name_latin": "Bordj Bounaama"
+      }
+    ]
+  },
+  {
+    "id": 39,
+    "name_latin": "El Oued",
+    "municipalities": [
+      {
+        "id": 1282,
+        "name_latin": "Douar El Maa"
+      },
+      {
+        "id": 1283,
+        "name_latin": "El Ogla"
+      },
+      {
+        "id": 1291,
+        "name_latin": "Magrane"
+      },
+      {
+        "id": 1301,
+        "name_latin": "Sidi Aoun"
+      },
+      {
+        "id": 1292,
+        "name_latin": "Mih Ouansa"
+      },
+      {
+        "id": 1290,
+        "name_latin": "Kouinine"
+      },
+      {
+        "id": 1278,
+        "name_latin": "Bayadha"
+      },
+      {
+        "id": 1294,
+        "name_latin": "Nakhla"
+      },
+      {
+        "id": 1299,
+        "name_latin": "Robbah"
+      },
+      {
+        "id": 1286,
+        "name_latin": "Guemar"
+      },
+      {
+        "id": 1279,
+        "name_latin": "Ben Guecha"
+      },
+      {
+        "id": 1297,
+        "name_latin": "Ourmes"
+      },
+      {
+        "id": 1304,
+        "name_latin": "Taghzout"
+      },
+      {
+        "id": 1287,
+        "name_latin": "Hamraia"
+      },
+      {
+        "id": 1298,
+        "name_latin": "Reguiba"
+      },
+      {
+        "id": 1280,
+        "name_latin": "Debila"
+      },
+      {
+        "id": 1288,
+        "name_latin": "Hassani Abdelkrim"
+      },
+      {
+        "id": 1289,
+        "name_latin": "Hassi Khalifa"
+      },
+      {
+        "id": 1307,
+        "name_latin": "Trifaoui"
+      },
+      {
+        "id": 1305,
+        "name_latin": "Taleb Larbi"
+      },
+      {
+        "id": 1295,
+        "name_latin": "Oued El Alenda"
+      },
+      {
+        "id": 1285,
+        "name_latin": "El-Oued"
+      }
+    ]
+  },
+  {
+    "id": 40,
+    "name_latin": "Khenchela",
+    "municipalities": [
+      {
+        "id": 1321,
+        "name_latin": "Khirane"
+      },
+      {
+        "id": 1309,
+        "name_latin": "Babar"
+      },
+      {
+        "id": 1316,
+        "name_latin": "El Mahmal"
+      },
+      {
+        "id": 1324,
+        "name_latin": "Ouled Rechache"
+      },
+      {
+        "id": 1314,
+        "name_latin": "Djellal"
+      },
+      {
+        "id": 1328,
+        "name_latin": "Yabous"
+      },
+      {
+        "id": 1320,
+        "name_latin": "Khenchela"
+      },
+      {
+        "id": 1319,
+        "name_latin": "Kais"
+      },
+      {
+        "id": 1313,
+        "name_latin": "Chelia"
+      },
+      {
+        "id": 1325,
+        "name_latin": "Remila"
+      },
+      {
+        "id": 1327,
+        "name_latin": "Taouzianat"
+      },
+      {
+        "id": 1310,
+        "name_latin": "Baghai"
+      },
+      {
+        "id": 1315,
+        "name_latin": "El Hamma"
+      },
+      {
+        "id": 1318,
+        "name_latin": "Ensigha"
+      },
+      {
+        "id": 1326,
+        "name_latin": "Tamza"
+      },
+      {
+        "id": 1308,
+        "name_latin": "Ain Touila"
+      },
+      {
+        "id": 1311,
+        "name_latin": "Bouhmama"
+      },
+      {
+        "id": 1317,
+        "name_latin": "El Oueldja"
+      },
+      {
+        "id": 1312,
+        "name_latin": "Chechar"
+      },
+      {
+        "id": 1322,
+        "name_latin": "M'sara"
+      },
+      {
+        "id": 1323,
+        "name_latin": "M'toussa"
+      }
+    ]
+  },
+  {
+    "id": 41,
+    "name_latin": "Souk Ahras",
+    "municipalities": [
+      {
+        "id": 1349,
+        "name_latin": "Souk Ahras"
+      },
+      {
+        "id": 1329,
+        "name_latin": "Ain Soltane"
+      },
+      {
+        "id": 1347,
+        "name_latin": "Sedrata"
+      },
+      {
+        "id": 1334,
+        "name_latin": "Hanencha"
+      },
+      {
+        "id": 1337,
+        "name_latin": "Machroha"
+      },
+      {
+        "id": 1330,
+        "name_latin": "Ain Zana"
+      },
+      {
+        "id": 1341,
+        "name_latin": "Ouled Driss"
+      },
+      {
+        "id": 1351,
+        "name_latin": "Terraguelt"
+      },
+      {
+        "id": 1343,
+        "name_latin": "Oum El Adhaim"
+      },
+      {
+        "id": 1340,
+        "name_latin": "Oued Kebrit"
+      },
+      {
+        "id": 1352,
+        "name_latin": "Tiffech"
+      },
+      {
+        "id": 1345,
+        "name_latin": "Ragouba"
+      },
+      {
+        "id": 1332,
+        "name_latin": "Drea"
+      },
+      {
+        "id": 1350,
+        "name_latin": "Taoura"
+      },
+      {
+        "id": 1353,
+        "name_latin": "Zaarouria"
+      },
+      {
+        "id": 1333,
+        "name_latin": "Haddada"
+      },
+      {
+        "id": 1335,
+        "name_latin": "Khedara"
+      },
+      {
+        "id": 1342,
+        "name_latin": "Ouled Moumen"
+      },
+      {
+        "id": 1339,
+        "name_latin": "Merahna"
+      },
+      {
+        "id": 1344,
+        "name_latin": "Ouillen"
+      },
+      {
+        "id": 1348,
+        "name_latin": "Sidi Fredj"
+      },
+      {
+        "id": 1331,
+        "name_latin": "Bir Bouhouche"
+      },
+      {
+        "id": 1346,
+        "name_latin": "Safel El Ouiden"
+      },
+      {
+        "id": 1336,
+        "name_latin": "Khemissa"
+      },
+      {
+        "id": 1354,
+        "name_latin": "Zouabi"
+      },
+      {
+        "id": 1338,
+        "name_latin": "M'daourouche"
+      }
+    ]
+  },
+  {
+    "id": 42,
+    "name_latin": "Tipaza",
+    "municipalities": [
+      {
+        "id": 1369,
+        "name_latin": "Hadjout"
+      },
+      {
+        "id": 1375,
+        "name_latin": "Merad"
+      },
+      {
+        "id": 1374,
+        "name_latin": "Menaceur"
+      },
+      {
+        "id": 1355,
+        "name_latin": "Aghbal"
+      },
+      {
+        "id": 1377,
+        "name_latin": "Nador"
+      },
+      {
+        "id": 1381,
+        "name_latin": "Sidi-Amar"
+      },
+      {
+        "id": 1368,
+        "name_latin": "Gouraya"
+      },
+      {
+        "id": 1376,
+        "name_latin": "Messelmoun"
+      },
+      {
+        "id": 1364,
+        "name_latin": "Cherchell"
+      },
+      {
+        "id": 1370,
+        "name_latin": "Hadjret Ennous"
+      },
+      {
+        "id": 1378,
+        "name_latin": "Sidi Ghiles"
+      },
+      {
+        "id": 1365,
+        "name_latin": "Damous"
+      },
+      {
+        "id": 1373,
+        "name_latin": "Larhat"
+      },
+      {
+        "id": 1367,
+        "name_latin": "Fouka"
+      },
+      {
+        "id": 1357,
+        "name_latin": "Ain Tagourait"
+      },
+      {
+        "id": 1360,
+        "name_latin": "Bou Haroun"
+      },
+      {
+        "id": 1361,
+        "name_latin": "Bou Ismail"
+      },
+      {
+        "id": 1371,
+        "name_latin": "Khemisti"
+      },
+      {
+        "id": 1356,
+        "name_latin": "Ahmer El Ain"
+      },
+      {
+        "id": 1362,
+        "name_latin": "Bourkika"
+      },
+      {
+        "id": 1366,
+        "name_latin": "Douaouda"
+      },
+      {
+        "id": 1379,
+        "name_latin": "Sidi Rached"
+      },
+      {
+        "id": 1358,
+        "name_latin": "Attatba"
+      },
+      {
+        "id": 1363,
+        "name_latin": "Chaiba"
+      },
+      {
+        "id": 1372,
+        "name_latin": "Kolea"
+      },
+      {
+        "id": 1380,
+        "name_latin": "Sidi Semiane"
+      },
+      {
+        "id": 1382,
+        "name_latin": "Tipaza"
+      },
+      {
+        "id": 1359,
+        "name_latin": "Beni Mileuk"
+      }
+    ]
+  },
+  {
+    "id": 43,
+    "name_latin": "Mila",
+    "municipalities": [
+      {
+        "id": 1394,
+        "name_latin": "El Mechira"
+      },
+      {
+        "id": 1393,
+        "name_latin": "El Ayadi Barbes"
+      },
+      {
+        "id": 1384,
+        "name_latin": "Ain Beida Harriche"
+      },
+      {
+        "id": 1411,
+        "name_latin": "Tassala Lematai"
+      },
+      {
+        "id": 1410,
+        "name_latin": "Terrai Bainen"
+      },
+      {
+        "id": 1387,
+        "name_latin": "Amira Arres"
+      },
+      {
+        "id": 1408,
+        "name_latin": "Tassadane Haddada"
+      },
+      {
+        "id": 1399,
+        "name_latin": "Minar Zarza"
+      },
+      {
+        "id": 1406,
+        "name_latin": "Sidi Merouane"
+      },
+      {
+        "id": 1391,
+        "name_latin": "Chigara"
+      },
+      {
+        "id": 1397,
+        "name_latin": "Hamala"
+      },
+      {
+        "id": 1396,
+        "name_latin": "Grarem Gouga"
+      },
+      {
+        "id": 1412,
+        "name_latin": "Tiberguent"
+      },
+      {
+        "id": 1404,
+        "name_latin": "Rouached"
+      },
+      {
+        "id": 1392,
+        "name_latin": "Derrahi Bousselah"
+      },
+      {
+        "id": 1414,
+        "name_latin": "Zeghaia"
+      },
+      {
+        "id": 1401,
+        "name_latin": "Oued Endja"
+      },
+      {
+        "id": 1383,
+        "name_latin": "Ahmed Rachedi"
+      },
+      {
+        "id": 1407,
+        "name_latin": "Tadjenanet"
+      },
+      {
+        "id": 1385,
+        "name_latin": "Ain Mellouk"
+      },
+      {
+        "id": 1403,
+        "name_latin": "Ouled Khalouf"
+      },
+      {
+        "id": 1388,
+        "name_latin": "Benyahia Abderrahmane"
+      },
+      {
+        "id": 1409,
+        "name_latin": "Teleghma"
+      },
+      {
+        "id": 1402,
+        "name_latin": "Oued Seguen"
+      },
+      {
+        "id": 1400,
+        "name_latin": "Oued Athmenia"
+      },
+      {
+        "id": 1386,
+        "name_latin": "Ain Tine"
+      },
+      {
+        "id": 1390,
+        "name_latin": "Chelghoum Laid"
+      },
+      {
+        "id": 1413,
+        "name_latin": "Yahia Beniguecha"
+      },
+      {
+        "id": 1395,
+        "name_latin": "Ferdjioua"
+      },
+      {
+        "id": 1405,
+        "name_latin": "Sidi Khelifa"
+      },
+      {
+        "id": 1398,
+        "name_latin": "Mila"
+      },
+      {
+        "id": 1389,
+        "name_latin": "Bouhatem"
+      }
+    ]
+  },
+  {
+    "id": 44,
+    "name_latin": "Aïn Defla",
+    "municipalities": [
+      {
+        "id": 1440,
+        "name_latin": "Khemis-Miliana"
+      },
+      {
+        "id": 1446,
+        "name_latin": "Sidi-Lakhdar"
+      },
+      {
+        "id": 1415,
+        "name_latin": "Ain-Benian"
+      },
+      {
+        "id": 1420,
+        "name_latin": "Ain-Torki"
+      },
+      {
+        "id": 1437,
+        "name_latin": "Hammam-Righa"
+      },
+      {
+        "id": 1429,
+        "name_latin": "Bourached"
+      },
+      {
+        "id": 1439,
+        "name_latin": "Hoceinia"
+      },
+      {
+        "id": 1430,
+        "name_latin": "Djelida"
+      },
+      {
+        "id": 1421,
+        "name_latin": "Arib"
+      },
+      {
+        "id": 1431,
+        "name_latin": "Djemaa Ouled Cheikh"
+      },
+      {
+        "id": 1434,
+        "name_latin": "El-Amra"
+      },
+      {
+        "id": 1435,
+        "name_latin": "El-Attaf"
+      },
+      {
+        "id": 1449,
+        "name_latin": "Tiberkanine"
+      },
+      {
+        "id": 1416,
+        "name_latin": "Ain-Bouyahia"
+      },
+      {
+        "id": 1433,
+        "name_latin": "El-Abadia"
+      },
+      {
+        "id": 1447,
+        "name_latin": "Tacheta Zegagha"
+      },
+      {
+        "id": 1422,
+        "name_latin": "Birbouche"
+      },
+      {
+        "id": 1432,
+        "name_latin": "Djendel"
+      },
+      {
+        "id": 1425,
+        "name_latin": "Ben Allal"
+      },
+      {
+        "id": 1443,
+        "name_latin": "Oued Chorfa"
+      },
+      {
+        "id": 1428,
+        "name_latin": "Boumedfaa"
+      },
+      {
+        "id": 1418,
+        "name_latin": "Ain-Lechiakh"
+      },
+      {
+        "id": 1419,
+        "name_latin": "Ain-Soltane"
+      },
+      {
+        "id": 1444,
+        "name_latin": "Oued Djemaa"
+      },
+      {
+        "id": 1436,
+        "name_latin": "El-Maine"
+      },
+      {
+        "id": 1445,
+        "name_latin": "Rouina"
+      },
+      {
+        "id": 1450,
+        "name_latin": "Zeddine"
+      },
+      {
+        "id": 1426,
+        "name_latin": "Bir-Ould-Khelifa"
+      },
+      {
+        "id": 1427,
+        "name_latin": "Bordj-Emir-Khaled"
+      },
+      {
+        "id": 1448,
+        "name_latin": "Tarik-Ibn-Ziad"
+      },
+      {
+        "id": 1423,
+        "name_latin": "Bathia"
+      },
+      {
+        "id": 1424,
+        "name_latin": "Belaas"
+      },
+      {
+        "id": 1438,
+        "name_latin": "Hassania"
+      },
+      {
+        "id": 1417,
+        "name_latin": "Ain-Defla"
+      },
+      {
+        "id": 1442,
+        "name_latin": "Miliana"
+      },
+      {
+        "id": 1441,
+        "name_latin": "Mekhatria"
+      }
+    ]
+  },
+  {
+    "id": 45,
+    "name_latin": "Naâma",
+    "municipalities": [
+      {
+        "id": 1462,
+        "name_latin": "Tiout"
+      },
+      {
+        "id": 1459,
+        "name_latin": "Moghrar"
+      },
+      {
+        "id": 1453,
+        "name_latin": "Asla"
+      },
+      {
+        "id": 1456,
+        "name_latin": "Kasdir"
+      },
+      {
+        "id": 1457,
+        "name_latin": "Makmen Ben Amar"
+      },
+      {
+        "id": 1452,
+        "name_latin": "Ain Sefra"
+      },
+      {
+        "id": 1458,
+        "name_latin": "Mecheria"
+      },
+      {
+        "id": 1455,
+        "name_latin": "El Biodh"
+      },
+      {
+        "id": 1451,
+        "name_latin": "Ain Ben Khelil"
+      },
+      {
+        "id": 1460,
+        "name_latin": "Naama"
+      },
+      {
+        "id": 1454,
+        "name_latin": "Djenienne Bourezg"
+      },
+      {
+        "id": 1461,
+        "name_latin": "Sfissifa"
+      }
+    ]
+  },
+  {
+    "id": 46,
+    "name_latin": "Aïn Témouchent",
+    "municipalities": [
+      {
+        "id": 1486,
+        "name_latin": "Sidi Boumediene"
+      },
+      {
+        "id": 1489,
+        "name_latin": "Tamzoura"
+      },
+      {
+        "id": 1471,
+        "name_latin": "Chaabat El Ham"
+      },
+      {
+        "id": 1474,
+        "name_latin": "El Maleh"
+      },
+      {
+        "id": 1483,
+        "name_latin": "Ouled Kihal"
+      },
+      {
+        "id": 1472,
+        "name_latin": "Chentouf"
+      },
+      {
+        "id": 1490,
+        "name_latin": "Terga"
+      },
+      {
+        "id": 1481,
+        "name_latin": "Oued Sebbah"
+      },
+      {
+        "id": 1473,
+        "name_latin": "El Amria"
+      },
+      {
+        "id": 1479,
+        "name_latin": "Hassi El Ghella"
+      },
+      {
+        "id": 1482,
+        "name_latin": "Ouled Boudjemaa"
+      },
+      {
+        "id": 1463,
+        "name_latin": "Aghlal"
+      },
+      {
+        "id": 1465,
+        "name_latin": "Ain Kihal"
+      },
+      {
+        "id": 1467,
+        "name_latin": "Ain Tolba"
+      },
+      {
+        "id": 1468,
+        "name_latin": "Aoubellil"
+      },
+      {
+        "id": 1469,
+        "name_latin": "Beni Saf"
+      },
+      {
+        "id": 1478,
+        "name_latin": "Hassasna"
+      },
+      {
+        "id": 1476,
+        "name_latin": "Emir Abdelkader"
+      },
+      {
+        "id": 1488,
+        "name_latin": "Sidi Safi"
+      },
+      {
+        "id": 1484,
+        "name_latin": "Oulhaca El Gheraba"
+      },
+      {
+        "id": 1487,
+        "name_latin": "Sidi Ouriache"
+      },
+      {
+        "id": 1464,
+        "name_latin": "Ain El Arbaa"
+      },
+      {
+        "id": 1475,
+        "name_latin": "El Messaid"
+      },
+      {
+        "id": 1480,
+        "name_latin": "Oued Berkeche"
+      },
+      {
+        "id": 1485,
+        "name_latin": "Sidi Ben Adda"
+      },
+      {
+        "id": 1466,
+        "name_latin": "Ain Temouchent"
+      },
+      {
+        "id": 1470,
+        "name_latin": "Bouzedjar"
+      },
+      {
+        "id": 1477,
+        "name_latin": "Hammam Bou Hadjar"
+      }
+    ]
+  },
+  {
+    "id": 47,
+    "name_latin": "Ghardaïa",
+    "municipalities": [
+      {
+        "id": 1493,
+        "name_latin": "Dhayet Bendhahoua"
+      },
+      {
+        "id": 1500,
+        "name_latin": "Mansoura"
+      },
+      {
+        "id": 1494,
+        "name_latin": "El Atteuf"
+      },
+      {
+        "id": 1492,
+        "name_latin": "Bounoura"
+      },
+      {
+        "id": 1503,
+        "name_latin": "Zelfana"
+      },
+      {
+        "id": 1497,
+        "name_latin": "El Guerrara"
+      },
+      {
+        "id": 1502,
+        "name_latin": "Sebseb"
+      },
+      {
+        "id": 1501,
+        "name_latin": "Metlili"
+      },
+      {
+        "id": 1491,
+        "name_latin": "Berriane"
+      },
+      {
+        "id": 1496,
+        "name_latin": "Ghardaia"
+      }
+    ]
+  },
+  {
+    "id": 48,
+    "name_latin": "Relizane",
+    "municipalities": [
+      {
+        "id": 1516,
+        "name_latin": "El-Guettar"
+      },
+      {
+        "id": 1530,
+        "name_latin": "Ouled Aiche"
+      },
+      {
+        "id": 1509,
+        "name_latin": "Beni Dergoun"
+      },
+      {
+        "id": 1511,
+        "name_latin": "Dar Ben Abdelah"
+      },
+      {
+        "id": 1541,
+        "name_latin": "Zemmoura"
+      },
+      {
+        "id": 1537,
+        "name_latin": "Sidi M'hamed Benaouda"
+      },
+      {
+        "id": 1514,
+        "name_latin": "El H'madna"
+      },
+      {
+        "id": 1536,
+        "name_latin": "Sidi M'hamed Benali"
+      },
+      {
+        "id": 1512,
+        "name_latin": "Djidiouia"
+      },
+      {
+        "id": 1519,
+        "name_latin": "Hamri"
+      },
+      {
+        "id": 1507,
+        "name_latin": "Belaassel Bouzagza"
+      },
+      {
+        "id": 1517,
+        "name_latin": "El-Matmar"
+      },
+      {
+        "id": 1534,
+        "name_latin": "Sidi Khettab"
+      },
+      {
+        "id": 1505,
+        "name_latin": "Ain-Tarek"
+      },
+      {
+        "id": 1518,
+        "name_latin": "Had Echkalla"
+      },
+      {
+        "id": 1515,
+        "name_latin": "El Ouldja"
+      },
+      {
+        "id": 1522,
+        "name_latin": "Mazouna"
+      },
+      {
+        "id": 1504,
+        "name_latin": "Ain Rahma"
+      },
+      {
+        "id": 1520,
+        "name_latin": "Kalaa"
+      },
+      {
+        "id": 1538,
+        "name_latin": "Sidi Saada"
+      },
+      {
+        "id": 1540,
+        "name_latin": "Yellel"
+      },
+      {
+        "id": 1539,
+        "name_latin": "Souk El Had"
+      },
+      {
+        "id": 1524,
+        "name_latin": "Mendes"
+      },
+      {
+        "id": 1528,
+        "name_latin": "Oued Essalem"
+      },
+      {
+        "id": 1535,
+        "name_latin": "Sidi Lazreg"
+      },
+      {
+        "id": 1506,
+        "name_latin": "Ammi Moussa"
+      },
+      {
+        "id": 1526,
+        "name_latin": "Ouarizane"
+      },
+      {
+        "id": 1525,
+        "name_latin": "Merdja Sidi Abed"
+      },
+      {
+        "id": 1531,
+        "name_latin": "Ouled Sidi Mihoub"
+      },
+      {
+        "id": 1508,
+        "name_latin": "Bendaoud"
+      },
+      {
+        "id": 1529,
+        "name_latin": "Oued-Rhiou"
+      },
+      {
+        "id": 1513,
+        "name_latin": "El Hassi"
+      },
+      {
+        "id": 1523,
+        "name_latin": "Mediouna"
+      },
+      {
+        "id": 1510,
+        "name_latin": "Beni Zentis"
+      },
+      {
+        "id": 1527,
+        "name_latin": "Oued El Djemaa"
+      },
+      {
+        "id": 1521,
+        "name_latin": "Lahlef"
+      },
+      {
+        "id": 1533,
+        "name_latin": "Relizane"
+      },
+      {
+        "id": 1532,
+        "name_latin": "Ramka"
+      }
+    ]
+  },
+  {
+    "id": 32,
+    "name_latin": "El Bayadh",
+    "municipalities": [
+      {
+        "id": 1136,
+        "name_latin": "Ain El Orak"
+      },
+      {
+        "id": 1151,
+        "name_latin": "Krakda"
+      },
+      {
+        "id": 1154,
+        "name_latin": "Sidi Slimane"
+      },
+      {
+        "id": 1153,
+        "name_latin": "Sidi Ameur"
+      },
+      {
+        "id": 1138,
+        "name_latin": "Boualem"
+      },
+      {
+        "id": 1146,
+        "name_latin": "El Bnoud"
+      },
+      {
+        "id": 1139,
+        "name_latin": "Bougtoub"
+      },
+      {
+        "id": 1147,
+        "name_latin": "El Kheiter"
+      },
+      {
+        "id": 1157,
+        "name_latin": "Tousmouline"
+      },
+      {
+        "id": 1155,
+        "name_latin": "Sidi Tiffour"
+      },
+      {
+        "id": 1156,
+        "name_latin": "Stitten"
+      },
+      {
+        "id": 1144,
+        "name_latin": "El Bayadh"
+      },
+      {
+        "id": 1152,
+        "name_latin": "Rogassa"
+      },
+      {
+        "id": 1148,
+        "name_latin": "El Mehara"
+      },
+      {
+        "id": 1150,
+        "name_latin": "Kef El Ahmar"
+      },
+      {
+        "id": 1141,
+        "name_latin": "Brezina"
+      },
+      {
+        "id": 1149,
+        "name_latin": "Ghassoul"
+      },
+      {
+        "id": 1145,
+        "name_latin": "Labiodh Sidi Cheikh"
+      },
+      {
+        "id": 1140,
+        "name_latin": "Boussemghoun"
+      },
+      {
+        "id": 1142,
+        "name_latin": "Cheguig"
+      },
+      {
+        "id": 1143,
+        "name_latin": "Chellala"
+      },
+      {
+        "id": 1137,
+        "name_latin": "Arbaouat"
+      }
+    ]
+  },
+  {
+    "id": 55,
+    "name_latin": "Touggourt",
+    "municipalities": [
+      {
+        "id": 1098,
+        "name_latin": "M'naguer"
+      },
+      {
+        "id": 1107,
+        "name_latin": "Temacine"
+      },
+      {
+        "id": 1104,
+        "name_latin": "Sidi Slimane"
+      },
+      {
+        "id": 1097,
+        "name_latin": "Megarine"
+      },
+      {
+        "id": 1099,
+        "name_latin": "Nezla"
+      },
+      {
+        "id": 1091,
+        "name_latin": "Blidet Amor"
+      },
+      {
+        "id": 1106,
+        "name_latin": "Tebesbest"
+      },
+      {
+        "id": 1108,
+        "name_latin": "Touggourt"
+      },
+      {
+        "id": 1105,
+        "name_latin": "Taibet"
+      },
+      {
+        "id": 1092,
+        "name_latin": "El Alia"
+      },
+      {
+        "id": 1094,
+        "name_latin": "El-Hadjira"
+      },
+      {
+        "id": 1090,
+        "name_latin": "Benaceur"
+      },
+      {
+        "id": 1109,
+        "name_latin": "Zaouia El Abidia"
+      }
+    ]
+  },
+  {
+    "id": 57,
+    "name_latin": "El Meghaier",
+    "municipalities": [
+      {
+        "id": 1293,
+        "name_latin": "M'rara"
+      },
+      {
+        "id": 1284,
+        "name_latin": "El-M'ghaier"
+      },
+      {
+        "id": 1296,
+        "name_latin": "Oum Touyour"
+      },
+      {
+        "id": 1300,
+        "name_latin": "Sidi Amrane"
+      },
+      {
+        "id": 1281,
+        "name_latin": "Djamaa"
+      },
+      {
+        "id": 1306,
+        "name_latin": "Tenedla"
+      },
+      {
+        "id": 1303,
+        "name_latin": "Still"
+      },
+      {
+        "id": 1302,
+        "name_latin": "Sidi Khelil"
+      }
+    ]
+  },
+  {
+    "id": 49,
+    "name_latin": "Timimoun",
+    "municipalities": [
+      {
+        "id": 25,
+        "name_latin": "Tinerkouk"
+      },
+      {
+        "id": 24,
+        "name_latin": "Timimoun"
+      },
+      {
+        "id": 15,
+        "name_latin": "Ouled Said"
+      },
+      {
+        "id": 12,
+        "name_latin": "Metarfa"
+      },
+      {
+        "id": 19,
+        "name_latin": "Talmine"
+      },
+      {
+        "id": 14,
+        "name_latin": "Ouled Aissa"
+      },
+      {
+        "id": 7,
+        "name_latin": "Charouine"
+      },
+      {
+        "id": 3,
+        "name_latin": "Aougrout"
+      },
+      {
+        "id": 8,
+        "name_latin": "Deldoul"
+      },
+      {
+        "id": 11,
+        "name_latin": "Ksar Kaddour"
+      }
+    ]
+  },
+  {
+    "id": 50,
+    "name_latin": "Bordj Badji Mokhtar",
+    "municipalities": [
+      {
+        "id": 23,
+        "name_latin": "Timiaouine"
+      },
+      {
+        "id": 5,
+        "name_latin": "Bordj Badji Mokhtar"
+      }
+    ]
+  },
+  {
+    "id": 51,
+    "name_latin": "Ouled Djellal",
+    "municipalities": [
+      {
+        "id": 258,
+        "name_latin": "Ras El Miad"
+      },
+      {
+        "id": 232,
+        "name_latin": "Besbes"
+      },
+      {
+        "id": 259,
+        "name_latin": "Sidi Khaled"
+      },
+      {
+        "id": 240,
+        "name_latin": "Doucen"
+      },
+      {
+        "id": 237,
+        "name_latin": "Chaiba"
+      },
+      {
+        "id": 255,
+        "name_latin": "Ouled Djellal"
+      }
+    ]
+  },
+  {
+    "id": 52,
+    "name_latin": "Béni Abbès",
+    "municipalities": [
+      {
+        "id": 265,
+        "name_latin": "Beni-Abbes"
+      },
+      {
+        "id": 282,
+        "name_latin": "Tamtert"
+      },
+      {
+        "id": 271,
+        "name_latin": "Igli"
+      },
+      {
+        "id": 269,
+        "name_latin": "El Ouata"
+      },
+      {
+        "id": 279,
+        "name_latin": "Ouled-Khodeir"
+      },
+      {
+        "id": 273,
+        "name_latin": "Kerzaz"
+      },
+      {
+        "id": 283,
+        "name_latin": "Timoudi"
+      },
+      {
+        "id": 274,
+        "name_latin": "Ksabi"
+      },
+      {
+        "id": 266,
+        "name_latin": "Beni-Ikhlef"
+      }
+    ]
+  },
+  {
+    "id": 53,
+    "name_latin": "In Salah",
+    "municipalities": [
+      {
+        "id": 360,
+        "name_latin": "Inghar"
+      },
+      {
+        "id": 357,
+        "name_latin": "Ain Salah"
+      },
+      {
+        "id": 358,
+        "name_latin": "Foggaret Ezzoua"
+      }
+    ]
+  },
+  {
+    "id": 54,
+    "name_latin": "In Guezzam",
+    "municipalities": [
+      {
+        "id": 363,
+        "name_latin": "Tin Zouatine"
+      },
+      {
+        "id": 356,
+        "name_latin": "Ain Guezzam"
+      }
+    ]
+  },
+  {
+    "id": 56,
+    "name_latin": "Djanet",
+    "municipalities": [
+      {
+        "id": 1161,
+        "name_latin": "Djanet"
+      },
+      {
+        "id": 1158,
+        "name_latin": "Bordj El Haouass"
+      }
+    ]
+  },
+  {
+    "id": 58,
+    "name_latin": "El Menia",
+    "municipalities": [
+      {
+        "id": 1495,
+        "name_latin": "El Meniaa"
+      },
+      {
+        "id": 1499,
+        "name_latin": "Hassi Gara"
+      },
+      {
+        "id": 1498,
+        "name_latin": "Hassi Fehal"
+      }
+    ]
+  }
+]

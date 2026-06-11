@@ -7,7 +7,7 @@ import (
 )
 
 func OrdersRoutes(router *gin.Engine) {
-	orders := router.Group("/api/v1/shops/:shopId/orders")
+	orders := router.Group("/v1/shops/:shopId/orders")
 	{
 		orders.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.GetOrdersByShopID)
 		orders.POST("", middleware.OrderIPRateLimit(), controllers.CreateOrderByShopID)

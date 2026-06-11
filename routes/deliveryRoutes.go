@@ -7,7 +7,7 @@ import (
 )
 
 func DeliveryRatesRoutes(router *gin.Engine) {
-	rates := router.Group("/api/v1/shops/:shopId/delivery-rates")
+	rates := router.Group("/v1/shops/:shopId/delivery-rates")
 	rates.Use(middleware.RequireAuthentication)
 	{
 		// Staff can view rates, but only Owner (or Admin) can modify them

@@ -7,7 +7,7 @@ import (
 )
 
 func LandingPagesRoutes(router *gin.Engine) {
-	adminShop := router.Group("/api/v1/shops")
+	adminShop := router.Group("/v1/shops")
 	{
 		adminLandingPages := adminShop.Group("/:shopId/landing-pages")
 		{

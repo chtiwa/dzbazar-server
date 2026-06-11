@@ -9,12 +9,12 @@ import (
 func PixelsRoutes(router *gin.Engine) {
 	// Public route for marketplace / storefront usage
 	router.GET(
-		"/api/v1/shops/:shopId/pixels/active",
+		"/v1/shops/:shopId/pixels/active",
 		controllers.IndexActivePixelByShop,
 	)
 
 	// Protected merchant routes
-	pixels := router.Group("/api/v1/shops/:shopId/pixels")
+	pixels := router.Group("/v1/shops/:shopId/pixels")
 	pixels.Use(middleware.RequireAuthentication)
 	{
 		pixels.GET("", middleware.RequireRoles("Owner", "Staff"), controllers.GetPixelsByShop)

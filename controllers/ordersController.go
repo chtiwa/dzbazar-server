@@ -68,8 +68,20 @@ type UpdateOrderInput struct {
 	Ouvrable       bool              `json:"ouvrable"`
 	Fragile        bool              `json:"fragile"`
 	Essayable      bool              `json:"essayable"`
+	IsShipped      *bool             `json:"isShipped"`
 	Client         *OrderClientInput `json:"client"`
 	Items          []OrderItemInput  `json:"items"`
+}
+
+// decrementOrderItemsStock reduces the stock quantity of each ordered variant
+// combination by the quantity ordered. Called once, when an order transitions
+// to "shipped" for the first time.
+func decrementOrderItemsStock(tx *gorm.DB, items []models.OrderItem) {
+	for _, item := range items {
+		tx.Model(&models.ProductVariantCombination{}).
+			Where("id = ?", item.ProductVariantCombinationID).
+			UpdateColumn("quantity", gorm.Expr("quantity - ?", item.Quantity))
+	}
 }
 
 func GetOrdersByShopID(c *gin.Context) {
@@ -682,6 +694,13 @@ func UpdateOrderByShopID(c *gin.Context) {
 
 		if strings.TrimSpace(body.Status) != "" {
 			updates["status"] = body.Status
+		}
+
+		if body.IsShipped != nil {
+			updates["is_shipped"] = *body.IsShipped
+			if *body.IsShipped && !order.IsShipped {
+				decrementOrderItemsStock(tx, order.Items)
+			}
 		}
 
 		if err := tx.Model(&models.Order{}).

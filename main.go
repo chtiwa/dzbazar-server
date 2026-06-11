@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/chtiwa/dzbazar-server/controllers"
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/chtiwa/dzbazar-server/migrate"
@@ -41,9 +42,11 @@ func main() {
 	routes.DeliveryCompaniesRoutes(router)
 	routes.ClientsRoutes(router)
 	routes.PlansRoutes(router)
+	routes.OsenRoutes(router)
 	// routes.WebSocketRoutes(router)
 
 	go realtime.StartHub()
+	go controllers.StartOsenStatusSync()
 
 	fmt.Println("The server is running successfully!")
 

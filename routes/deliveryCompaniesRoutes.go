@@ -8,7 +8,7 @@ import (
 
 func DeliveryCompaniesRoutes(router *gin.Engine) {
 	// Global available delivery companies (admin-managed, read is public)
-	available := router.Group("/api/v1/delivery-companies/available")
+	available := router.Group("/v1/delivery-companies/available")
 	{
 		available.GET("", controllers.GetAvailableDeliveryCompanies)
 		available.POST("", middleware.RequireAuthentication, controllers.CreateAvailableDeliveryCompany)
@@ -17,7 +17,7 @@ func DeliveryCompaniesRoutes(router *gin.Engine) {
 	}
 
 	// Per-shop integrations (credentials)
-	integrations := router.Group("/api/v1/shops/:shopId/delivery-companies")
+	integrations := router.Group("/v1/shops/:shopId/delivery-companies")
 	integrations.Use(middleware.RequireAuthentication)
 	{
 		integrations.GET("", controllers.GetShopDeliveryCompanies)

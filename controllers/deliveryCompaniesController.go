@@ -264,6 +264,8 @@ func ConnectDeliveryCompany(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
 		return
 	}
+	body.Token = strings.TrimSpace(body.Token)
+	body.MerchantID = strings.TrimSpace(body.MerchantID)
 
 	availableID, err := uuid.Parse(body.AvailableDeliveryCompanyID)
 	if err != nil {
@@ -277,6 +279,34 @@ func ConnectDeliveryCompany(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Available delivery company not found"})
 			return
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		return
+	}
+
+	// Validate credentials against the carrier's API before saving.
+	if strings.EqualFold(strings.TrimSpace(available.Name), "osen express") {
+		valid, errMsg := validateOsenToken(body.Token)
+		if !valid {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": fmt.Sprintf("Token Osen Express invalide: %s", errMsg),
+			})
+			return
+		}
+	}
+
+	var existing models.DeliveryCompany
+	err = initializers.DB.
+		Where("shop_id = ? AND available_delivery_company_id = ?", shopID, availableID).
+		First(&existing).Error
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false,
+			"message": fmt.Sprintf("%s is already connected to this shop", available.Name),
+		})
+		return
+	}
+	if err != gorm.ErrRecordNotFound {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
 		return
 	}
@@ -342,10 +372,10 @@ func UpdateDeliveryCompanyCredentials(c *gin.Context) {
 
 	updates := map[string]any{}
 	if body.Token != nil {
-		updates["token"] = *body.Token
+		updates["token"] = strings.TrimSpace(*body.Token)
 	}
 	if body.MerchantID != nil {
-		updates["merchant_id"] = *body.MerchantID
+		updates["merchant_id"] = strings.TrimSpace(*body.MerchantID)
 	}
 
 	if len(updates) == 0 {
