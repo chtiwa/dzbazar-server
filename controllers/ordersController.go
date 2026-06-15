@@ -61,13 +61,13 @@ type OrderItemInput struct {
 }
 
 type UpdateOrderInput struct {
-	ShippingMethod string            `json:"shippingMethod"`
+	ShippingMethod *string           `json:"shippingMethod"`
 	ShippingPrice  *float64          `json:"shippingPrice"`
-	Note           string            `json:"note"`
+	Note           *string           `json:"note"`
 	Status         string            `json:"status"`
-	Ouvrable       bool              `json:"ouvrable"`
-	Fragile        bool              `json:"fragile"`
-	Essayable      bool              `json:"essayable"`
+	Ouvrable       *bool             `json:"ouvrable"`
+	Fragile        *bool             `json:"fragile"`
+	Essayable      *bool             `json:"essayable"`
 	IsShipped      *bool             `json:"isShipped"`
 	Client         *OrderClientInput `json:"client"`
 	Items          []OrderItemInput  `json:"items"`
@@ -683,13 +683,28 @@ func UpdateOrderByShopID(c *gin.Context) {
 		}
 
 		updates := map[string]any{
-			"shipping_method": body.ShippingMethod,
-			"shipping_price":  shippingPrice,
-			"total_price":     calculatedTotalPrice,
-			"note":            body.Note,
-			"ouvrable":        body.Ouvrable,
-			"fragile":         body.Fragile,
-			"essayable":       body.Essayable,
+			"shipping_price": shippingPrice,
+			"total_price":    calculatedTotalPrice,
+		}
+
+		if body.ShippingMethod != nil {
+			updates["shipping_method"] = *body.ShippingMethod
+		}
+
+		if body.Note != nil {
+			updates["note"] = *body.Note
+		}
+
+		if body.Ouvrable != nil {
+			updates["ouvrable"] = *body.Ouvrable
+		}
+
+		if body.Fragile != nil {
+			updates["fragile"] = *body.Fragile
+		}
+
+		if body.Essayable != nil {
+			updates["essayable"] = *body.Essayable
 		}
 
 		if strings.TrimSpace(body.Status) != "" {

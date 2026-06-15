@@ -86,17 +86,19 @@ func findOsenMunicipalityID(stateCode, cityName string) (int, error) {
 	}
 
 	cityLower := strings.ToLower(strings.TrimSpace(cityName))
-	// Exact match
-	for _, m := range target.Municipalities {
-		if strings.ToLower(m.NameLatin) == cityLower {
-			return m.ID, nil
+	if cityLower != "" {
+		// Exact match
+		for _, m := range target.Municipalities {
+			if strings.ToLower(m.NameLatin) == cityLower {
+				return m.ID, nil
+			}
 		}
-	}
-	// Contains match
-	for _, m := range target.Municipalities {
-		mLower := strings.ToLower(m.NameLatin)
-		if strings.Contains(mLower, cityLower) || strings.Contains(cityLower, mLower) {
-			return m.ID, nil
+		// Contains match
+		for _, m := range target.Municipalities {
+			mLower := strings.ToLower(m.NameLatin)
+			if strings.Contains(mLower, cityLower) || strings.Contains(cityLower, mLower) {
+				return m.ID, nil
+			}
 		}
 	}
 	// Fallback: first municipality
@@ -257,7 +259,14 @@ func (e *osenShipError) Error() string { return e.msg }
 // decrements stock for each ordered variant. The order must have Client and
 // Items.Product preloaded.
 func shipOrderToOsen(order *models.Order, integration *models.DeliveryCompany) (map[string]any, error) {
-	municipalityID, err := findOsenMunicipalityID(order.Client.StateCode, order.Client.City)
+	// For Stopdesk orders the commune is stored in StopdeskPoint (the bureau
+	// name); City is left empty by the storefront checkout in that case.
+	cityName := order.Client.City
+	if order.ShippingMethod != "Domicile" {
+		cityName = order.Client.StopdeskPoint
+	}
+
+	municipalityID, err := findOsenMunicipalityID(order.Client.StateCode, cityName)
 	if err != nil {
 		return nil, &osenShipError{http.StatusBadRequest, fmt.Sprintf("Zone de livraison non couverte: %s", err.Error())}
 	}
