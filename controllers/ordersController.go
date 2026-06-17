@@ -343,6 +343,7 @@ func CreateOrderByShopID(c *gin.Context) {
 		preloadErr := initializers.DB.
 			Preload("Client").
 			Preload("Items").
+			Preload("Items.Product").
 			Preload("Items.ProductVariantCombination").
 			First(&fullOrder, "id = ?", orderID).Error
 
@@ -355,15 +356,39 @@ func CreateOrderByShopID(c *gin.Context) {
 
 		mainProductName := "Multi-item Order"
 		if len(fullOrder.Items) > 0 {
-			comboStr := fullOrder.Items[0].ProductVariantCombination.CombinationString
-			if comboStr == "" {
-				comboStr = "Standard"
+			item := fullOrder.Items[0]
+			if item.Product.Title != "" {
+				mainProductName = item.Product.Title
+			} else {
+				comboStr := item.ProductVariantCombination.CombinationString
+				if comboStr == "" {
+					comboStr = "Standard"
+				}
+				mainProductName = fmt.Sprintf("Product SKU Variant: %s", comboStr)
 			}
-			mainProductName = fmt.Sprintf("Product SKU Variant: %s", comboStr)
 		}
 
 		if testCode == "" && fullOrder.Status != "Confirmé" {
+			var shop models.Shop
+			initializers.DB.Select("name").First(&shop, "id = ?", fullOrder.ShopID)
+
+			var members []models.ShopMember
+			initializers.DB.Preload("User").Where("shop_id = ?", fullOrder.ShopID).Find(&members)
+
+			recipients := make([]string, 0, len(members))
+			seen := make(map[string]struct{})
+			for _, m := range members {
+				if m.User.Email != "" {
+					if _, ok := seen[m.User.Email]; !ok {
+						seen[m.User.Email] = struct{}{}
+						recipients = append(recipients, m.User.Email)
+					}
+				}
+			}
+
 			if emailErr := utils.SendOrderEmail(
+				shop.Name,
+				recipients,
 				fullOrder.Client.FullName,
 				fullOrder.Client.PhoneNumber,
 				fullOrder.Client.State,

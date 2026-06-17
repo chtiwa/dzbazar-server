@@ -13,6 +13,8 @@ func UsersRoutes(router *gin.Engine) {
 		users.POST("/signup", controllers.SignUp)
 		users.GET("/logout", controllers.Logout)
 		users.POST("/verify-otp", controllers.VerifyUser)
+		users.POST("/forgot-password", controllers.ForgotPassword)
+		users.POST("/reset-password", controllers.ResetPassword)
 
 		users.GET("/validate", middleware.RequireAuthentication, controllers.Validate)
 		users.GET("/verify", middleware.RequireAuthentication)

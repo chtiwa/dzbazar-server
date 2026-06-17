@@ -49,6 +49,7 @@ func Migrate() {
 		&models.DeliveryCompany{},
 		&models.Plan{},
 		&models.ShopSubscription{},
+		&models.AbandonedLead{},
 	)
 	if err != nil {
 		log.Fatalf("Phase 2 migration failed: %v", err)

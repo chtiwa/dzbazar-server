@@ -32,13 +32,19 @@ type ProductConfirmationRate struct {
 	ConfirmationRate float64 `json:"confirmationRate"`
 }
 
+type WilayaStat struct {
+	Wilaya string `json:"wilaya"`
+	Count  int64  `json:"count"`
+}
+
 type DashboardData struct {
-	Daily             []TimeCount               `json:"daily"`
-	Weekly            []TimeCount               `json:"weekly"`
-	Monthly           []TimeCount               `json:"monthly"`
-	StatusStats       []StatusStat              `json:"statusStats"`
-	TotalOrders       int64                     `json:"totalOrders"`
-	ConfirmationRates []ProductConfirmationRate  `json:"confirmationRates"`
+	Daily             []TimeCount              `json:"daily"`
+	Weekly            []TimeCount              `json:"weekly"`
+	Monthly           []TimeCount              `json:"monthly"`
+	StatusStats       []StatusStat             `json:"statusStats"`
+	TotalOrders       int64                    `json:"totalOrders"`
+	ConfirmationRates []ProductConfirmationRate `json:"confirmationRates"`
+	WilayaStats       []WilayaStat             `json:"wilayaStats"`
 }
 
 func dashboardCacheKey(shopID uuid.UUID) string {
@@ -130,6 +136,8 @@ func GetOrdersDashboard(c *gin.Context) {
 		}
 	}
 
+	// Pool = En attente, Ne répond pas 1/2/3, Reporté, Annulé, Confirmé.
+	// Excluded: Abandonné, Expédié, Livré, Retour.
 	var confirmationRates []ProductConfirmationRate
 	if err := db.
 		Table("order_items oi").
@@ -139,17 +147,30 @@ func GetOrdersDashboard(c *gin.Context) {
 		Select(`
 			p.id::text AS product_id,
 			p.title AS product_name,
-			COUNT(DISTINCT oi.order_id) AS total_orders,
+			COUNT(DISTINCT CASE WHEN o.status NOT IN ('Abandonné', 'Expédié', 'Livré', 'Retour') THEN oi.order_id END) AS total_orders,
 			COUNT(DISTINCT CASE WHEN o.status = 'Confirmé' THEN oi.order_id END) AS confirmed_orders,
 			ROUND(
 				COUNT(DISTINCT CASE WHEN o.status = 'Confirmé' THEN oi.order_id END) * 100.0
-				/ NULLIF(COUNT(DISTINCT oi.order_id), 0),
+				/ NULLIF(COUNT(DISTINCT CASE WHEN o.status NOT IN ('Abandonné', 'Expédié', 'Livré', 'Retour') THEN oi.order_id END), 0),
 			2) AS confirmation_rate
 		`).
 		Group("p.id, p.title").
 		Order("total_orders DESC").
 		Scan(&confirmationRates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching confirmation rates", "error": err.Error()})
+		return
+	}
+
+	var wilayaStats []WilayaStat
+	if err := db.
+		Table("orders o").
+		Joins("JOIN clients c ON c.id = o.client_id").
+		Where("o.shop_id = ? AND o.deleted_at IS NULL AND c.state != ''", shopID).
+		Select("c.state AS wilaya, COUNT(*) AS count").
+		Group("c.state").
+		Order("count DESC").
+		Scan(&wilayaStats).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching wilaya stats", "error": err.Error()})
 		return
 	}
 
@@ -160,6 +181,7 @@ func GetOrdersDashboard(c *gin.Context) {
 		StatusStats:       statusStats,
 		TotalOrders:       totalOrders,
 		ConfirmationRates: confirmationRates,
+		WilayaStats:       wilayaStats,
 	}
 
 	// Store in cache — failure is non-fatal

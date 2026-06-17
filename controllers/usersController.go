@@ -123,7 +123,7 @@ func CreateUserByShop(c *gin.Context) {
 		PhoneNumber string `json:"phoneNumber" binding:"required"`
 		Email       string `json:"email" binding:"required,email"`
 		Password    string `json:"password" binding:"required,min=6"`
-		Role        string `json:"role" binding:"omitempty,oneof=Owner Admin Moderator Staff User"`
+		Role        string `json:"role" binding:"omitempty,oneof=Owner Staff Logistics"`
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {

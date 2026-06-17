@@ -317,6 +317,90 @@ func Validate(c *gin.Context) {
 	})
 }
 
+func ForgotPassword(c *gin.Context) {
+	var body struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Email invalide"})
+		return
+	}
+
+	var user models.User
+	if err := initializers.DB.Where("email = ?", body.Email).First(&user).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "Si un compte existe avec cet email, un code a été envoyé."})
+		return
+	}
+
+	otp := utils.GenerateOTP()
+	expiresAt := time.Now().Add(15 * time.Minute)
+	user.EmailOTP = otp
+	user.EmailOTPExpiresAt = &expiresAt
+
+	if err := initializers.DB.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Erreur lors de la génération du code"})
+		return
+	}
+
+	if err := utils.SendPasswordResetEmail(user.Email, otp); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Impossible d'envoyer l'email"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Code de réinitialisation envoyé"})
+}
+
+func ResetPassword(c *gin.Context) {
+	var body struct {
+		Email    string `json:"email" binding:"required,email"`
+		OTP      string `json:"otp" binding:"required"`
+		Password string `json:"password" binding:"required,min=6"`
+	}
+
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Données invalides", "error": err.Error()})
+		return
+	}
+
+	var user models.User
+	if err := initializers.DB.Where("email = ?", body.Email).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Compte introuvable"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Erreur base de données"})
+		return
+	}
+
+	if user.EmailOTP == "" || user.EmailOTP != body.OTP {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Code OTP invalide"})
+		return
+	}
+
+	if user.EmailOTPExpiresAt == nil || time.Now().After(*user.EmailOTPExpiresAt) {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Code OTP expiré"})
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Erreur lors du traitement du mot de passe"})
+		return
+	}
+
+	user.Password = string(hash)
+	user.EmailOTP = ""
+	user.EmailOTPExpiresAt = nil
+
+	if err := initializers.DB.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Erreur lors de la mise à jour du mot de passe"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Mot de passe réinitialisé avec succès"})
+}
+
 func Logout(c *gin.Context) {
 	isProduction := os.Getenv("APP_ENV") == "production"
 	c.SetSameSite(http.SameSiteLaxMode)

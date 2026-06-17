@@ -43,6 +43,7 @@ func main() {
 	routes.ClientsRoutes(router)
 	routes.PlansRoutes(router)
 	routes.OsenRoutes(router)
+	routes.AbandonedLeadsRoutes(router)
 	// routes.WebSocketRoutes(router)
 
 	go realtime.StartHub()

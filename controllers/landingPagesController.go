@@ -25,6 +25,7 @@ import (
 )
 
 const maxLandingPageImages = 10
+const maxLandingPageImageSize = 10 * 1024 * 1024 // 10 MB
 
 func landingPageCacheKeyByID(id uuid.UUID) string {
 	return fmt.Sprintf("landing-page:id=%s", id.String())
@@ -73,6 +74,10 @@ func uploadLandingPageFiles(shopID uuid.UUID, files []*multipart.FileHeader) ([]
 	for index, file := range files {
 		if !strings.HasPrefix(file.Header.Get("Content-Type"), "image/") {
 			return nil, uploadedKeys, fmt.Errorf("only image files are allowed")
+		}
+
+		if file.Size > maxLandingPageImageSize {
+			return nil, uploadedKeys, fmt.Errorf("image %q exceeds the 10 MB size limit", file.Filename)
 		}
 
 		src, err := file.Open()
@@ -639,6 +644,21 @@ func UpdateLandingPageByShop(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"message": "Failed to delete removed images",
+				"error":   err.Error(),
+			})
+			return
+		}
+	}
+
+	// Rewrite order_index for retained existing images to reflect the frontend's ordering
+	for i, img := range existingImages {
+		if err := tx.Model(&models.LandingPageImage{}).
+			Where("id = ? AND landing_page_id = ?", img.ID, landingPageID).
+			UpdateColumn("order_index", i).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to reorder existing images",
 				"error":   err.Error(),
 			})
 			return

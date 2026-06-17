@@ -43,6 +43,41 @@ type MyShopResponse struct {
 // reserved for super admin
 func GetShops(c *gin.Context) {}
 
+func GetShopByID(c *gin.Context) {
+	shopIDStr := c.Param("shopId")
+	shopID, err := uuid.Parse(shopIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid Shop ID parameter format",
+		})
+		return
+	}
+
+	var shop models.Shop
+	if err := initializers.DB.Preload("LogoImage").First(&shop, "id = ?", shopID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "Shop not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to retrieve shop",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Shop retrieved successfully",
+		"data":    shop,
+	})
+}
+
 func GetMyShops(c *gin.Context) {
 	user, ok := c.Get("user")
 	if !ok {
