@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 )
@@ -27,13 +26,11 @@ type FacebookPayload struct {
 	TestEventCode string          `json:"test_event_code,omitempty"`
 }
 
-// SendFacebookPurchase fires a confirmed purchase event via Conversion API
-func SendFacebookPurchase(orderID, fullName, phone string, value float64, currency, fbc, fbp string, createdAt time.Time, clientUserAgent, clientIP, testCode string) error {
-	pixelID := os.Getenv("FACEBOOK_PIXEL_ID")
-	accessToken := os.Getenv("FACEBOOK_ACCESS_TOKEN")
-
+// SendFacebookPurchase fires a confirmed purchase event via Conversion API,
+// using the shop's own pixel ID and access token (each shop configures its own).
+func SendFacebookPurchase(pixelID, accessToken, orderID, fullName, phone string, value float64, currency, fbc, fbp string, createdAt time.Time, clientUserAgent, clientIP, testCode string) error {
 	if pixelID == "" || accessToken == "" {
-		return fmt.Errorf("missing FACEBOOK_PIXEL_ID or FACEBOOK_ACCESS_TOKEN")
+		return fmt.Errorf("missing pixel ID or access token")
 	}
 
 	url := fmt.Sprintf("https://graph.facebook.com/v24.0/%s/events?access_token=%s", pixelID, accessToken)

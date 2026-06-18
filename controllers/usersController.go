@@ -139,15 +139,6 @@ func CreateUserByShop(c *gin.Context) {
 		body.Role = "Staff"
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to hash the password",
-		})
-		return
-	}
-
 	tx := initializers.DB.Begin()
 	if tx.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -157,23 +148,73 @@ func CreateUserByShop(c *gin.Context) {
 		return
 	}
 
-	user := models.User{
-		FirstName:   body.FirstName,
-		LastName:    body.LastName,
-		PhoneNumber: body.PhoneNumber,
-		Email:       body.Email,
-		Password:    string(hash),
-		Role:        body.Role,
-		IsVerified:  true,
-	}
+	// A person can belong to several shops (e.g. they already own one and are
+	// being invited as Staff/Logistics into another). Email is globally unique
+	// on users, so reuse the existing account instead of trying to re-create it.
+	var existingUser models.User
+	lookupErr := tx.Where("email = ?", body.Email).First(&existingUser).Error
 
-	if err := tx.Create(&user).Error; err != nil {
+	if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		tx.Rollback()
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"message": "Failed to create user (email may already exist)",
+			"message": "Error while checking for an existing account",
 		})
 		return
+	}
+
+	var user models.User
+
+	if lookupErr == nil {
+		user = existingUser
+
+		var existingMembership models.ShopMember
+		memErr := tx.Where("shop_id = ? AND user_id = ?", shopID, user.ID).First(&existingMembership).Error
+		if memErr == nil {
+			tx.Rollback()
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"message": "This user is already a member of this shop",
+			})
+			return
+		}
+		if !errors.Is(memErr, gorm.ErrRecordNotFound) {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Error while checking existing membership",
+			})
+			return
+		}
+	} else {
+		hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
+		if err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to hash the password",
+			})
+			return
+		}
+
+		user = models.User{
+			FirstName:   body.FirstName,
+			LastName:    body.LastName,
+			PhoneNumber: body.PhoneNumber,
+			Email:       body.Email,
+			Password:    string(hash),
+			Role:        body.Role,
+			IsVerified:  true,
+		}
+
+		if err := tx.Create(&user).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Failed to create user (email may already exist)",
+			})
+			return
+		}
 	}
 
 	member := models.ShopMember{
@@ -202,9 +243,14 @@ func CreateUserByShop(c *gin.Context) {
 	user.Password = ""
 	user.EmailOTP = ""
 
+	message := "User was created successfully"
+	if lookupErr == nil {
+		message = "Existing user was added to the shop"
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
-		"message": "User was created successfully",
+		"message": message,
 		"data":    user,
 	})
 }

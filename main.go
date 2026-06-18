@@ -44,6 +44,7 @@ func main() {
 	routes.PlansRoutes(router)
 	routes.OsenRoutes(router)
 	routes.AbandonedLeadsRoutes(router)
+	routes.SuperAdminRoutes(router)
 	// routes.WebSocketRoutes(router)
 
 	go realtime.StartHub()

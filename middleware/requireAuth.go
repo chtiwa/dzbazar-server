@@ -41,8 +41,28 @@ func RequireAuthentication(c *gin.Context) {
 					var user models.User
 					// Safe GORM query
 					if result := initializers.DB.Where("id = ?", id).First(&user); result.Error == nil {
+						if user.IsSuspended {
+							c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+								"success": false,
+								"message": "This account has been suspended",
+							})
+							return
+						}
+
 						c.Set("user", user)
 						c.Set("role", user.Role)
+
+						// Impersonation grant: only honored if the underlying
+						// user is still a super admin right now — demoting a
+						// super admin immediately kills any outstanding token.
+						if impersonating, _ := claims["impersonating"].(bool); impersonating && user.PlatformRole == "super_admin" {
+							if shopIDStr, ok := claims["shopId"].(string); ok {
+								c.Set("role", "Owner")
+								c.Set("isImpersonating", true)
+								c.Set("impersonatedShopID", shopIDStr)
+							}
+						}
+
 						c.Next()
 						return
 					}
@@ -64,6 +84,13 @@ func RequireAuthentication(c *gin.Context) {
 				if uuidErr == nil {
 					var user models.User
 					if result := initializers.DB.Where("id = ?", id).First(&user); result.Error == nil {
+						if user.IsSuspended {
+							c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+								"success": false,
+								"message": "This account has been suspended",
+							})
+							return
+						}
 
 						// Generate a new access token
 						accessToken := utils.GenerateToken(user.ID, 60*15, user.Role)

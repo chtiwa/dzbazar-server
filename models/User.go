@@ -15,6 +15,12 @@ type User struct {
 	Password    string `json:"password"`
 	Role        string `gorm:"default:Staff" json:"role"`
 	IsVerified  bool   `gorm:"default:false" json:"isVerified"`
+	IsSuspended bool   `gorm:"default:false" json:"isSuspended"`
+
+	// PlatformRole is orthogonal to Role/ShopMember.Role: it answers "can this
+	// user act across all shops", never "what can they do inside shop X".
+	// Values: "" (regular user), "support", "super_admin".
+	PlatformRole string `gorm:"default:''" json:"platformRole"`
 
 	EmailOTP          string     `json:"emailOtp"`
 	EmailOTPExpiresAt *time.Time `json:"emailOtpExpiresAt"`

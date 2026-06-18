@@ -76,7 +76,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	db := initializers.DB
 	now := time.Now()
 
-	var daily []TimeCount
+	daily := []TimeCount{}
 	if err := db.
 		Table("orders").
 		Where("shop_id = ? AND deleted_at IS NULL AND created_at >= ?", shopID, now.AddDate(0, 0, -30)).
@@ -88,7 +88,7 @@ func GetOrdersDashboard(c *gin.Context) {
 		return
 	}
 
-	var weekly []TimeCount
+	weekly := []TimeCount{}
 	if err := db.
 		Table("orders").
 		Where("shop_id = ? AND deleted_at IS NULL AND created_at >= ?", shopID, now.AddDate(0, 0, -7*12)).
@@ -100,7 +100,7 @@ func GetOrdersDashboard(c *gin.Context) {
 		return
 	}
 
-	var monthly []TimeCount
+	monthly := []TimeCount{}
 	if err := db.
 		Table("orders").
 		Where("shop_id = ? AND deleted_at IS NULL AND created_at >= ?", shopID, now.AddDate(-1, 0, 0)).
@@ -120,7 +120,7 @@ func GetOrdersDashboard(c *gin.Context) {
 		return
 	}
 
-	var statusStats []StatusStat
+	statusStats := []StatusStat{}
 	if err := db.
 		Table("orders").
 		Where("shop_id = ? AND deleted_at IS NULL", shopID).
@@ -138,7 +138,7 @@ func GetOrdersDashboard(c *gin.Context) {
 
 	// Pool = En attente, Ne répond pas 1/2/3, Reporté, Annulé, Confirmé.
 	// Excluded: Abandonné, Expédié, Livré, Retour.
-	var confirmationRates []ProductConfirmationRate
+	confirmationRates := []ProductConfirmationRate{}
 	if err := db.
 		Table("order_items oi").
 		Joins("JOIN orders o ON o.id = oi.order_id").
@@ -161,7 +161,7 @@ func GetOrdersDashboard(c *gin.Context) {
 		return
 	}
 
-	var wilayaStats []WilayaStat
+	wilayaStats := []WilayaStat{}
 	if err := db.
 		Table("orders o").
 		Joins("JOIN clients c ON c.id = o.client_id").

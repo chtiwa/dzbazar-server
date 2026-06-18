@@ -7,13 +7,14 @@ import (
 )
 
 func PlansRoutes(router *gin.Engine) {
-	// Global plan catalog — read is public, write is authenticated (admin)
+	// Global plan catalog — read is public (pricing page), writes moved to
+	// /v1/super-admin/plans (see superAdminRoutes.go). This used to require
+	// only RequireAuthentication with no role check at all — any logged-in
+	// user, including a Logistics courier account, could rewrite the global
+	// plan catalog.
 	plans := router.Group("/v1/plans")
 	{
 		plans.GET("", controllers.GetPlans)
-		plans.POST("", middleware.RequireAuthentication, controllers.CreatePlan)
-		plans.PATCH("/:id", middleware.RequireAuthentication, controllers.UpdatePlan)
-		plans.DELETE("/:id", middleware.RequireAuthentication, controllers.DeletePlan)
 	}
 
 	// Per-shop subscription

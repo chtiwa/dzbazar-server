@@ -150,9 +150,18 @@ func IndexActivePixelByShop(c *gin.Context) {
 		return
 	}
 
+	// Public endpoint — never expose the access token, only whether one is set.
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    pixel,
+		"data": gin.H{
+			"id":             pixel.ID,
+			"shopId":         pixel.ShopID,
+			"platform":       pixel.Platform,
+			"title":          pixel.Title,
+			"pixelId":        pixel.PixelID,
+			"isActive":       pixel.IsActive,
+			"hasAccessToken": pixel.HasAccessToken,
+		},
 	})
 }
 

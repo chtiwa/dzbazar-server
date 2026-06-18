@@ -21,6 +21,18 @@ func RequireShopAccess(requiredRole string) gin.HandlerFunc {
 		err := initializers.DB.Where("shop_id = ? AND user_id = ?", targetShopID, user.(models.User).ID).First(&membership).Error
 
 		if err != nil {
+			// Fall back to an explicit, time-boxed impersonation grant minted by
+			// POST /v1/super-admin/shops/:shopId/impersonate — scoped to exactly
+			// one shop, never a wildcard across all shops.
+			isImpersonating, _ := c.Get("isImpersonating")
+			impersonatedShopID, _ := c.Get("impersonatedShopID")
+			if isImpersonating == true && impersonatedShopID == targetShopID {
+				c.Set("activeShopID", targetShopID)
+				c.Set("userShopRole", "Owner")
+				c.Next()
+				return
+			}
+
 			c.JSON(403, gin.H{"error": "You do not have permission to access this store workspace"})
 			c.Abort()
 			return

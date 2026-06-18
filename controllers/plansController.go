@@ -7,6 +7,7 @@ import (
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -110,6 +111,8 @@ func CreatePlan(c *gin.Context) {
 		return
 	}
 
+	utils.LogAudit(c, "plan.create", "Plan", &plan.ID, gin.H{"name": plan.Name, "price": plan.Price})
+
 	c.JSON(http.StatusCreated, gin.H{"success": true, "message": "Plan created successfully", "data": plan})
 }
 
@@ -190,6 +193,8 @@ func UpdatePlan(c *gin.Context) {
 		return
 	}
 
+	utils.LogAudit(c, "plan.update", "Plan", &plan.ID, updates)
+
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Plan updated successfully", "data": plan})
 }
 
@@ -214,6 +219,8 @@ func DeletePlan(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to delete plan", "error": err.Error()})
 		return
 	}
+
+	utils.LogAudit(c, "plan.delete", "Plan", &plan.ID, gin.H{"name": plan.Name})
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Plan deleted successfully"})
 }

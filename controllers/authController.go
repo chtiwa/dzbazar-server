@@ -10,6 +10,7 @@ import (
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -75,6 +76,14 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
 			"message": "Please verify your email address before logging in",
+		})
+		return
+	}
+
+	if user.IsSuspended {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "This account has been suspended",
 		})
 		return
 	}
@@ -310,11 +319,33 @@ func Validate(c *gin.Context) {
 
 	sanitizeUser(&freshUser)
 
-	c.JSON(http.StatusOK, gin.H{
+	response := gin.H{
 		"success": true,
 		"role":    freshUser.Role,
 		"user":    freshUser,
-	})
+	}
+
+	// Surface the impersonation grant (set by middleware.RequireAuthentication
+	// when the access token carries an "impersonating" claim) so the tenant
+	// admin app can show the banner and auto-select the impersonated shop —
+	// without needing to know anything about the super-admin app.
+	if isImpersonating, _ := c.Get("isImpersonating"); isImpersonating == true {
+		if shopIDStr, ok := c.Get("impersonatedShopID"); ok {
+			if shopID, err := uuid.Parse(shopIDStr.(string)); err == nil {
+				var shop models.Shop
+				if err := initializers.DB.Select("id", "name", "slug").First(&shop, "id = ?", shopID).Error; err == nil {
+					response["isImpersonating"] = true
+					response["impersonatedShop"] = gin.H{
+						"id":   shop.ID,
+						"name": shop.Name,
+						"slug": shop.Slug,
+					}
+				}
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func ForgotPassword(c *gin.Context) {

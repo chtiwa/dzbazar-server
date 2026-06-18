@@ -419,23 +419,34 @@ func CreateOrderByShopID(c *gin.Context) {
 		}
 
 		if fullOrder.ConversionSource == "facebook" {
-			fbErr := utils.SendFacebookPurchase(
-				fullOrder.ID.String(),
-				fullOrder.Client.FullName,
-				fullOrder.Client.PhoneNumber,
-				fullOrder.TotalPrice,
-				"DZD",
-				fullOrder.FBc,
-				fullOrder.FBp,
-				time.Now(),
-				ua,
-				ip,
-				testCode,
-			)
-			if fbErr != nil {
-				fmt.Println("Error passing payload downstream towards Facebook Graph servers:", fbErr)
-			} else {
-				fmt.Println("Facebook conversion parameters pushed smoothly")
+			var fbPixel models.Pixel
+			pixelErr := initializers.DB.
+				Where("shop_id = ? AND platform = ? AND is_active = ?", fullOrder.ShopID, "facebook", true).
+				First(&fbPixel).Error
+
+			// CAPI only runs when the shop configured an access token; otherwise the
+			// browser pixel already fires Purchase client-side (see usePixelEvents.ts).
+			if pixelErr == nil && fbPixel.HasAccessToken && fbPixel.AccessToken != "" {
+				fbErr := utils.SendFacebookPurchase(
+					fbPixel.PixelID,
+					fbPixel.AccessToken,
+					fullOrder.ID.String(),
+					fullOrder.Client.FullName,
+					fullOrder.Client.PhoneNumber,
+					fullOrder.TotalPrice,
+					"DZD",
+					fullOrder.FBc,
+					fullOrder.FBp,
+					time.Now(),
+					ua,
+					ip,
+					testCode,
+				)
+				if fbErr != nil {
+					fmt.Println("Error passing payload downstream towards Facebook Graph servers:", fbErr)
+				} else {
+					fmt.Println("Facebook conversion parameters pushed smoothly")
+				}
 			}
 		}
 	}(order.ID, clientUserAgent, clientIP)
