@@ -9,6 +9,10 @@ type AbandonedLead struct {
 	ProductTitle     string    `json:"productTitle"`
 	Price            float64   `json:"price"`
 	CombinationStr   string    `json:"combinationStr"`
+	State            string    `json:"state"`
+	City             string    `json:"city"`
+	ShippingMethod   string    `json:"shippingMethod"`
+	Quantity         int       `json:"quantity"`
 	FullName         string    `gorm:"not null" json:"fullName"`
 	PhoneNumber      string    `gorm:"not null" json:"phoneNumber"`
 	FBclid           string    `json:"fbclid"`

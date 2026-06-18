@@ -20,6 +20,10 @@ type CreateAbandonedLeadInput struct {
 	ProductTitle     string  `json:"productTitle"`
 	Price            float64 `json:"price"`
 	CombinationStr   string  `json:"combinationStr"`
+	State            string  `json:"state"`
+	City             string  `json:"city"`
+	ShippingMethod   string  `json:"shippingMethod"`
+	Quantity         int     `json:"quantity"`
 	FullName         string  `json:"fullName" binding:"required"`
 	PhoneNumber      string  `json:"phoneNumber" binding:"required"`
 	FBclid           string  `json:"fbclid"`
@@ -67,6 +71,10 @@ func CreateAbandonedLead(c *gin.Context) {
 		ProductTitle:     body.ProductTitle,
 		Price:            body.Price,
 		CombinationStr:   body.CombinationStr,
+		State:            body.State,
+		City:             body.City,
+		ShippingMethod:   body.ShippingMethod,
+		Quantity:         body.Quantity,
 		FullName:         body.FullName,
 		PhoneNumber:      body.PhoneNumber,
 		FBclid:           body.FBclid,
