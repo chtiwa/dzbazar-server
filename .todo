@@ -6,9 +6,9 @@
 <!-- - landingpages controller -->
 <!-- - delivery rates logic ( create delivery rates once the shop is created) -->
 <!-- - dashboard controller -->
+<!-- - shop settings -->
 
 - plans
 - upsell
 - api integration with multiple platforms
 - cross sell
-- shop settings

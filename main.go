@@ -49,6 +49,7 @@ func main() {
 
 	go realtime.StartHub()
 	go controllers.StartOsenStatusSync()
+	go controllers.StartSubscriptionExpiryReminders()
 
 	fmt.Println("The server is running successfully!")
 

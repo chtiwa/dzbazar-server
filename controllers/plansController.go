@@ -303,9 +303,10 @@ func SubscribeShopToPlan(c *gin.Context) {
 			return tx.Create(&sub).Error
 		}
 		return tx.Model(&sub).Updates(map[string]any{
-			"plan_id":    planID,
-			"started_at": sub.StartedAt,
-			"expires_at": body.ExpiresAt,
+			"plan_id":                 planID,
+			"started_at":              sub.StartedAt,
+			"expires_at":              body.ExpiresAt,
+			"expiry_reminder_sent_at": nil,
 		}).Error
 	})
 

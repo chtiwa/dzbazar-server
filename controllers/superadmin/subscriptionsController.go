@@ -3,10 +3,14 @@ package superadmin
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // ListSubscriptions is the "Payments" page data source: a read-only ledger
@@ -69,4 +73,90 @@ func ListSubscriptions(c *gin.Context) {
 		"data":       result,
 		"pagination": paginationMeta(page, perPage, totalRows),
 	})
+}
+
+type SetSubscriptionInput struct {
+	PlanID    string     `json:"planId" binding:"required"`
+	StartedAt *time.Time `json:"startedAt"`
+	ExpiresAt *time.Time `json:"expiresAt"`
+}
+
+// SetShopSubscription lets a super admin manually assign or change a shop's
+// subscription plan, with an optional custom start/expiry date (default
+// expiry: 30 days from start). Mirrors the upsert-by-shop-id pattern used by
+// the owner-initiated SubscribeShopToPlan in plansController.go.
+func SetShopSubscription(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	var body SetSubscriptionInput
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		return
+	}
+
+	planID, err := uuid.Parse(body.PlanID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid plan ID"})
+		return
+	}
+
+	var plan models.Plan
+	if err := initializers.DB.First(&plan, "id = ? AND is_active = true", planID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Plan not found or inactive"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		return
+	}
+
+	start := time.Now()
+	if body.StartedAt != nil {
+		start = *body.StartedAt
+	}
+
+	expires := start.AddDate(0, 0, 30)
+	if body.ExpiresAt != nil {
+		expires = *body.ExpiresAt
+	}
+
+	var sub models.ShopSubscription
+	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
+		existing := tx.Where("shop_id = ?", shopID).First(&sub)
+		if existing.Error != nil && existing.Error != gorm.ErrRecordNotFound {
+			return existing.Error
+		}
+
+		if existing.Error == gorm.ErrRecordNotFound {
+			sub = models.ShopSubscription{
+				ShopID:    shopID,
+				PlanID:    planID,
+				StartedAt: start,
+				ExpiresAt: &expires,
+			}
+			return tx.Create(&sub).Error
+		}
+
+		return tx.Model(&sub).Updates(map[string]any{
+			"plan_id":                 planID,
+			"started_at":              start,
+			"expires_at":              expires,
+			"expiry_reminder_sent_at": nil,
+		}).Error
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update subscription", "error": err.Error()})
+		return
+	}
+
+	utils.LogAudit(c, "subscription.set", "ShopSubscription", &sub.ID, gin.H{"shopId": shopID, "planId": planID, "expiresAt": expires})
+
+	initializers.DB.Preload("Plan").First(&sub, "shop_id = ?", shopID)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Subscription updated", "data": sub})
 }

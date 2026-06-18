@@ -309,3 +309,64 @@ func SendOTPEmail(email, otp string) error {
 	log.Printf("OTP email sent successfully: ID %s\n", resp.Id)
 	return nil
 }
+
+func SendPlanExpiryEmail(email, shopName, planName string, expiresAt time.Time) error {
+	client := resend.NewClient(os.Getenv("RESEND_API_KEY"))
+	if client == nil {
+		return fmt.Errorf("failed to initialize Resend client")
+	}
+
+	htmlContent := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html lang="fr">
+	<head>
+	<meta charset="UTF-8">
+	<title>Expiration de votre abonnement - LK Parfumo</title>
+	<style>
+		body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
+		.container { max-width: 600px; margin: auto; background: #ffffff; padding: 20px; border-radius: 8px; text-align: center; }
+		.header { background: #000000; color: white; padding: 15px; font-size: 22px; font-weight: bold; border-radius: 8px 8px 0 0; }
+		.content { padding: 30px 20px; font-size: 16px; color: #333; text-align: left; }
+		.content p { margin: 8px 0; }
+		.footer { text-align: center; font-size: 14px; color: #666; margin-top: 20px; }
+	</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="header">Expiration de votre abonnement</div>
+			<div class="content">
+				<p>Bonjour,</p>
+				<p>Votre abonnement <strong>%s</strong> pour la boutique <strong>%s</strong> expire le <strong>%s</strong>, soit dans 3 jours.</p>
+				<p>Contactez-nous pour renouveler votre abonnement.</p>
+			</div>
+			<div class="footer">
+				Cet email a été envoyé automatiquement par LK Parfumo.
+			</div>
+		</div>
+	</body>
+	</html>`, planName, shopName, expiresAt.Format("02/01/2006"))
+
+	params := &resend.SendEmailRequest{
+		From:    "LK Parfumo <contact@lkparfumo.com>",
+		To:      []string{email},
+		Subject: fmt.Sprintf("Votre abonnement %s expire bientôt – %s", planName, shopName),
+		Html:    htmlContent,
+		Headers: map[string]string{
+			"Message-ID": fmt.Sprintf("<%d-%s@lkparfumo>", time.Now().UnixNano(), uuid.New().String()),
+		},
+	}
+
+	resp, err := client.Emails.Send(params)
+	if err != nil {
+		log.Printf("Resend error: %v\n", err)
+		return fmt.Errorf("resend error: %v", err)
+	}
+
+	if resp.Id == "" {
+		log.Printf("Resend response error: empty response ID")
+		return fmt.Errorf("resend error: failed to send email")
+	}
+
+	log.Printf("Plan expiry email sent successfully: ID %s\n", resp.Id)
+	return nil
+}

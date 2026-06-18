@@ -66,5 +66,13 @@ func Migrate() {
 	initializers.DB.Exec(`ALTER TABLE delivery_companies ALTER COLUMN name DROP NOT NULL`)
 	initializers.DB.Exec(`ALTER TABLE delivery_companies ALTER COLUMN url DROP NOT NULL`)
 
+	// Enforce "only one super_admin" at the DB level — not just app convention —
+	// so it holds no matter what code path ever writes platform_role.
+	initializers.DB.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_one_super_admin
+		ON users (platform_role)
+		WHERE platform_role = 'super_admin' AND deleted_at IS NULL
+	`)
+
 	log.Println("🚀 Database schema migrated perfectly with all relations intact!")
 }

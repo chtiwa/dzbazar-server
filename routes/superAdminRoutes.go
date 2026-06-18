@@ -22,6 +22,7 @@ func SuperAdminRoutes(router *gin.Engine) {
 		admin.DELETE("/shops/:id", superadmin.DeleteShopByAdmin)
 		admin.POST("/shops/:id/impersonate", superadmin.StartImpersonation)
 		admin.POST("/impersonate/exit", superadmin.EndImpersonation)
+		admin.PUT("/shops/:id/subscription", superadmin.SetShopSubscription)
 
 		admin.GET("/users", superadmin.ListUsers)
 		admin.GET("/users/:id", superadmin.GetUser)

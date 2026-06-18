@@ -40,4 +40,6 @@ type ShopSubscription struct {
 	Plan      Plan       `gorm:"foreignKey:PlanID;references:ID" json:"plan"`
 	StartedAt time.Time  `gorm:"not null" json:"startedAt"`
 	ExpiresAt *time.Time `json:"expiresAt"` // null = no expiry
+
+	ExpiryReminderSentAt *time.Time `json:"expiryReminderSentAt"` // set when the 3-day-before email is sent; reset to nil whenever ExpiresAt changes
 }
