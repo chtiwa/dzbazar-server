@@ -19,7 +19,7 @@ func CORSMiddleware() gin.HandlerFunc {
 		if origin == clientURL || origin == adminURL || origin == clientURLv2 || origin == superAdminURL || origin == "http://localhost:5000" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, PATCH, OPTIONS")
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
 			c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, token, key, X-Shop-ID")
 			// }
 
