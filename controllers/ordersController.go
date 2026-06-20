@@ -319,6 +319,13 @@ func CreateOrderByShopID(c *gin.Context) {
 			return createOrderErr
 		}
 
+		// A completed order means this phone number is no longer "abandoned" —
+		// soft-delete any prior abandoned lead so it stops being counted/shown as one.
+		if delErr := tx.Where("shop_id = ? AND phone_number = ?", parsedShopID, body.Client.PhoneNumber).
+			Delete(&models.AbandonedLead{}).Error; delErr != nil {
+			return delErr
+		}
+
 		return nil
 	})
 

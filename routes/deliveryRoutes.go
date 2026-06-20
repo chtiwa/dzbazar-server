@@ -15,4 +15,10 @@ func DeliveryRatesRoutes(router *gin.Engine) {
 		rates.PATCH("", middleware.RequireRoles("Owner"), controllers.UpdateDeliveryRate)
 		rates.PATCH("/bulk", middleware.RequireRoles("Owner"), controllers.BulkUpdateDeliveryRates)
 	}
+
+	// Public counterpart for the anonymous storefront checkout — no session exists there.
+	public := router.Group("/v1/public/shops/:shopId/delivery-rates")
+	{
+		public.GET("", controllers.GetPublicDeliveryRates)
+	}
 }

@@ -43,6 +43,27 @@ func GetDeliveryRates(c *gin.Context) {
 	})
 }
 
+// GetPublicDeliveryRates is the unauthenticated counterpart of GetDeliveryRates,
+// used by the public storefront checkout to load shipping options for a shop.
+func GetPublicDeliveryRates(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	var rates []models.DeliveryRate
+	if err := initializers.DB.Where("shop_id = ? AND is_active = ?", shopID, true).Find(&rates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch rates"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    rates,
+	})
+}
+
 func UpdateDeliveryRate(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
