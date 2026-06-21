@@ -1,8 +1,10 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
@@ -10,6 +12,16 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+func publicDeliveryRatesCacheKey(shopID uuid.UUID) string {
+	return fmt.Sprintf("delivery-rates:public:shop=%s", shopID.String())
+}
+
+func invalidateDeliveryRatesCache(shopID uuid.UUID) {
+	if err := initializers.RClient.Del(initializers.Ctx, publicDeliveryRatesCacheKey(shopID)).Err(); err != nil {
+		fmt.Println("Failed to delete delivery rates cache key:", err)
+	}
+}
 
 type UpdateDeliveryRateInput struct {
 	WilayaID     int     `json:"wilayaId" binding:"required"`
@@ -52,10 +64,23 @@ func GetPublicDeliveryRates(c *gin.Context) {
 		return
 	}
 
+	cacheKey := publicDeliveryRatesCacheKey(shopID)
+	if val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result(); err == nil {
+		var cachedRates []models.DeliveryRate
+		if unmarshalErr := json.Unmarshal([]byte(val), &cachedRates); unmarshalErr == nil {
+			c.JSON(http.StatusOK, gin.H{"success": true, "data": cachedRates})
+			return
+		}
+	}
+
 	var rates []models.DeliveryRate
 	if err := initializers.DB.Where("shop_id = ? AND is_active = ?", shopID, true).Find(&rates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch rates"})
 		return
+	}
+
+	if jsonData, err := json.Marshal(rates); err == nil {
+		_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -125,6 +150,8 @@ func UpdateDeliveryRate(c *gin.Context) {
 		})
 		return
 	}
+
+	invalidateDeliveryRatesCache(shopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -198,6 +225,8 @@ func BulkUpdateDeliveryRates(c *gin.Context) {
 		})
 		return
 	}
+
+	invalidateDeliveryRatesCache(shopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

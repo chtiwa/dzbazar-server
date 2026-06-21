@@ -70,7 +70,7 @@ func SendOrderEmail(
 
 	// Build the email request
 	params := &resend.SendEmailRequest{
-		From:    "LK Parfumo <contact@lkparfumo.com>",
+		From:    "DZ Bazar <contact@lkparfumo.com>",
 		To:      recipients,
 		Subject: fmt.Sprintf("Nouvelle Commande – %s – %s – %s – %d", shopName, fullName, phoneNumber, time.Now().Unix()),
 		Html:    htmlContent,
@@ -286,7 +286,7 @@ func SendOTPEmail(email, otp string) error {
 	</html>`, otp)
 
 	params := &resend.SendEmailRequest{
-		From:    "LK Parfumo <contact@lkparfumo.com>",
+		From:    "DZ BAZAR <contact@lkparfumo.com>",
 		To:      []string{email},
 		Subject: "Votre code de vérification",
 		Html:    htmlContent,
@@ -321,7 +321,7 @@ func SendPlanExpiryEmail(email, shopName, planName string, expiresAt time.Time) 
 	<html lang="fr">
 	<head>
 	<meta charset="UTF-8">
-	<title>Expiration de votre abonnement - LK Parfumo</title>
+	<title>Expiration de votre abonnement - DZ Bazar</title>
 	<style>
 		body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
 		.container { max-width: 600px; margin: auto; background: #ffffff; padding: 20px; border-radius: 8px; text-align: center; }

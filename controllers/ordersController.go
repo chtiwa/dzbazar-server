@@ -46,6 +46,7 @@ type CreateOrderInput struct {
 type OrderClientInput struct {
 	FullName      string `json:"fullName" binding:"required"`
 	PhoneNumber   string `json:"phoneNumber" binding:"required"`
+	PhoneNumber2  string `json:"phoneNumber2"`
 	State         string `json:"state" binding:"required"`
 	StateCode     string `json:"stateCode"`
 	City          string `json:"city"`
@@ -256,6 +257,7 @@ func CreateOrderByShopID(c *gin.Context) {
 					ShopID:        parsedShopID,
 					FullName:      body.Client.FullName,
 					PhoneNumber:   body.Client.PhoneNumber,
+					PhoneNumber2:  body.Client.PhoneNumber2,
 					State:         body.Client.State,
 					StateCode:     body.Client.StateCode,
 					City:          body.Client.City,
@@ -267,6 +269,28 @@ func CreateOrderByShopID(c *gin.Context) {
 			} else {
 				return err
 			}
+		} else {
+			// Existing client: refresh their stored info so it reflects this latest
+			// order rather than staying frozen on whatever their first order had.
+			updates := map[string]any{
+				"full_name":      body.Client.FullName,
+				"phone_number2":  body.Client.PhoneNumber2,
+				"state":          body.Client.State,
+				"state_code":     body.Client.StateCode,
+				"city":           body.Client.City,
+				"stopdesk_point": body.Client.StopdeskPoint,
+			}
+			if updErr := tx.Model(&models.Client{}).
+				Where("id = ? AND shop_id = ?", client.ID, parsedShopID).
+				Updates(updates).Error; updErr != nil {
+				return updErr
+			}
+			client.FullName = body.Client.FullName
+			client.PhoneNumber2 = body.Client.PhoneNumber2
+			client.State = body.Client.State
+			client.StateCode = body.Client.StateCode
+			client.City = body.Client.City
+			client.StopdeskPoint = body.Client.StopdeskPoint
 		}
 
 		var orderItems []models.OrderItem

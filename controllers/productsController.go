@@ -606,14 +606,15 @@ func GetProductsBySearchBySlug(c *gin.Context) {
 	slug := c.Param("slug")
 
 	// 1. RESOLVE SLUG TO UUID (Fixes the Slug mismatch bug)
-	var shopID uuid.UUID
-	if err := initializers.DB.Model(&models.Shop{}).Select("id").Where("slug = ?", slug).First(&shopID).Error; err != nil {
+	var shop models.Shop
+	if err := initializers.DB.Select("id").Where("slug = ?", slug).First(&shop).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
 			"message": "Shop not found",
 		})
 		return
 	}
+	shopID := shop.ID
 
 	var products []models.Product
 
