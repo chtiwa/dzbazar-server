@@ -271,9 +271,19 @@ func shipOrderToOsen(order *models.Order, integration *models.DeliveryCompany) (
 		return nil, &osenShipError{http.StatusBadRequest, fmt.Sprintf("Zone de livraison non couverte: %s", err.Error())}
 	}
 
+	// Carrier-facing description: include the variant (e.g. "100ml") and
+	// quantity, not just the bare product title — a customer receiving a
+	// parcel labeled only with the product name, with no indication of
+	// which variant or how many units, often doesn't recognize the order
+	// and refuses it at the door.
 	description := "Produit"
 	if len(order.Items) > 0 && order.Items[0].Product.Title != "" {
-		description = order.Items[0].Product.Title
+		item := order.Items[0]
+		description = item.Product.Title
+		if item.ProductVariantCombination.CombinationString != "" {
+			description += " x " + item.ProductVariantCombination.CombinationString
+		}
+		description += fmt.Sprintf(" — Qté: %d", item.Quantity)
 	}
 
 	// Round COD and parcel value down to nearest 10 (Osen requirement).
@@ -382,6 +392,7 @@ func CreateOsenOrder(c *gin.Context) {
 	if err := initializers.DB.
 		Preload("Client").
 		Preload("Items.Product").
+		Preload("Items.ProductVariantCombination").
 		Where("id = ? AND shop_id = ?", orderID, shopID).
 		First(&order).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -463,6 +474,7 @@ func BulkCreateOsenOrders(c *gin.Context) {
 		if err := initializers.DB.
 			Preload("Client").
 			Preload("Items.Product").
+			Preload("Items.ProductVariantCombination").
 			Where("id = ? AND shop_id = ?", orderID, shopID).
 			First(&order).Error; err != nil {
 			results = append(results, bulkOsenShipResult{OrderID: idStr, Success: false, Message: "Commande introuvable"})

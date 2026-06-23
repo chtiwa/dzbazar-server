@@ -4,7 +4,17 @@ import (
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
+
+// GetShopMembership reports whether the user is a member of the shop, and
+// returns the membership row if so. Shared by RequireShopAccess and the
+// websocket handshake — both need the same tenant-isolation check.
+func GetShopMembership(userID uuid.UUID, shopID string) (models.ShopMember, bool) {
+	var membership models.ShopMember
+	err := initializers.DB.Where("shop_id = ? AND user_id = ?", shopID, userID).First(&membership).Error
+	return membership, err == nil
+}
 
 func RequireShopAccess(requiredRole string) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -17,10 +27,9 @@ func RequireShopAccess(requiredRole string) gin.HandlerFunc {
 			return
 		}
 
-		var membership models.ShopMember
-		err := initializers.DB.Where("shop_id = ? AND user_id = ?", targetShopID, user.(models.User).ID).First(&membership).Error
+		membership, ok := GetShopMembership(user.(models.User).ID, targetShopID)
 
-		if err != nil {
+		if !ok {
 			// Fall back to an explicit, time-boxed impersonation grant minted by
 			// POST /v1/super-admin/shops/:shopId/impersonate — scoped to exactly
 			// one shop, never a wildcard across all shops.

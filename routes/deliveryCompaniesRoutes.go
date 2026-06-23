@@ -7,13 +7,11 @@ import (
 )
 
 func DeliveryCompaniesRoutes(router *gin.Engine) {
-	// Global available delivery companies (admin-managed, read is public)
+	// Global available delivery companies — read-only here; writes are
+	// super-admin-only and live under /v1/super-admin/delivery-companies/available.
 	available := router.Group("/v1/delivery-companies/available")
 	{
 		available.GET("", controllers.GetAvailableDeliveryCompanies)
-		available.POST("", middleware.RequireAuthentication, controllers.CreateAvailableDeliveryCompany)
-		available.PATCH("/:id", middleware.RequireAuthentication, controllers.UpdateAvailableDeliveryCompany)
-		available.DELETE("/:id", middleware.RequireAuthentication, controllers.DeleteAvailableDeliveryCompany)
 	}
 
 	// Per-shop integrations (credentials)

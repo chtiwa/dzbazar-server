@@ -26,20 +26,32 @@ import (
 const (
 	subscriptionReminderInterval = 12 * time.Hour
 	reminderWindowDays           = 3
+	subscriptionReminderLockKey  = "lock:tick:subscription_reminders"
 )
 
 // StartSubscriptionExpiryReminders runs forever, periodically emailing shop
 // owners whose subscription is about to expire. Intended to be run in its
 // own goroutine.
+//
+// Each tick (including the immediate boot-time run) is guarded by a
+// fleet-wide Redis lock so that running multiple instances doesn't send the
+// same owner duplicate reminder emails.
 func StartSubscriptionExpiryReminders() {
-	sendExpiryReminders() // run once immediately on boot, don't wait 12h
+	runExpiryRemindersGuarded() // run once immediately on boot, don't wait 12h
 
 	ticker := time.NewTicker(subscriptionReminderInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		sendExpiryReminders()
+		runExpiryRemindersGuarded()
 	}
+}
+
+func runExpiryRemindersGuarded() {
+	if !utils.TryAcquireTickLock(subscriptionReminderLockKey, subscriptionReminderInterval-time.Hour) {
+		return
+	}
+	sendExpiryReminders()
 }
 
 // sendExpiryReminders finds subscriptions expiring within the reminder

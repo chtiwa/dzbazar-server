@@ -4,9 +4,10 @@ import "github.com/google/uuid"
 
 type AvailableDeliveryCompany struct {
 	BaseModel
-	Name  string                         `gorm:"not null" json:"name"`
-	URL   string                         `gorm:"not null" json:"url"`
-	Image *AvailableDeliveryCompanyImage `gorm:"foreignKey:AvailableDeliveryCompanyID;references:ID" json:"image"`
+	Name     string                         `gorm:"not null" json:"name"`
+	URL      string                         `gorm:"not null" json:"url"`
+	IsActive bool                           `gorm:"not null;default:true" json:"isActive"`
+	Image    *AvailableDeliveryCompanyImage `gorm:"foreignKey:AvailableDeliveryCompanyID;references:ID" json:"image"`
 }
 
 type AvailableDeliveryCompanyImage struct {

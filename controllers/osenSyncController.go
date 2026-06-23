@@ -12,6 +12,7 @@ import (
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/chtiwa/dzbazar-server/realtime"
+	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/google/uuid"
 )
 
@@ -31,6 +32,7 @@ const (
 	osenSyncPageSize  = 100
 	osenSyncMaxPages  = 5
 	osenShippedStatus = "Expedié"
+	osenSyncLockKey   = "lock:tick:osen_sync"
 )
 
 type osenOrderListItem struct {
@@ -50,6 +52,9 @@ func StartOsenStatusSync() {
 	defer ticker.Stop()
 
 	for range ticker.C {
+		if !utils.TryAcquireTickLock(osenSyncLockKey, osenSyncInterval-time.Minute) {
+			continue
+		}
 		syncOsenOrderStatuses()
 	}
 }
@@ -141,10 +146,10 @@ func syncShopOsenOrders(shopID uuid.UUID) {
 					Where("id = ?", order.ID).
 					Update("status", newStatus).Error; err == nil {
 					realtime.Broadcast <- realtime.Message{
-						Event: "order_status_synced",
+						Event:  "order_status_synced",
+						ShopID: shopID.String(),
 						Data: map[string]any{
 							"orderId": order.ID,
-							"shopId":  shopID,
 							"status":  newStatus,
 						},
 					}

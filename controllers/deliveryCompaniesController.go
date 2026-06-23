@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/google/uuid"
@@ -30,11 +31,28 @@ type CreateAvailableDeliveryCompanyInput struct {
 }
 
 type UpdateAvailableDeliveryCompanyInput struct {
-	Name *string `form:"name"`
-	URL  *string `form:"url"`
+	Name     *string `form:"name"`
+	URL      *string `form:"url"`
+	IsActive *bool   `form:"isActive"`
 }
 
 func GetAvailableDeliveryCompanies(c *gin.Context) {
+	var companies []models.AvailableDeliveryCompany
+	if err := initializers.DB.Preload("Image").Where("is_active = ?", true).Find(&companies).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to fetch available delivery companies",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": companies})
+}
+
+// ListAllAvailableDeliveryCompanies is the super-admin variant — returns both
+// active and inactive entries so operators can re-enable a disabled carrier.
+func ListAllAvailableDeliveryCompanies(c *gin.Context) {
 	var companies []models.AvailableDeliveryCompany
 	if err := initializers.DB.Preload("Image").Find(&companies).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -96,6 +114,12 @@ func CreateAvailableDeliveryCompany(c *gin.Context) {
 		return
 	}
 
+	utils.LogAudit(c, "available_delivery_company.create", "AvailableDeliveryCompany", &company.ID, gin.H{
+		"name":     company.Name,
+		"url":      company.URL,
+		"hasImage": company.Image != nil,
+	})
+
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"message": "Available delivery company created successfully",
@@ -139,6 +163,9 @@ func UpdateAvailableDeliveryCompany(c *gin.Context) {
 	if body.URL != nil {
 		updates["url"] = strings.TrimSpace(*body.URL)
 	}
+	if body.IsActive != nil {
+		updates["is_active"] = *body.IsActive
+	}
 
 	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
 		if len(updates) > 0 {
@@ -177,6 +204,18 @@ func UpdateAvailableDeliveryCompany(c *gin.Context) {
 
 	initializers.DB.Preload("Image").First(&company, "id = ?", company.ID)
 
+	utils.LogAudit(c, "available_delivery_company.update", "AvailableDeliveryCompany", &company.ID, gin.H{
+		"updates":      updates,
+		"imageChanged": uploadedImageURL != "",
+	})
+
+	if body.IsActive != nil {
+		utils.LogAudit(c, "available_delivery_company.toggle", "AvailableDeliveryCompany", &company.ID, gin.H{
+			"name":     company.Name,
+			"isActive": *body.IsActive,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Available delivery company updated successfully",
@@ -209,6 +248,11 @@ func DeleteAvailableDeliveryCompany(c *gin.Context) {
 		})
 		return
 	}
+
+	utils.LogAudit(c, "available_delivery_company.delete", "AvailableDeliveryCompany", &company.ID, gin.H{
+		"name": company.Name,
+		"url":  company.URL,
+	})
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Delivery company deleted successfully"})
 }

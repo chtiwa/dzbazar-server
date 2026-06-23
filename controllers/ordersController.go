@@ -441,7 +441,8 @@ func CreateOrderByShopID(c *gin.Context) {
 		}
 
 		realtime.Broadcast <- realtime.Message{
-			Event: "order_created",
+			Event:  "order_created",
+			ShopID: fullOrder.ShopID.String(),
 			Data: map[string]any{
 				"productName": mainProductName,
 				"totalPrice":  fullOrder.TotalPrice,

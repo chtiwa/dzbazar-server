@@ -45,9 +45,10 @@ func main() {
 	routes.OsenRoutes(router)
 	routes.AbandonedLeadsRoutes(router)
 	routes.SuperAdminRoutes(router)
-	// routes.WebSocketRoutes(router)
+	routes.WebSocketRoutes(router)
 
 	go realtime.StartHub()
+	go realtime.StartSubscriber()
 	go controllers.StartOsenStatusSync()
 	go controllers.StartSubscriptionExpiryReminders()
 

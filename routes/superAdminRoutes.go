@@ -38,6 +38,11 @@ func SuperAdminRoutes(router *gin.Engine) {
 		admin.PATCH("/plans/:id", controllers.UpdatePlan)
 		admin.DELETE("/plans/:id", controllers.DeletePlan)
 
+		admin.GET("/delivery-companies/available", controllers.ListAllAvailableDeliveryCompanies)
+		admin.POST("/delivery-companies/available", controllers.CreateAvailableDeliveryCompany)
+		admin.PATCH("/delivery-companies/available/:id", controllers.UpdateAvailableDeliveryCompany)
+		admin.DELETE("/delivery-companies/available/:id", controllers.DeleteAvailableDeliveryCompany)
+
 		admin.GET("/feature-flags", superadmin.ListFeatureFlags)
 		admin.POST("/feature-flags", superadmin.CreateFeatureFlag)
 		admin.PATCH("/feature-flags/:id", superadmin.UpdateFeatureFlag)
