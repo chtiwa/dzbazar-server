@@ -21,6 +21,34 @@ import (
 
 const osenBaseURL = "https://backendmain.osenexpress.com"
 
+// buildShipmentDescription renders a carrier-facing description covering every
+// item on the order (not just the first), so a customer who ordered e.g. a
+// brown AND a black variant sees both on the label instead of just one — a
+// parcel that looks like it's missing half the order often gets refused at
+// the door. The order must have Items.Product and
+// Items.ProductVariantCombination preloaded.
+func buildShipmentDescription(order *models.Order) string {
+	if len(order.Items) == 0 {
+		return "Produit"
+	}
+
+	parts := make([]string, 0, len(order.Items))
+	for _, item := range order.Items {
+		title := item.Product.Title
+		if title == "" {
+			title = "Produit"
+		}
+		part := title
+		if item.ProductVariantCombination.CombinationString != "" {
+			part += " x " + item.ProductVariantCombination.CombinationString
+		}
+		part += fmt.Sprintf(" — Qté: %d", item.Quantity)
+		parts = append(parts, part)
+	}
+
+	return strings.Join(parts, ", ")
+}
+
 // ── Token validation ──────────────────────────────────────────────────────────
 
 type osenValidateTokenReq struct {
@@ -271,20 +299,7 @@ func shipOrderToOsen(order *models.Order, integration *models.DeliveryCompany) (
 		return nil, &osenShipError{http.StatusBadRequest, fmt.Sprintf("Zone de livraison non couverte: %s", err.Error())}
 	}
 
-	// Carrier-facing description: include the variant (e.g. "100ml") and
-	// quantity, not just the bare product title — a customer receiving a
-	// parcel labeled only with the product name, with no indication of
-	// which variant or how many units, often doesn't recognize the order
-	// and refuses it at the door.
-	description := "Produit"
-	if len(order.Items) > 0 && order.Items[0].Product.Title != "" {
-		item := order.Items[0]
-		description = item.Product.Title
-		if item.ProductVariantCombination.CombinationString != "" {
-			description += " x " + item.ProductVariantCombination.CombinationString
-		}
-		description += fmt.Sprintf(" — Qté: %d", item.Quantity)
-	}
+	description := buildShipmentDescription(order)
 
 	// Round COD and parcel value down to nearest 10 (Osen requirement).
 	cod := math.Floor(order.TotalPrice/10) * 10
@@ -353,13 +368,27 @@ func shipOrderToOsen(order *models.Order, integration *models.DeliveryCompany) (
 	}
 
 	updates := map[string]any{
-		"is_shipped": true,
-		"status":     "Expedié",
+		"is_shipped":     true,
+		"status":         "Expedié",
+		"shipped_at":     time.Now(),
+		"shipped_via_id": integration.AvailableDeliveryCompanyID,
 	}
 	if trackingID, ok := osenOrder["trackingId"].(string); ok && trackingID != "" {
 		updates["tracking_number"] = trackingID
 	}
-	initializers.DB.Model(order).Updates(updates)
+	// The parcel already exists at Osen at this point — if this write fails we
+	// must surface it as an error rather than report success, otherwise the
+	// merchant sees a success toast while the order silently stays unshipped
+	// locally (and risks being shipped twice).
+	result := initializers.DB.Model(&models.Order{}).Where("id = ?", order.ID).Updates(updates)
+	if result.Error != nil {
+		log.Printf("osen: order %s shipped at carrier but local status update failed: %v", order.ID, result.Error)
+		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez Osen Express mais échec de la mise à jour locale du statut"}
+	}
+	if result.RowsAffected == 0 {
+		log.Printf("osen: order %s shipped at carrier but local status update affected 0 rows", order.ID)
+		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez Osen Express mais le statut local n'a pas pu être mis à jour"}
+	}
 
 	decrementOrderItemsStock(initializers.DB, order.Items)
 

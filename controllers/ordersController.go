@@ -70,6 +70,7 @@ type UpdateOrderInput struct {
 	Fragile        *bool             `json:"fragile"`
 	Essayable      *bool             `json:"essayable"`
 	IsShipped      *bool             `json:"isShipped"`
+	ShippedViaID   *string           `json:"shippedViaId"`
 	Client         *OrderClientInput `json:"client"`
 	Items          []OrderItemInput  `json:"items"`
 }
@@ -183,6 +184,8 @@ func GetOrdersByShopID(c *gin.Context) {
 		Preload("Items").
 		Preload("Items.Product").
 		Preload("Items.ProductVariantCombination").
+		Preload("ShippedVia").
+		Preload("ShippedVia.Image").
 		Order("created_at DESC").
 		Limit(perPage).
 		Offset(offset).
@@ -577,6 +580,8 @@ func IndexOrderByShopID(c *gin.Context) {
 		Preload("Items.ProductVariantCombination.Option1").
 		Preload("Items.ProductVariantCombination.Option2").
 		Preload("Items.ProductVariantCombination.Option3").
+		Preload("ShippedVia").
+		Preload("ShippedVia.Image").
 		First(&order).Error
 
 	if err != nil {
@@ -783,6 +788,12 @@ func UpdateOrderByShopID(c *gin.Context) {
 			updates["is_shipped"] = *body.IsShipped
 			if *body.IsShipped && !order.IsShipped {
 				decrementOrderItemsStock(tx, order.Items)
+				updates["shipped_at"] = time.Now()
+				if body.ShippedViaID != nil {
+					if shippedViaID, parseErr := uuid.Parse(*body.ShippedViaID); parseErr == nil {
+						updates["shipped_via_id"] = shippedViaID
+					}
+				}
 			}
 		}
 

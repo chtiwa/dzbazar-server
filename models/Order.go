@@ -1,6 +1,10 @@
 package models
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type OrderStatus string
 
@@ -31,6 +35,13 @@ type Order struct {
 	FBp              string `json:"fbp"`
 	ConversionSource string `json:"conversionSource"`
 	IsShipped        bool   `gorm:"default:false" json:"isShipped"`
+
+	// Carrier the order was actually handed to, and when — set once at
+	// shipping time, independent of any later edits to the order (unlike
+	// UpdatedAt, which bumps on every unrelated change).
+	ShippedAt    *time.Time                `json:"shippedAt"`
+	ShippedViaID *uuid.UUID                `gorm:"type:uuid" json:"shippedViaId"`
+	ShippedVia   *AvailableDeliveryCompany `gorm:"foreignKey:ShippedViaID;references:ID" json:"shippedVia"`
 
 	// THE FIX: One Order has Many Items
 	Items []OrderItem `gorm:"foreignKey:OrderID;constraint:OnDelete:CASCADE" json:"items"`
