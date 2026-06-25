@@ -44,6 +44,7 @@ func main() {
 	routes.PlansRoutes(router)
 	routes.OsenRoutes(router)
 	routes.LeopardRoutes(router)
+	routes.ZrRoutes(router)
 	routes.AbandonedLeadsRoutes(router)
 	routes.SuperAdminRoutes(router)
 	routes.WebSocketRoutes(router)
@@ -51,6 +52,7 @@ func main() {
 	go realtime.StartHub()
 	go realtime.StartSubscriber()
 	go controllers.StartOsenStatusSync()
+	go controllers.StartZrStatusSync()
 	go controllers.StartSubscriptionExpiryReminders()
 
 	fmt.Println("The server is running successfully!")

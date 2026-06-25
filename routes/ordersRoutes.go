@@ -11,7 +11,6 @@ func OrdersRoutes(router *gin.Engine) {
 	{
 		orders.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.GetOrdersByShopID)
 		orders.POST("", middleware.OrderIPRateLimit(), controllers.CreateOrderByShopID)
-		orders.POST("/proxy", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.CreateZrOrder)
 		orders.POST("/excel", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.ExportAsExcel)
 
 		orders.GET("/:id", middleware.RequireAuthentication, controllers.IndexOrderByShopID)

@@ -1,9 +1,7 @@
 package controllers
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"math"
 	"net/http"
 	"os"
@@ -493,57 +491,6 @@ func CreateOrderByShopID(c *gin.Context) {
 		"message":  "The order was created successfully",
 		"order_id": order.ID,
 	})
-}
-
-func CreateZrOrder(c *gin.Context) {
-	bodyBytes, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to parse the body",
-		})
-		return
-	}
-
-	zrApi := os.Getenv("ZR_EXPRESS_URL")
-	token := os.Getenv("ZR_EXPRESS_TOKEN")
-	key := os.Getenv("ZR_EXPRESS_KEY")
-
-	req, err := http.NewRequest("POST", fmt.Sprint(zrApi, "/parcels"), bytes.NewBuffer(bodyBytes))
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{
-			"success": false,
-			"error":   "Failed to create api request",
-		})
-		return
-	}
-
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Tenant", token)
-	req.Header.Set("X-Api-Key", key)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{
-			"success": false,
-			"error":   "Failed to contact external api",
-		})
-		return
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to read the api response",
-		})
-		return
-	}
-
-	c.Data(resp.StatusCode, "application/json", respBody)
 }
 
 func IndexOrderByShopID(c *gin.Context) {

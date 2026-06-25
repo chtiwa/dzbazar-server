@@ -338,6 +338,16 @@ func ConnectDeliveryCompany(c *gin.Context) {
 			return
 		}
 	}
+	if strings.EqualFold(strings.TrimSpace(available.Name), "zr express") {
+		valid, errMsg := validateZrCredentials(body.Token, body.MerchantID)
+		if !valid {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": fmt.Sprintf("Identifiants ZR Express invalides: %s", errMsg),
+			})
+			return
+		}
+	}
 
 	var existing models.DeliveryCompany
 	err = initializers.DB.
