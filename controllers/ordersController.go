@@ -64,6 +64,7 @@ type UpdateOrderInput struct {
 	ShippingPrice  *float64          `json:"shippingPrice"`
 	Note           *string           `json:"note"`
 	Status         string            `json:"status"`
+	ReportedDate   *string           `json:"reportedDate"`
 	Ouvrable       *bool             `json:"ouvrable"`
 	Fragile        *bool             `json:"fragile"`
 	Essayable      *bool             `json:"essayable"`
@@ -729,6 +730,14 @@ func UpdateOrderByShopID(c *gin.Context) {
 
 		if strings.TrimSpace(body.Status) != "" {
 			updates["status"] = body.Status
+		}
+
+		if body.ReportedDate != nil {
+			if strings.TrimSpace(*body.ReportedDate) == "" {
+				updates["reported_date"] = nil
+			} else if parsed, parseErr := time.Parse("2006-01-02", *body.ReportedDate); parseErr == nil {
+				updates["reported_date"] = parsed
+			}
 		}
 
 		if body.IsShipped != nil {

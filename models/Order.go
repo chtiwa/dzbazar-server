@@ -23,6 +23,9 @@ type Order struct {
 	TotalPrice     float64 `json:"totalPrice"` // Sum of all items + shipping
 	Status         string  `gorm:"default:En attente" json:"status"`
 
+	// Date the order was rescheduled to, set when Status is "Reporté".
+	ReportedDate *time.Time `json:"reportedDate"`
+
 	Note string `gorm:"omitempty" json:"note"`
 
 	// Marketing & COD Flags

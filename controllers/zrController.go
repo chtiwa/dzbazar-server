@@ -88,13 +88,12 @@ type zrCustomer struct {
 	Phone      zrPhone `json:"phone"`
 }
 
+// zrDeliveryAddress mirrors DeliveryAddressInputDto exactly as documented
+// (additionalProperties: false — city/country/district/postalCode aren't in
+// this schema at all and were rejected as unknown properties).
 type zrDeliveryAddress struct {
-	City            string `json:"city"`
-	CityTerritoryID string `json:"cityTerritoryId,omitempty"`
-	Country         string `json:"country"`
-	District            string `json:"district,omitempty"`
-	DistrictTerritoryID string `json:"districtTerritoryId,omitempty"`
-	PostalCode          string `json:"postalCode,omitempty"`
+	CityTerritoryID     string `json:"cityTerritoryId"`
+	DistrictTerritoryID string `json:"districtTerritoryId"`
 	Street              string `json:"street,omitempty"`
 }
 
@@ -105,14 +104,22 @@ type zrOrderedProduct struct {
 	StockType   string  `json:"stockType"`
 }
 
+// zrWeight mirrors ParcelWeightDto exactly as documented: weight is an
+// object, not a plain number — sending a bare number here is a type mismatch
+// that crashes the API's deserializer with an empty body before any
+// validation runs (confirmed: docs.zrexpress.app/reference/createparcelendpoint).
+type zrWeight struct {
+	Weight            float64  `json:"weight"`
+	DimensionalWeight *float64 `json:"dimensionalWeight,omitempty"`
+}
+
 type zrCreateParcelReq struct {
 	Customer        zrCustomer         `json:"customer"`
 	DeliveryAddress zrDeliveryAddress  `json:"deliveryAddress"`
 	Amount          float64            `json:"amount"`
-	Weight          float64            `json:"weight"`
+	Weight          zrWeight           `json:"weight"`
 	OrderedProducts []zrOrderedProduct `json:"orderedProducts"`
 	DeliveryType    string             `json:"deliveryType"`
-	StateID         string             `json:"stateId,omitempty"`
 	HubID           string             `json:"hubId,omitempty"`
 	Description     string             `json:"description,omitempty"`
 	ExternalID      string             `json:"externalId,omitempty"`
@@ -213,14 +220,22 @@ func shipOrderToZr(order *models.Order, integration *models.DeliveryCompany) (ma
 		deliveryType = "pickup-point"
 	}
 
-	wilayaID, districtID, err := resolveZrTerritoryID(order.ShopID, integration, order.Client.StateCode, order.Client.State, order.Client.City)
+	// For Stopdesk orders the commune is stored in StopdeskPoint; City is left
+	// empty by the storefront checkout in that case (same convention Osen and
+	// Leopard already rely on).
+	cityName := order.Client.City
+	if deliveryType == "pickup-point" {
+		cityName = order.Client.StopdeskPoint
+	}
+
+	wilayaID, districtID, err := resolveZrTerritoryID(order.Client.StateCode, order.Client.State, cityName)
 	if err != nil {
 		return nil, &osenShipError{http.StatusBadRequest, fmt.Sprintf("Zone de livraison ZR Express non couverte: %s", err.Error())}
 	}
 
 	var hubID string
 	if deliveryType == "pickup-point" {
-		hubID, err = resolveZrHubID(order.ShopID, integration, order.Client.StateCode, order.Client.State, order.Client.City)
+		hubID, err = resolveZrHubID(order.ShopID, integration, order.Client.StateCode, order.Client.State, cityName)
 		if err != nil {
 			return nil, &osenShipError{http.StatusBadRequest, "Point de relais ZR Express introuvable pour cette wilaya"}
 		}
@@ -250,17 +265,13 @@ func shipOrderToZr(order *models.Order, integration *models.DeliveryCompany) (ma
 			Phone:      zrPhone{Number1: formatZrPhone(order.Client.PhoneNumber)},
 		},
 		DeliveryAddress: zrDeliveryAddress{
-			City:                order.Client.State,
 			CityTerritoryID:     wilayaID,
-			Country:             "Algeria",
-			District:            order.Client.City,
 			DistrictTerritoryID: districtID,
 		},
 		Amount:          math.Floor(order.TotalPrice),
-		Weight:          zrDefaultWeightKg,
+		Weight:          zrWeight{Weight: zrDefaultWeightKg},
 		OrderedProducts: orderedProducts,
 		DeliveryType:    deliveryType,
-		StateID:         wilayaID,
 		HubID:           hubID,
 		Description:     buildShipmentDescription(order),
 		ExternalID:      order.ID.String(),
@@ -284,7 +295,9 @@ func shipOrderToZr(order *models.Order, integration *models.DeliveryCompany) (ma
 
 	respBody, _ := io.ReadAll(resp.Body)
 
-	if resp.StatusCode != http.StatusCreated {
+	// Confirmed live: ZR returns 200 OK on a successful parcel creation, not
+	// the 201 Created its REST convention would suggest.
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, &osenShipError{http.StatusBadRequest, fmt.Sprintf("[HTTP %d] %s", resp.StatusCode, extractZrErrorMessage(respBody))}
 	}
 
