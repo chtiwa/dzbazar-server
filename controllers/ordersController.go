@@ -486,6 +486,8 @@ func CreateOrderByShopID(c *gin.Context) {
 	}(order.ID, clientUserAgent, clientIP)
 
 	InvalidateDashboardCache(parsedShopID)
+	invalidateProductCaches(uuid.Nil, parsedShopID)
+	initializers.RClient.Del(initializers.Ctx, landingPagesCacheKeyByShop(parsedShopID))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":  true,
@@ -853,6 +855,8 @@ func DeleteOrderByShopID(c *gin.Context) {
 	}
 
 	InvalidateDashboardCache(shopID)
+	invalidateProductCaches(uuid.Nil, shopID)
+	initializers.RClient.Del(initializers.Ctx, landingPagesCacheKeyByShop(shopID))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

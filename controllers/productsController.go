@@ -23,6 +23,36 @@ import (
 	"github.com/google/uuid"
 )
 
+// countOrdersByProductIDs returns, per product, how many non-deleted orders contain it
+// (regardless of status — used for "Orders" counts on product/landing page lists).
+func countOrdersByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]int64, error) {
+	counts := make(map[uuid.UUID]int64, len(productIDs))
+	if len(productIDs) == 0 {
+		return counts, nil
+	}
+
+	var rows []struct {
+		ProductID uuid.UUID
+		Count     int64
+	}
+
+	err := initializers.DB.
+		Table("order_items").
+		Joins("JOIN orders ON orders.id = order_items.order_id").
+		Where("order_items.product_id IN ? AND orders.deleted_at IS NULL", productIDs).
+		Select("order_items.product_id AS product_id, COUNT(DISTINCT order_items.order_id) AS count").
+		Group("order_items.product_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range rows {
+		counts[r.ProductID] = r.Count
+	}
+	return counts, nil
+}
+
 type VariantItemSimple struct {
 	ID    string `json:"id"`
 	Value string `json:"value"`
@@ -439,6 +469,23 @@ func GetProductsByShopAdmin(c *gin.Context) {
 			"error":   err.Error(),
 		})
 		return
+	}
+
+	productIDs := make([]uuid.UUID, len(products))
+	for i, p := range products {
+		productIDs[i] = p.ID
+	}
+	orderCounts, err := countOrdersByProductIDs(productIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error while counting orders per product",
+			"error":   err.Error(),
+		})
+		return
+	}
+	for i := range products {
+		products[i].Orders = orderCounts[products[i].ID]
 	}
 
 	response := gin.H{

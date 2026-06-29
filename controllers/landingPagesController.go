@@ -338,6 +338,23 @@ func GetLandingPagesByShop(c *gin.Context) {
 		return
 	}
 
+	productIDs := make([]uuid.UUID, len(landingPages))
+	for i, lp := range landingPages {
+		productIDs[i] = lp.ProductID
+	}
+	orderCounts, err := countOrdersByProductIDs(productIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to count orders per landing page",
+			"error":   err.Error(),
+		})
+		return
+	}
+	for i := range landingPages {
+		landingPages[i].Orders = orderCounts[landingPages[i].ProductID]
+	}
+
 	if jsonData, err := json.Marshal(landingPages); err == nil {
 		_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
 	}
@@ -433,6 +450,8 @@ func IndexLandingPage(c *gin.Context) {
 	var landingPage models.LandingPage
 	if err := initializers.DB.
 		Where("id = ? AND active = ?", landingPageID, true).
+		Preload("Shop").
+		Preload("Shop.LogoImage").
 		Preload("Images", func(db *gorm.DB) *gorm.DB {
 			return db.Order("order_index ASC")
 		}).

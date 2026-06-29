@@ -14,6 +14,9 @@ type Product struct {
 	Variants    []Variant      `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"variants"` // can be null when the product doesn't have any variants
 
 	Combinations []ProductVariantCombination `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"combinations"`
+
+	// Count of non-deleted orders containing this product. Computed per-request, not stored.
+	Orders int64 `gorm:"-" json:"orders"`
 }
 
 type ProductImage struct {
@@ -26,11 +29,15 @@ type ProductImage struct {
 type LandingPage struct {
 	BaseModel
 	ShopID    uuid.UUID          `gorm:"not null" json:"shopId"`
+	Shop      Shop               `gorm:"foreignKey:ShopID;references:ID" json:"shop,omitempty"`
 	ProductID uuid.UUID          `gorm:"not null" json:"productId"`
 	Product   Product            `gorm:"foreignKey:ProductID;references:ID" json:"product"`
 	Title     string             `gorm:"not null" json:"title"`
 	Images    []LandingPageImage `gorm:"foreignKey:LandingPageID;constraint:OnDelete:CASCADE" json:"images"`
 	Active    bool               `gorm:"default:true" json:"active"`
+
+	// Count of non-deleted orders containing this landing page's product. Computed per-request, not stored.
+	Orders int64 `gorm:"-" json:"orders"`
 }
 
 type LandingPageImage struct {
