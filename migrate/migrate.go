@@ -39,6 +39,7 @@ func Migrate() {
 		&models.ProductImage{},
 		&models.LandingPage{},
 		&models.LandingPageImage{},
+		&models.Coupon{},
 		&models.Variant{},
 		&models.VariantItem{},
 		&models.ProductVariantCombination{},

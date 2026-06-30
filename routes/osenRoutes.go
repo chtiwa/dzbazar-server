@@ -11,7 +11,7 @@ func OsenRoutes(router *gin.Engine) {
 	g.Use(middleware.RequireAuthentication)
 	{
 		g.GET("/orders", controllers.GetOsenOrders)
-		g.POST("/orders", controllers.CreateOsenOrder)
-		g.POST("/orders/bulk", controllers.BulkCreateOsenOrders)
+		g.POST("/orders", middleware.RequireRoles("Owner", "Logistics"), controllers.CreateOsenOrder)
+		g.POST("/orders/bulk", middleware.RequireRoles("Owner", "Logistics"), controllers.BulkCreateOsenOrders)
 	}
 }

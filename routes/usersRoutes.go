@@ -21,12 +21,18 @@ func UsersRoutes(router *gin.Engine) {
 	}
 
 	shopUsers := router.Group("/v1/shops/:shopId/users")
-	shopUsers.Use(middleware.RequireAuthentication, middleware.RequireRoles("Owner"))
+	shopUsers.Use(middleware.RequireAuthentication)
 	{
-		shopUsers.GET("", controllers.GetUsersByShop)
-		shopUsers.POST("", controllers.CreateUserByShop)
+		// Any shop member can view their own record (IndexUserByShop enforces self-or-Owner).
 		shopUsers.GET("/:id", controllers.IndexUserByShop)
-		shopUsers.PATCH("/:id", controllers.UpdateUserByShop)
-		shopUsers.DELETE("/:id", controllers.DeleteUserByShop)
+
+		owned := shopUsers.Group("")
+		owned.Use(middleware.RequireRoles("Owner"))
+		{
+			owned.GET("", controllers.GetUsersByShop)
+			owned.POST("", controllers.CreateUserByShop)
+			owned.PATCH("/:id", controllers.UpdateUserByShop)
+			owned.DELETE("/:id", controllers.DeleteUserByShop)
+		}
 	}
 }

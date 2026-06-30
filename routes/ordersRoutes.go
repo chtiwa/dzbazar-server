@@ -15,6 +15,6 @@ func OrdersRoutes(router *gin.Engine) {
 
 		orders.GET("/:id", middleware.RequireAuthentication, controllers.IndexOrderByShopID)
 		orders.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.UpdateOrderByShopID)
-		orders.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff"), controllers.DeleteOrderByShopID)
+		orders.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner"), controllers.DeleteOrderByShopID)
 	}
 }

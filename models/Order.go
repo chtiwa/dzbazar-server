@@ -23,6 +23,11 @@ type Order struct {
 	TotalPrice     float64 `json:"totalPrice"` // Sum of all items + shipping
 	Status         string  `gorm:"default:En attente" json:"status"`
 
+	// Coupon applied at checkout, if any. Kept for audit/display only — discounting
+	// already happened server-side before TotalPrice was computed.
+	CouponID       *uuid.UUID `gorm:"type:uuid" json:"couponId"`
+	DiscountAmount float64    `gorm:"default:0" json:"discountAmount"`
+
 	// Date the order was rescheduled to, set when Status is "Reporté".
 	ReportedDate *time.Time `json:"reportedDate"`
 

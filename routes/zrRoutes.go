@@ -11,8 +11,8 @@ func ZrRoutes(router *gin.Engine) {
 	g.Use(middleware.RequireAuthentication)
 	{
 		g.GET("/orders", controllers.GetZrOrders)
-		g.POST("/orders", controllers.CreateZrOrder)
-		g.POST("/orders/bulk", controllers.BulkCreateZrOrders)
+		g.POST("/orders", middleware.RequireRoles("Owner", "Logistics"), controllers.CreateZrOrder)
+		g.POST("/orders/bulk", middleware.RequireRoles("Owner", "Logistics"), controllers.BulkCreateZrOrders)
 		g.POST("/geo/refresh", controllers.RefreshZrGeo)
 		g.GET("/geo/debug", controllers.DebugZrGeo)
 	}

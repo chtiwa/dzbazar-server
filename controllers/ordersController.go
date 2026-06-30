@@ -32,6 +32,7 @@ type CreateOrderInput struct {
 	FBclid           string  `json:"fbclid"`
 	FBc              string  `json:"fbc"`
 	FBp              string  `json:"fbp"`
+	CouponCode       string  `json:"couponCode"`
 
 	// Nested client object matches your new JSON payload
 	Client OrderClientInput `json:"client" binding:"required"`
@@ -142,11 +143,30 @@ func GetOrdersByShopID(c *gin.Context) {
 
 	status := c.Query("status")
 	search := strings.TrimSpace(c.Query("search"))
+	dateFrom := c.Query("dateFrom")
+	dateTo := c.Query("dateTo")
 
 	baseQuery := initializers.DB.Model(&models.Order{}).Where("orders.shop_id = ?", shopID)
 
 	if status != "" && status != "Tous" {
 		baseQuery = baseQuery.Where("status = ?", status)
+	}
+
+	// A start date with no end date means "that single day only".
+	if dateTo == "" {
+		dateTo = dateFrom
+	}
+
+	if dateFrom != "" {
+		if parsed, err := time.Parse("2006-01-02", dateFrom); err == nil {
+			baseQuery = baseQuery.Where("orders.created_at >= ?", parsed)
+		}
+	}
+
+	if dateTo != "" {
+		if parsed, err := time.Parse("2006-01-02", dateTo); err == nil {
+			baseQuery = baseQuery.Where("orders.created_at < ?", parsed.AddDate(0, 0, 1))
+		}
 	}
 
 	if search != "" {
@@ -320,6 +340,28 @@ func CreateOrderByShopID(c *gin.Context) {
 			calculatedTotalPrice += item.Price * float64(item.Quantity)
 		}
 
+		// Coupon discount is recomputed server-side, never trusted from the client —
+		// same trust boundary as the item-price total above. An invalid, inactive, or
+		// out-of-scope code is silently ignored so checkout never fails on a stale promo.
+		var couponID *uuid.UUID
+		var discountAmount float64
+		if code := strings.TrimSpace(body.CouponCode); code != "" {
+			var coupon models.Coupon
+			if err := tx.Preload("Products").Preload("LandingPages").
+				Where("shop_id = ? AND UPPER(code) = ?", parsedShopID, strings.ToUpper(code)).
+				First(&coupon).Error; err == nil {
+				productIDs := make([]uuid.UUID, len(orderItems))
+				for i, oi := range orderItems {
+					productIDs[i] = oi.ProductID
+				}
+				if discount, matched := couponDiscount(coupon, productIDs, calculatedTotalPrice); matched {
+					discountAmount = discount
+					couponID = &coupon.ID
+					calculatedTotalPrice -= discountAmount
+				}
+			}
+		}
+
 		calculatedTotalPrice += body.ShippingPrice
 
 		order = models.Order{
@@ -330,6 +372,8 @@ func CreateOrderByShopID(c *gin.Context) {
 			TotalPrice:     calculatedTotalPrice,
 			Status:         "En attente",
 			Note:           body.Note,
+			CouponID:       couponID,
+			DiscountAmount: discountAmount,
 			// FIX 3: Map the missing boolean flags from the body
 			Ouvrable:         body.Ouvrable,
 			Fragile:          body.Fragile,
@@ -386,6 +430,7 @@ func CreateOrderByShopID(c *gin.Context) {
 		}
 
 		testCode := os.Getenv("FACEBOOK_TEST_CODE")
+		isProduction := os.Getenv("APP_ENV") == "production"
 
 		mainProductName := "Multi-item Order"
 		if len(fullOrder.Items) > 0 {
@@ -401,7 +446,7 @@ func CreateOrderByShopID(c *gin.Context) {
 			}
 		}
 
-		if testCode == "" && fullOrder.Status != "Confirmé" {
+		if isProduction && testCode == "" && fullOrder.Status != "Confirmé" {
 			var shop models.Shop
 			initializers.DB.Select("name").First(&shop, "id = ?", fullOrder.ShopID)
 

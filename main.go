@@ -35,6 +35,7 @@ func main() {
 	routes.UsersRoutes(router)
 	routes.ProductsRoutes(router)
 	routes.LandingPagesRoutes(router)
+	routes.CouponsRoutes(router)
 	routes.ShopsRoutes(router)
 	routes.PixelsRoutes(router)
 	routes.DashboardRoutes(router)
