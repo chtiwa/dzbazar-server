@@ -11,13 +11,12 @@ func LandingPagesRoutes(router *gin.Engine) {
 	{
 		adminLandingPages := adminShop.Group("/:shopId/landing-pages")
 		{
-			adminLandingPages.POST("", middleware.RequireAuthentication, middleware.RequireRoles("Owner"), controllers.CreateLandingPageByShop)
-			adminLandingPages.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Owner"), controllers.GetLandingPagesByShop)
-			adminLandingPages.GET("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner"), controllers.GetLandingPageByShop)
+			adminLandingPages.POST("", middleware.RequireAuthentication, middleware.RequireRoles("owner", "moderator"), controllers.CreateLandingPageByShop)
+			adminLandingPages.GET("", middleware.RequireAuthentication, middleware.RequireRoles("owner", "moderator"), controllers.GetLandingPagesByShop)
+			adminLandingPages.GET("/:id", middleware.RequireAuthentication, middleware.RequireRoles("owner", "moderator"), controllers.GetLandingPageByShop)
 
-			adminLandingPages.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner"), controllers.UpdateLandingPageByShop)
-			adminLandingPages.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner"), controllers.DeleteLandingPageByShop)
-
+			adminLandingPages.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("owner", "moderator"), controllers.UpdateLandingPageByShop)
+			adminLandingPages.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("owner"), controllers.DeleteLandingPageByShop)
 		}
 	}
 

@@ -6,6 +6,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// ShopRole is the source-of-truth table for valid shop member roles.
+// ponytail: permission logic lives in roleCan(); add columns only if shops need custom permissions.
+type ShopRole struct {
+	Name string `gorm:"primaryKey" json:"name"` // owner | moderator | confirmation
+}
+
 type User struct {
 	BaseModel
 	FirstName   string `gorm:"not null" json:"firstName"`
@@ -13,7 +19,7 @@ type User struct {
 	PhoneNumber string `gorm:"not null" json:"phoneNumber"`
 	Email       string `gorm:"unique;not null" json:"email"`
 	Password    string `json:"password"`
-	Role        string `gorm:"default:Staff" json:"role"`
+	Role        string `gorm:"default:'moderator'" json:"role"`
 	IsVerified  bool   `gorm:"default:false" json:"isVerified"`
 	IsSuspended bool   `gorm:"default:false" json:"isSuspended"`
 
@@ -37,5 +43,5 @@ type ShopMember struct {
 	User User `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user"`
 	Shop Shop `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"shop"`
 
-	Role string `gorm:"type:text;not null;default:'Staff'" json:"role"`
+	Role string `gorm:"type:text;not null;default:'moderator'" json:"role"`
 }

@@ -9,12 +9,12 @@ import (
 func OrdersRoutes(router *gin.Engine) {
 	orders := router.Group("/v1/shops/:shopId/orders")
 	{
-		orders.GET("", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.GetOrdersByShopID)
+		orders.GET("", middleware.RequireAuthentication, middleware.RequireRoles("owner", "moderator", "confirmation"), controllers.GetOrdersByShopID)
 		orders.POST("", middleware.OrderIPRateLimit(), controllers.CreateOrderByShopID)
-		orders.POST("/excel", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.ExportAsExcel)
+		orders.POST("/excel", middleware.RequireAuthentication, middleware.RequireRoles("owner", "moderator", "confirmation"), controllers.ExportAsExcel)
 
 		orders.GET("/:id", middleware.RequireAuthentication, controllers.IndexOrderByShopID)
-		orders.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner", "Staff", "Logistics"), controllers.UpdateOrderByShopID)
-		orders.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("Owner"), controllers.DeleteOrderByShopID)
+		orders.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("owner", "moderator", "confirmation"), controllers.UpdateOrderByShopID)
+		orders.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("owner"), controllers.DeleteOrderByShopID)
 	}
 }

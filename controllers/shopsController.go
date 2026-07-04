@@ -350,7 +350,7 @@ func CreateShop(c *gin.Context) {
 		membership := models.ShopMember{
 			ShopID: shop.ID,
 			UserID: userData.ID,
-			Role:   "Owner",
+			Role:   "owner",
 		}
 		if err := tx.Create(&membership).Error; err != nil {
 			return err

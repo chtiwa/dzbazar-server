@@ -19,8 +19,8 @@ func DeliveryCompaniesRoutes(router *gin.Engine) {
 	integrations.Use(middleware.RequireAuthentication)
 	{
 		integrations.GET("", controllers.GetShopDeliveryCompanies)
-		integrations.POST("", middleware.RequireShopAccess("Owner"), controllers.ConnectDeliveryCompany)
-		integrations.PATCH("/:id", middleware.RequireShopAccess("Owner"), controllers.UpdateDeliveryCompanyCredentials)
-		integrations.DELETE("/:id", middleware.RequireShopAccess("Owner"), controllers.DisconnectDeliveryCompany)
+		integrations.POST("", middleware.RequireShopAccess("owner", "moderator"), controllers.ConnectDeliveryCompany)
+		integrations.PATCH("/:id", middleware.RequireShopAccess("owner", "moderator"), controllers.UpdateDeliveryCompanyCredentials)
+		integrations.DELETE("/:id", middleware.RequireShopAccess("owner"), controllers.DisconnectDeliveryCompany)
 	}
 }

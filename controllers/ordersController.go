@@ -446,7 +446,7 @@ func CreateOrderByShopID(c *gin.Context) {
 			}
 		}
 
-		if isProduction && testCode == "" && fullOrder.Status != "Confirmé" {
+		if isProduction && fullOrder.Status != "Confirmé" {
 			var shop models.Shop
 			initializers.DB.Select("name").First(&shop, "id = ?", fullOrder.ShopID)
 

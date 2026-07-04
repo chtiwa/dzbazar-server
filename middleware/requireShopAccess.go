@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"net/http"
+
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/gin-gonic/gin"
@@ -16,10 +18,41 @@ func GetShopMembership(userID uuid.UUID, shopID string) (models.ShopMember, bool
 	return membership, err == nil
 }
 
-func RequireShopAccess(requiredRole string) gin.HandlerFunc {
+// roleCan reports whether role may perform action.
+// ponytail: perms in code; add shop_roles boolean columns only if shops need custom permissions.
+func roleCan(role, action string) bool {
+	switch action {
+	case "delete":
+		return role == "owner"
+	default:
+		return role == "owner" || role == "moderator"
+	}
+}
+
+// RequireShopPermission checks the shop role (set by RequireShopAccess) against action.
+// Must run after RequireShopAccess.
+func RequireShopPermission(action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		user, _ := c.Get("user")                 // Populated by your base Auth middleware
-		targetShopID := c.GetHeader("X-Shop-ID") // Passed by frontend admin panel
+		role, _ := c.Get("userShopRole")
+		if !roleCan(role.(string), action) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You do not have permission to perform this action"})
+			return
+		}
+		c.Next()
+	}
+}
+
+// RequireShopAccess verifies the user is a member of the shop in X-Shop-ID.
+// Pass allowed roles to restrict further (empty = any shop member is fine).
+func RequireShopAccess(allowedRoles ...string) gin.HandlerFunc {
+	allowedMap := map[string]bool{}
+	for _, r := range allowedRoles {
+		allowedMap[r] = true
+	}
+
+	return func(c *gin.Context) {
+		user, _ := c.Get("user")                 // Populated by RequireAuthentication
+		targetShopID := c.GetHeader("X-Shop-ID") // Passed by the frontend admin panel
 
 		if targetShopID == "" {
 			c.JSON(400, gin.H{"error": "Missing active workspace header"})
@@ -37,7 +70,7 @@ func RequireShopAccess(requiredRole string) gin.HandlerFunc {
 			impersonatedShopID, _ := c.Get("impersonatedShopID")
 			if isImpersonating == true && impersonatedShopID == targetShopID {
 				c.Set("activeShopID", targetShopID)
-				c.Set("userShopRole", "Owner")
+				c.Set("userShopRole", "owner")
 				c.Next()
 				return
 			}
@@ -47,14 +80,12 @@ func RequireShopAccess(requiredRole string) gin.HandlerFunc {
 			return
 		}
 
-		// Optional: Enforce authorization roles (e.g. tracking logistics agents)
-		if requiredRole == "Owner" && membership.Role != "Owner" {
-			c.JSON(403, gin.H{"error": "Action requires Owner privileges"})
+		if len(allowedRoles) > 0 && !allowedMap[membership.Role] {
+			c.JSON(403, gin.H{"error": "Action requires elevated privileges"})
 			c.Abort()
 			return
 		}
 
-		// Set the active scope variables for your handlers down the execution chain
 		c.Set("activeShopID", targetShopID)
 		c.Set("userShopRole", membership.Role)
 		c.Next()

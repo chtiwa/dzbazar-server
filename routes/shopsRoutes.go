@@ -12,9 +12,9 @@ func ShopsRoutes(router *gin.Engine) {
 		shops.GET("", middleware.RequireAuthentication, controllers.GetMyShops)
 		shops.POST("", middleware.RequireAuthentication, controllers.CreateShop)
 		shops.GET("/by-slug/:slug", middleware.RequireAuthentication, controllers.IndexShopBySlug)
-		shops.GET("/:shopId", middleware.RequireAuthentication, middleware.RequireShopAccess("Owner"), controllers.GetShopByID)
-		shops.PATCH("/:shopId", middleware.RequireAuthentication, middleware.RequireShopAccess("Owner"), controllers.UpdateShop)
-		shops.DELETE("/:shopId", middleware.RequireAuthentication, middleware.RequireShopAccess("Owner"), controllers.DeleteShop)
+		shops.GET("/:shopId", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), controllers.GetShopByID)
+		shops.PATCH("/:shopId", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), controllers.UpdateShop)
+		shops.DELETE("/:shopId", middleware.RequireAuthentication, middleware.RequireShopAccess("owner"), controllers.DeleteShop)
 	}
 
 	store := router.Group("/v1/store")

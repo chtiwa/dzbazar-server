@@ -16,6 +16,7 @@ func Migrate() {
 
 	log.Println("🔄 Phase 1: Creating base tables without constraints...")
 	err := initializers.DB.AutoMigrate(
+		&models.ShopRole{},
 		&models.User{},
 		&models.Shop{},
 	)
@@ -74,6 +75,17 @@ func Migrate() {
 		ON users (platform_role)
 		WHERE platform_role = 'super_admin' AND deleted_at IS NULL
 	`)
+
+	// Seed shop roles (idempotent)
+	initializers.DB.Exec(`INSERT INTO shop_roles (name) VALUES ('owner'),('moderator'),('confirmation') ON CONFLICT (name) DO NOTHING`)
+
+	// Backfill legacy role names → new role names (idempotent — no-op once migrated)
+	initializers.DB.Exec(`UPDATE shop_members SET role='owner'        WHERE role='Owner'`)
+	initializers.DB.Exec(`UPDATE shop_members SET role='moderator'    WHERE role='Staff'`)
+	initializers.DB.Exec(`UPDATE shop_members SET role='confirmation' WHERE role='Logistics'`)
+	initializers.DB.Exec(`UPDATE users        SET role='owner'        WHERE role='Owner'`)
+	initializers.DB.Exec(`UPDATE users        SET role='moderator'    WHERE role='Staff'`)
+	initializers.DB.Exec(`UPDATE users        SET role='confirmation' WHERE role='Logistics'`)
 
 	log.Println("🚀 Database schema migrated perfectly with all relations intact!")
 }

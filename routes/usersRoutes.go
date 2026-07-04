@@ -23,16 +23,23 @@ func UsersRoutes(router *gin.Engine) {
 	shopUsers := router.Group("/v1/shops/:shopId/users")
 	shopUsers.Use(middleware.RequireAuthentication)
 	{
-		// Any shop member can view their own record (IndexUserByShop enforces self-or-Owner).
+		// Any shop member can view their own record (IndexUserByShop enforces self-or-owner).
 		shopUsers.GET("/:id", controllers.IndexUserByShop)
 
-		owned := shopUsers.Group("")
-		owned.Use(middleware.RequireRoles("Owner"))
+		// owner and moderator can list, create, and edit members
+		manageable := shopUsers.Group("")
+		manageable.Use(middleware.RequireRoles("owner", "moderator"))
 		{
-			owned.GET("", controllers.GetUsersByShop)
-			owned.POST("", controllers.CreateUserByShop)
-			owned.PATCH("/:id", controllers.UpdateUserByShop)
-			owned.DELETE("/:id", controllers.DeleteUserByShop)
+			manageable.GET("", controllers.GetUsersByShop)
+			manageable.POST("", controllers.CreateUserByShop)
+			manageable.PATCH("/:id", controllers.UpdateUserByShop)
+		}
+
+		// only owner can remove members
+		deletable := shopUsers.Group("")
+		deletable.Use(middleware.RequireRoles("owner"))
+		{
+			deletable.DELETE("/:id", controllers.DeleteUserByShop)
 		}
 	}
 }

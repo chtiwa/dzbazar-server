@@ -74,7 +74,7 @@ func IndexUserByShop(c *gin.Context) {
 
 	requester := c.MustGet("user").(models.User)
 	role := c.MustGet("role").(string)
-	if role != "Owner" && requester.ID != userID {
+	if role != "owner" && requester.ID != userID {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
 			"message": "You do not have permission to perform this action",
@@ -133,7 +133,7 @@ func CreateUserByShop(c *gin.Context) {
 		PhoneNumber string `json:"phoneNumber" binding:"required"`
 		Email       string `json:"email" binding:"required,email"`
 		Password    string `json:"password" binding:"required,min=6"`
-		Role        string `json:"role" binding:"omitempty,oneof=Owner Staff Logistics"`
+		Role        string `json:"role" binding:"omitempty"`
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -146,7 +146,14 @@ func CreateUserByShop(c *gin.Context) {
 	}
 
 	if body.Role == "" {
-		body.Role = "Staff"
+		body.Role = "moderator"
+	} else {
+		var n int64
+		initializers.DB.Model(&models.ShopRole{}).Where("name = ?", body.Role).Count(&n)
+		if n == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid role"})
+			return
+		}
 	}
 
 	tx := initializers.DB.Begin()
@@ -293,7 +300,7 @@ func UpdateUserByShop(c *gin.Context) {
 		PhoneNumber *string `json:"phoneNumber"`
 		Email       *string `json:"email" binding:"omitempty,email"`
 		Password    *string `json:"password" binding:"omitempty,min=6"`
-		Role        *string `json:"role" binding:"omitempty,oneof=Owner Admin Moderator Staff User"`
+		Role        *string `json:"role" binding:"omitempty"`
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -371,6 +378,14 @@ func UpdateUserByShop(c *gin.Context) {
 	}
 
 	if body.Role != nil {
+		var n int64
+		initializers.DB.Model(&models.ShopRole{}).Where("name = ?", *body.Role).Count(&n)
+		if n == 0 {
+			tx.Rollback()
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid role"})
+			return
+		}
+
 		if err := tx.Model(&models.ShopMember{}).
 			Where("shop_id = ? AND user_id = ?", shopID, userID).
 			Update("role", *body.Role).Error; err != nil {

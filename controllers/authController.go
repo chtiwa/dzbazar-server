@@ -152,7 +152,7 @@ func SignUp(c *gin.Context) {
 		Password:          string(hash),
 		EmailOTP:          otp,
 		EmailOTPExpiresAt: &expiresAt,
-		Role:              "Owner",
+		Role:              "owner",
 		IsVerified:        false,
 	}
 

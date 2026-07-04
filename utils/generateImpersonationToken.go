@@ -14,7 +14,7 @@ import (
 func GenerateImpersonationToken(userID uuid.UUID, shopID uuid.UUID, ttlSeconds uint) *jwt.Token {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub":           userID,
-		"role":          "Owner",
+		"role":          "owner",
 		"impersonating": true,
 		"shopId":        shopID.String(),
 		"exp":           time.Now().Add(time.Second * time.Duration(ttlSeconds)).Unix(),

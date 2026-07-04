@@ -57,7 +57,7 @@ func RequireAuthentication(c *gin.Context) {
 						// super admin immediately kills any outstanding token.
 						if impersonating, _ := claims["impersonating"].(bool); impersonating && user.PlatformRole == "super_admin" {
 							if shopIDStr, ok := claims["shopId"].(string); ok {
-								c.Set("role", "Owner")
+								c.Set("role", "owner")
 								c.Set("isImpersonating", true)
 								c.Set("impersonatedShopID", shopIDStr)
 							}

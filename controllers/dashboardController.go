@@ -66,14 +66,35 @@ func GetOrdersDashboard(c *gin.Context) {
 		return
 	}
 
+	fromStr := c.Query("from")
+	toStr := c.Query("to")
+
+	var fromTime, toTime time.Time
+	hasDateFilter := fromStr != "" && toStr != ""
+	if hasDateFilter {
+		fromTime, err = time.Parse("2006-01-02", fromStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid from date"})
+			return
+		}
+		toTime, err = time.Parse("2006-01-02", toStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid to date"})
+			return
+		}
+		toTime = toTime.Add(24 * time.Hour) // make end date inclusive
+	}
+
 	cacheKey := dashboardCacheKey(shopID)
 
-	// Cache hit
-	if cached, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Bytes(); err == nil {
-		var data DashboardData
-		if json.Unmarshal(cached, &data) == nil {
-			c.JSON(http.StatusOK, gin.H{"success": true, "cached": true, "data": data})
-			return
+	// Cache hit — only for unfiltered (all-time) requests
+	if !hasDateFilter {
+		if cached, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Bytes(); err == nil {
+			var data DashboardData
+			if json.Unmarshal(cached, &data) == nil {
+				c.JSON(http.StatusOK, gin.H{"success": true, "cached": true, "data": data})
+				return
+			}
 		}
 	}
 
@@ -81,45 +102,50 @@ func GetOrdersDashboard(c *gin.Context) {
 	now := time.Now()
 
 	daily := []TimeCount{}
-	if err := db.
-		Table("orders").
-		Where("shop_id = ? AND deleted_at IS NULL AND created_at >= ?", shopID, now.AddDate(0, 0, -30)).
-		Select("DATE(created_at)::text AS label, COUNT(*) AS count").
-		Group("DATE(created_at)").
-		Order("DATE(created_at) ASC").
-		Scan(&daily).Error; err != nil {
+	dailyQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL", shopID)
+	if hasDateFilter {
+		dailyQ = dailyQ.Where("created_at >= ? AND created_at < ?", fromTime, toTime)
+	} else {
+		dailyQ = dailyQ.Where("created_at >= ?", now.AddDate(0, 0, -30))
+	}
+	if err := dailyQ.Select("DATE(created_at)::text AS label, COUNT(*) AS count").
+		Group("DATE(created_at)").Order("DATE(created_at) ASC").Scan(&daily).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching daily stats", "error": err.Error()})
 		return
 	}
 
 	weekly := []TimeCount{}
-	if err := db.
-		Table("orders").
-		Where("shop_id = ? AND deleted_at IS NULL AND created_at >= ?", shopID, now.AddDate(0, 0, -7*12)).
-		Select("TO_CHAR(DATE_TRUNC('week', created_at), 'IYYY-IW') AS label, COUNT(*) AS count").
-		Group("DATE_TRUNC('week', created_at)").
-		Order("DATE_TRUNC('week', created_at) ASC").
-		Scan(&weekly).Error; err != nil {
+	weeklyQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL", shopID)
+	if hasDateFilter {
+		weeklyQ = weeklyQ.Where("created_at >= ? AND created_at < ?", fromTime, toTime)
+	} else {
+		weeklyQ = weeklyQ.Where("created_at >= ?", now.AddDate(0, 0, -7*12))
+	}
+	if err := weeklyQ.Select("TO_CHAR(DATE_TRUNC('week', created_at), 'IYYY-IW') AS label, COUNT(*) AS count").
+		Group("DATE_TRUNC('week', created_at)").Order("DATE_TRUNC('week', created_at) ASC").Scan(&weekly).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching weekly stats", "error": err.Error()})
 		return
 	}
 
 	monthly := []TimeCount{}
-	if err := db.
-		Table("orders").
-		Where("shop_id = ? AND deleted_at IS NULL AND created_at >= ?", shopID, now.AddDate(-1, 0, 0)).
-		Select("TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS label, COUNT(*) AS count").
-		Group("DATE_TRUNC('month', created_at)").
-		Order("DATE_TRUNC('month', created_at) ASC").
-		Scan(&monthly).Error; err != nil {
+	monthlyQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL", shopID)
+	if hasDateFilter {
+		monthlyQ = monthlyQ.Where("created_at >= ? AND created_at < ?", fromTime, toTime)
+	} else {
+		monthlyQ = monthlyQ.Where("created_at >= ?", now.AddDate(-1, 0, 0))
+	}
+	if err := monthlyQ.Select("TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS label, COUNT(*) AS count").
+		Group("DATE_TRUNC('month', created_at)").Order("DATE_TRUNC('month', created_at) ASC").Scan(&monthly).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching monthly stats", "error": err.Error()})
 		return
 	}
 
 	var totalOrders int64
-	if err := db.Table("orders").
-		Where("shop_id = ? AND deleted_at IS NULL", shopID).
-		Count(&totalOrders).Error; err != nil {
+	totalQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL", shopID)
+	if hasDateFilter {
+		totalQ = totalQ.Where("created_at >= ? AND created_at < ?", fromTime, toTime)
+	}
+	if err := totalQ.Count(&totalOrders).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error counting total orders", "error": err.Error()})
 		return
 	}
@@ -131,14 +157,15 @@ func GetOrdersDashboard(c *gin.Context) {
 		PendingRevenue   float64
 		DeliveredOrders  int64
 	}
-	if err := db.Table("orders").
-		Where("shop_id = ? AND deleted_at IS NULL", shopID).
-		Select(`
+	revQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL", shopID)
+	if hasDateFilter {
+		revQ = revQ.Where("created_at >= ? AND created_at < ?", fromTime, toTime)
+	}
+	if err := revQ.Select(`
 			COALESCE(SUM(CASE WHEN status = 'Livré' THEN total_price END), 0) AS delivered_revenue,
 			COALESCE(SUM(CASE WHEN status NOT IN ('Livré', 'Annulé', 'Abandonné') THEN total_price END), 0) AS pending_revenue,
 			COUNT(*) FILTER (WHERE status = 'Livré') AS delivered_orders
-		`).
-		Scan(&rev).Error; err != nil {
+		`).Scan(&rev).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching revenue stats", "error": err.Error()})
 		return
 	}
@@ -148,12 +175,11 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 
 	statusStats := []StatusStat{}
-	if err := db.
-		Table("orders").
-		Where("shop_id = ? AND deleted_at IS NULL", shopID).
-		Select("status, COUNT(*) AS count").
-		Group("status").
-		Scan(&statusStats).Error; err != nil {
+	statusQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL", shopID)
+	if hasDateFilter {
+		statusQ = statusQ.Where("created_at >= ? AND created_at < ?", fromTime, toTime)
+	}
+	if err := statusQ.Select("status, COUNT(*) AS count").Group("status").Scan(&statusStats).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching status stats", "error": err.Error()})
 		return
 	}
@@ -166,12 +192,14 @@ func GetOrdersDashboard(c *gin.Context) {
 	// Pool = En attente, Ne répond pas 1/2/3, Reporté, Annulé, Confirmé.
 	// Excluded: Abandonné, Expédié, Livré, Retour.
 	confirmationRates := []ProductConfirmationRate{}
-	if err := db.
-		Table("order_items oi").
+	confirmQ := db.Table("order_items oi").
 		Joins("JOIN orders o ON o.id = oi.order_id").
 		Joins("JOIN products p ON p.id = oi.product_id").
-		Where("o.shop_id = ? AND o.deleted_at IS NULL AND p.deleted_at IS NULL", shopID).
-		Select(`
+		Where("o.shop_id = ? AND o.deleted_at IS NULL AND p.deleted_at IS NULL", shopID)
+	if hasDateFilter {
+		confirmQ = confirmQ.Where("o.created_at >= ? AND o.created_at < ?", fromTime, toTime)
+	}
+	if err := confirmQ.Select(`
 			p.id::text AS product_id,
 			p.title AS product_name,
 			COUNT(DISTINCT CASE WHEN o.status NOT IN ('Abandonné', 'Expédié', 'Livré', 'Retour') THEN oi.order_id END) AS total_orders,
@@ -180,23 +208,20 @@ func GetOrdersDashboard(c *gin.Context) {
 				COUNT(DISTINCT CASE WHEN o.status = 'Confirmé' THEN oi.order_id END) * 100.0
 				/ NULLIF(COUNT(DISTINCT CASE WHEN o.status NOT IN ('Abandonné', 'Expédié', 'Livré', 'Retour') THEN oi.order_id END), 0),
 			2) AS confirmation_rate
-		`).
-		Group("p.id, p.title").
-		Order("total_orders DESC").
-		Scan(&confirmationRates).Error; err != nil {
+		`).Group("p.id, p.title").Order("total_orders DESC").Scan(&confirmationRates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching confirmation rates", "error": err.Error()})
 		return
 	}
 
 	wilayaStats := []WilayaStat{}
-	if err := db.
-		Table("orders o").
+	wilayaQ := db.Table("orders o").
 		Joins("JOIN clients c ON c.id = o.client_id").
-		Where("o.shop_id = ? AND o.deleted_at IS NULL AND c.state != ''", shopID).
-		Select("c.state AS wilaya, COUNT(*) AS count").
-		Group("c.state").
-		Order("count DESC").
-		Scan(&wilayaStats).Error; err != nil {
+		Where("o.shop_id = ? AND o.deleted_at IS NULL AND c.state != ''", shopID)
+	if hasDateFilter {
+		wilayaQ = wilayaQ.Where("o.created_at >= ? AND o.created_at < ?", fromTime, toTime)
+	}
+	if err := wilayaQ.Select("c.state AS wilaya, COUNT(*) AS count").
+		Group("c.state").Order("count DESC").Scan(&wilayaStats).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching wilaya stats", "error": err.Error()})
 		return
 	}
@@ -215,9 +240,11 @@ func GetOrdersDashboard(c *gin.Context) {
 		AvgOrderValue:     avgOrderValue,
 	}
 
-	// Store in cache — failure is non-fatal
-	if b, err := json.Marshal(data); err == nil {
-		initializers.RClient.Set(initializers.Ctx, cacheKey, b, dashboardCacheTTL)
+	// Store in cache — failure is non-fatal; skip for date-filtered requests
+	if !hasDateFilter {
+		if b, err := json.Marshal(data); err == nil {
+			initializers.RClient.Set(initializers.Ctx, cacheKey, b, dashboardCacheTTL)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "cached": false, "data": data})
