@@ -45,6 +45,10 @@ type DashboardData struct {
 	TotalOrders       int64                    `json:"totalOrders"`
 	ConfirmationRates []ProductConfirmationRate `json:"confirmationRates"`
 	WilayaStats       []WilayaStat             `json:"wilayaStats"`
+	DeliveredRevenue  float64                  `json:"deliveredRevenue"`
+	PendingRevenue    float64                  `json:"pendingRevenue"`
+	DeliveredOrders   int64                    `json:"deliveredOrders"`
+	AvgOrderValue     float64                  `json:"avgOrderValue"`
 }
 
 func dashboardCacheKey(shopID uuid.UUID) string {
@@ -120,6 +124,29 @@ func GetOrdersDashboard(c *gin.Context) {
 		return
 	}
 
+	// Livré = cash actually collected (COD). Pending = still in play, not yet
+	// collected and not dead (Annulé/Abandonné).
+	var rev struct {
+		DeliveredRevenue float64
+		PendingRevenue   float64
+		DeliveredOrders  int64
+	}
+	if err := db.Table("orders").
+		Where("shop_id = ? AND deleted_at IS NULL", shopID).
+		Select(`
+			COALESCE(SUM(CASE WHEN status = 'Livré' THEN total_price END), 0) AS delivered_revenue,
+			COALESCE(SUM(CASE WHEN status NOT IN ('Livré', 'Annulé', 'Abandonné') THEN total_price END), 0) AS pending_revenue,
+			COUNT(*) FILTER (WHERE status = 'Livré') AS delivered_orders
+		`).
+		Scan(&rev).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching revenue stats", "error": err.Error()})
+		return
+	}
+	avgOrderValue := 0.0
+	if rev.DeliveredOrders > 0 {
+		avgOrderValue = rev.DeliveredRevenue / float64(rev.DeliveredOrders)
+	}
+
 	statusStats := []StatusStat{}
 	if err := db.
 		Table("orders").
@@ -182,6 +209,10 @@ func GetOrdersDashboard(c *gin.Context) {
 		TotalOrders:       totalOrders,
 		ConfirmationRates: confirmationRates,
 		WilayaStats:       wilayaStats,
+		DeliveredRevenue:  rev.DeliveredRevenue,
+		PendingRevenue:    rev.PendingRevenue,
+		DeliveredOrders:   rev.DeliveredOrders,
+		AvgOrderValue:     avgOrderValue,
 	}
 
 	// Store in cache — failure is non-fatal
