@@ -46,6 +46,7 @@ func main() {
 	routes.OsenRoutes(router)
 	routes.LeopardRoutes(router)
 	routes.ZrRoutes(router)
+	routes.OffersRoutes(router)
 	routes.AbandonedLeadsRoutes(router)
 	routes.SuperAdminRoutes(router)
 	routes.WebSocketRoutes(router)

@@ -70,12 +70,12 @@ func SendOrderEmail(
 
 	// Build the email request
 	params := &resend.SendEmailRequest{
-		From:    "DZ Bazar <contact@lkparfumo.com>",
+		From:    "DZ Bazar <contact@dzbazar.online>",
 		To:      recipients,
 		Subject: fmt.Sprintf("Nouvelle Commande – %s – %s – %s – %d", shopName, fullName, phoneNumber, time.Now().Unix()),
 		Html:    htmlContent,
 		Headers: map[string]string{
-			"Message-ID": fmt.Sprintf("<%d-%s@lkparfumo>", time.Now().UnixNano(), uuid.New().String()),
+			"Message-ID": fmt.Sprintf("<%d-%s@dzbazar>", time.Now().UnixNano(), uuid.New().String()),
 		},
 	}
 
@@ -107,7 +107,7 @@ func SendLowStockEmail(productName, variant string, quantity int) error {
 	<html lang="fr">
 	<head>
 	<meta charset="UTF-8">
-	<title>Alerte Stock Faible - LK Parfumo</title>
+	<title>Alerte Stock Faible - DZ Bazar</title>
 	<style>
 		body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
 		.container { max-width: 600px; margin: auto; background: #ffffff; padding: 20px; border-radius: 8px; }
@@ -136,13 +136,13 @@ func SendLowStockEmail(productName, variant string, quantity int) error {
 		productName, variant, quantity)
 
 	params := &resend.SendEmailRequest{
-		From:    "LK Parfumo <contact@lkparfumo.com>",
+		From:    "DZ Bazar <contact@dzbazar.online>",
 		To:      []string{"chtiwaa@gmail.com"},
 		Cc:      []string{"lakhalzineddine12@gmail.com"},
 		Subject: fmt.Sprintf("Alerte stock faible – %s – %s", productName, variant),
 		Html:    htmlContent,
 		Headers: map[string]string{
-			"Message-ID": fmt.Sprintf("<%d-%s@lkparfumo>", time.Now().UnixNano(), uuid.New().String()),
+			"Message-ID": fmt.Sprintf("<%d-%s@dzbazar>", time.Now().UnixNano(), uuid.New().String()),
 		},
 	}
 
@@ -196,12 +196,12 @@ func SendPasswordResetEmail(email, otp string) error {
 	</html>`, otp)
 
 	params := &resend.SendEmailRequest{
-		From:    "LK Parfumo <contact@lkparfumo.com>",
+		From:    "DZ Bazar <contact@dzbazar.online>",
 		To:      []string{email},
 		Subject: "Réinitialisation de votre mot de passe",
 		Html:    htmlContent,
 		Headers: map[string]string{
-			"Message-ID": fmt.Sprintf("<%d-%s@lkparfumo>", time.Now().UnixNano(), uuid.New().String()),
+			"Message-ID": fmt.Sprintf("<%d-%s@dzbazar>", time.Now().UnixNano(), uuid.New().String()),
 		},
 	}
 
@@ -230,7 +230,7 @@ func SendOTPEmail(email, otp string) error {
 	<html lang="fr">
 	<head>
 	<meta charset="UTF-8">
-	<title>Code de vérification - LK Parfumo</title>
+	<title>Code de vérification - DZ Bazar</title>
 	<style>
 		body {
 			font-family: Arial, sans-serif;
@@ -286,12 +286,12 @@ func SendOTPEmail(email, otp string) error {
 	</html>`, otp)
 
 	params := &resend.SendEmailRequest{
-		From:    "DZ BAZAR <contact@lkparfumo.com>",
+		From:    "DZ Bazar <contact@dzbazar.online>",
 		To:      []string{email},
 		Subject: "Votre code de vérification",
 		Html:    htmlContent,
 		Headers: map[string]string{
-			"Message-ID": fmt.Sprintf("<%d-%s@lkparfumo>", time.Now().UnixNano(), uuid.New().String()),
+			"Message-ID": fmt.Sprintf("<%d-%s@dzbazar>", time.Now().UnixNano(), uuid.New().String()),
 		},
 	}
 
@@ -347,12 +347,12 @@ func SendPlanExpiryEmail(email, shopName, planName string, expiresAt time.Time) 
 	</html>`, planName, shopName, expiresAt.Format("02/01/2006"))
 
 	params := &resend.SendEmailRequest{
-		From:    "LK Parfumo <contact@lkparfumo.com>",
+		From:    "DZ Bazar <contact@dzbazar.online>",
 		To:      []string{email},
 		Subject: fmt.Sprintf("Votre abonnement %s expire bientôt – %s", planName, shopName),
 		Html:    htmlContent,
 		Headers: map[string]string{
-			"Message-ID": fmt.Sprintf("<%d-%s@lkparfumo>", time.Now().UnixNano(), uuid.New().String()),
+			"Message-ID": fmt.Sprintf("<%d-%s@dzbazar>", time.Now().UnixNano(), uuid.New().String()),
 		},
 	}
 

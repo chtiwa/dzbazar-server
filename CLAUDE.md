@@ -41,7 +41,7 @@ Go REST API using **Gin** (HTTP router) + **GORM** (ORM) + **PostgreSQL**. Entry
 - `middleware.RequireRoles(...)` — checks the `role` field on the JWT claims
 
 ### Multi-tenancy model
-A `User` can belong to multiple `Shop`s via `ShopMember` (with a `role`: `Owner` | `Staff` | `Logistics`). The active shop is communicated on every request via the `X-Shop-ID` header set by the frontend after login.
+A `User` can belong to multiple `Shop`s via `ShopMember` (with a `role`: `owner` | `moderator` | `confirmation`). The active shop is communicated on every request via the `X-Shop-ID` header set by the frontend after login.
 
 ### Key domain relationships
 - `Shop` → `Product` → `Variant` → `VariantItem`; `Product` → `ProductVariantCombination` (flattened SKU rows linking back to `VariantItem` via `Option1ID/2ID/3ID`)

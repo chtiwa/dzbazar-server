@@ -57,6 +57,9 @@ func Migrate() {
 		&models.GlobalSetting{},
 		&models.SupportTicket{},
 		&models.SupportTicketMessage{},
+		&models.Offer{},
+		&models.OfferPageOverride{},
+		&models.OfferEvent{},
 	)
 	if err != nil {
 		log.Fatalf("Phase 2 migration failed: %v", err)
