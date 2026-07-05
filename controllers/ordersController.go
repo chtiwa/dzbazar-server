@@ -678,6 +678,8 @@ func UpdateOrderByShopID(c *gin.Context) {
 		return
 	}
 
+	var oldStatus string
+
 	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
 		var order models.Order
 		if err := tx.
@@ -686,6 +688,7 @@ func UpdateOrderByShopID(c *gin.Context) {
 			First(&order, "id = ? AND shop_id = ?", orderID, shopID).Error; err != nil {
 			return err
 		}
+		oldStatus = order.Status
 
 		if body.Client != nil {
 			if err := tx.Model(&models.Client{}).
@@ -826,6 +829,13 @@ func UpdateOrderByShopID(c *gin.Context) {
 		return
 	}
 
+	if strings.TrimSpace(body.Status) != "" && body.Status != oldStatus {
+		utils.LogAudit(c, "order.status_changed", "Order", &orderID, map[string]string{
+			"from": oldStatus,
+			"to":   body.Status,
+		})
+	}
+
 	var updatedOrder models.Order
 	if err := initializers.DB.
 		Preload("Client").
@@ -847,6 +857,68 @@ func UpdateOrderByShopID(c *gin.Context) {
 		"success": true,
 		"message": "Order was updated successfully",
 		"data":    updatedOrder,
+	})
+}
+
+// GetOrderStatusHistory lists who changed an order's status and when.
+// Owner-only — route-gated so confirmatrices can't see who's watching them.
+func GetOrderStatusHistory(c *gin.Context) {
+	shopIDStr := c.Param("shopId")
+	shopID, err := uuid.Parse(shopIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid or missing Shop ID",
+		})
+		return
+	}
+
+	orderIDStr := c.Param("id")
+	orderID, err := uuid.Parse(orderIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid Order ID format",
+		})
+		return
+	}
+
+	var order models.Order
+	if err := initializers.DB.
+		Select("id").
+		First(&order, "id = ? AND shop_id = ?", orderID, shopID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "Order not found or does not belong to this shop",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Database error while looking up order",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	var logs []models.AuditLog
+	if err := initializers.DB.
+		Where("target_type = ? AND target_id = ? AND action = ?", "Order", orderID, "order.status_changed").
+		Order("created_at DESC").
+		Find(&logs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to fetch order status history",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    logs,
 	})
 }
 
