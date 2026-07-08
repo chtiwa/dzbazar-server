@@ -72,6 +72,40 @@ func Migrate() {
 	initializers.DB.Exec(`ALTER TABLE delivery_companies ALTER COLUMN name DROP NOT NULL`)
 	initializers.DB.Exec(`ALTER TABLE delivery_companies ALTER COLUMN url DROP NOT NULL`)
 
+	// FlaggedClient was reshaped from a Facebook-only {ShopID, FBp} row to a
+	// platform-agnostic {ShopID, Platform, ClientID} row. Drop the orphaned,
+	// still-NOT-NULL f_bp column left behind by the earlier AutoMigrate run.
+	initializers.DB.Exec(`ALTER TABLE flagged_clients DROP COLUMN IF EXISTS f_bp`)
+
+	// orders.client_id -> clients.id was originally created as ON DELETE SET
+	// NULL, which is impossible since client_id is NOT NULL — deleting a
+	// client with orders violated that not-null constraint instead of
+	// deleting the orders. AutoMigrate never edits an existing FK's ON DELETE
+	// action, so it's replaced here with CASCADE. Looked up by table pair
+	// rather than a hardcoded constraint name, since GORM's auto-generated
+	// name isn't guaranteed.
+	initializers.DB.Exec(`
+		DO $$
+		DECLARE
+			existing_constraint text;
+		BEGIN
+			SELECT conname INTO existing_constraint
+			FROM pg_constraint
+			WHERE conrelid = 'orders'::regclass
+				AND confrelid = 'clients'::regclass
+				AND contype = 'f';
+
+			IF existing_constraint IS NOT NULL THEN
+				EXECUTE format('ALTER TABLE orders DROP CONSTRAINT %I', existing_constraint);
+			END IF;
+
+			ALTER TABLE orders
+				ADD CONSTRAINT fk_orders_client
+				FOREIGN KEY (client_id) REFERENCES clients(id)
+				ON DELETE CASCADE;
+		END $$;
+	`)
+
 	// Enforce "only one super_admin" at the DB level — not just app convention —
 	// so it holds no matter what code path ever writes platform_role.
 	initializers.DB.Exec(`

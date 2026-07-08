@@ -15,5 +15,8 @@ type Client struct {
 	City          string `json:"city"`
 	StopdeskPoint string `json:"stopdeskPoint"`
 
-	Orders []Order `gorm:"foreignKey:ClientID;constraint:OnDelete:SET NULL" json:"orders,omitempty"`
+	// ClientID on Order is NOT NULL, so "SET NULL" here would itself violate
+	// that constraint on delete — CASCADE is the only valid option: deleting
+	// a client deletes their orders (which cascades further into OrderItems).
+	Orders []Order `gorm:"foreignKey:ClientID;constraint:OnDelete:CASCADE" json:"orders,omitempty"`
 }

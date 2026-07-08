@@ -17,5 +17,6 @@ func OrdersRoutes(router *gin.Engine) {
 		orders.GET("/:id/status-history", middleware.RequireAuthentication, middleware.RequireRoles("owner"), controllers.GetOrderStatusHistory)
 		orders.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireRoles("owner", "moderator", "confirmation"), controllers.UpdateOrderByShopID)
 		orders.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireRoles("owner"), controllers.DeleteOrderByShopID)
+		orders.POST("/:id/ban-client", middleware.RequireAuthentication, middleware.RequireRoles("owner"), controllers.BanOrderClient)
 	}
 }

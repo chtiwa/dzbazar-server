@@ -147,8 +147,9 @@ func GetOrdersByShopID(c *gin.Context) {
 	search := strings.TrimSpace(c.Query("search"))
 	dateFrom := c.Query("dateFrom")
 	dateTo := c.Query("dateTo")
+	flaggedOnly := c.Query("flagged") == "true"
 
-	baseQuery := initializers.DB.Model(&models.Order{}).Where("orders.shop_id = ? AND orders.is_hidden = ?", shopID, false)
+	baseQuery := initializers.DB.Model(&models.Order{}).Where("orders.shop_id = ? AND orders.is_hidden = ?", shopID, flaggedOnly)
 
 	if status != "" && status != "Tous" {
 		baseQuery = baseQuery.Where("status = ?", status)
@@ -413,6 +414,7 @@ func CreateOrderByShopID(c *gin.Context) {
 			TTp:              body.TTp,
 			ConversionSource: body.ConversionSource,
 			IsHidden:         containsCussword || previouslyFlagged,
+			ClientIP:         clientIP,
 			Items:            orderItems,
 		}
 
@@ -1015,5 +1017,95 @@ func DeleteOrderByShopID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Order was deleted successfully",
+	})
+}
+
+// BanOrderClient permanently bans the fbp/ttp behind one order from ever
+// placing a visible order again: every future order from that same browser
+// id is auto-hidden and skips the pixel event, exactly like a cussword-flagged
+// order — same silent treatment, just owner-triggered instead of automatic.
+// Rejecting the request outright instead would tip the troll off to switch
+// devices; silently no-op'ing keeps them ordering into a void.
+func BanOrderClient(c *gin.Context) {
+	shopIDStr := c.Param("shopId")
+	shopID, err := uuid.Parse(shopIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid or missing Shop ID",
+		})
+		return
+	}
+
+	orderIDStr := c.Param("id")
+	orderID, err := uuid.Parse(orderIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid Order ID format",
+		})
+		return
+	}
+
+	var order models.Order
+	if err := initializers.DB.First(&order, "id = ? AND shop_id = ?", orderID, shopID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "Order not found or does not belong to this shop",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Database error while looking up order",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	platform, clientID := "", ""
+	switch order.ConversionSource {
+	case "facebook":
+		platform, clientID = "facebook", order.FBp
+	case "tiktok":
+		platform, clientID = "tiktok", order.TTp
+	}
+
+	if clientID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "This order has no trackable browser ID (organic order) — nothing to ban",
+		})
+		return
+	}
+
+	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
+		var existing models.FlaggedClient
+		alreadyBanned := tx.Where("shop_id = ? AND platform = ? AND client_id = ?", shopID, platform, clientID).
+			First(&existing).Error == nil
+
+		if !alreadyBanned {
+			if err := tx.Create(&models.FlaggedClient{ShopID: shopID, Platform: platform, ClientID: clientID}).Error; err != nil {
+				return err
+			}
+		}
+
+		return tx.Model(&models.Order{}).Where("id = ?", order.ID).Update("is_hidden", true).Error
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to ban client",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Client banned — future orders from this browser will be silently hidden",
 	})
 }

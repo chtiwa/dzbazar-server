@@ -46,10 +46,18 @@ type Order struct {
 	ConversionSource string `json:"conversionSource"`
 	IsShipped        bool   `gorm:"default:false" json:"isShipped"`
 
-	// Set at creation when the client's fullName contains a banned cussword.
-	// Order still succeeds for the client, but it's hidden from the admin
-	// panel and no conversion pixel event is fired for it.
-	IsHidden bool `gorm:"default:false" json:"-"`
+	// Set at creation when the client's fullName contains a banned cussword,
+	// or when their fbp/ttp was previously banned by the store owner. The
+	// order still succeeds for the client (no different UX, no tip-off), but
+	// it's excluded from the default admin order list and fires no pixel
+	// event. Owners can still view these under the "flagged" list filter.
+	IsHidden bool `gorm:"default:false" json:"isHidden"`
+
+	// IP address of the client at order time — informational only, shown to
+	// the owner reviewing a flagged order. Not used to match/ban clients:
+	// Algerian mobile carriers heavily NAT, so IP is too shared to be a
+	// reliable identifier (unlike fbp/ttp, which are unique to the browser).
+	ClientIP string `json:"clientIp"`
 
 	// Carrier the order was actually handed to, and when — set once at
 	// shipping time, independent of any later edits to the order (unlike

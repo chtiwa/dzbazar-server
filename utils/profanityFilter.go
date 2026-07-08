@@ -6,7 +6,7 @@ import "strings"
 // transliterations and Arabic script, used to silently flag spam/troll orders
 // where the client typed an insult into the fullName field instead of their name.
 var bannedWords = []string{
-	"nik", "nikomok", "nikmok", "nikbouk", "kahba", "9ahba", "9a7ba",
+	"fuck", "dick", "bitch", "ass", "nik", "nikomok", "nikmok", "nikbouk", "kahba", "9ahba", "9a7ba",
 	"zebi", "zbi", "zamel", "zeml", "khanzir", "hmar", "7mar", "qahba",
 	"chermoula", "twassekh", "wesekh", "wsekh", "hchouma", "kelb", "9elb",
 	"ya kelb", "yal kelb", "ya khanzir", "tfou", "ya zebi", "mokrez",
