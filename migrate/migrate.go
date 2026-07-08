@@ -48,6 +48,7 @@ func Migrate() {
 		&models.AvailableDeliveryCompanyImage{},
 		&models.Order{},
 		&models.OrderItem{},
+		&models.FlaggedClient{},
 		&models.DeliveryCompany{},
 		&models.Plan{},
 		&models.ShopSubscription{},

@@ -32,6 +32,8 @@ type CreateOrderInput struct {
 	FBclid           string  `json:"fbclid"`
 	FBc              string  `json:"fbc"`
 	FBp              string  `json:"fbp"`
+	TTclid           string  `json:"ttclid"`
+	TTp              string  `json:"ttp"`
 	CouponCode       string  `json:"couponCode"`
 
 	// Nested client object matches your new JSON payload
@@ -146,7 +148,7 @@ func GetOrdersByShopID(c *gin.Context) {
 	dateFrom := c.Query("dateFrom")
 	dateTo := c.Query("dateTo")
 
-	baseQuery := initializers.DB.Model(&models.Order{}).Where("orders.shop_id = ?", shopID)
+	baseQuery := initializers.DB.Model(&models.Order{}).Where("orders.shop_id = ? AND orders.is_hidden = ?", shopID, false)
 
 	if status != "" && status != "Tous" {
 		baseQuery = baseQuery.Where("status = ?", status)
@@ -364,6 +366,32 @@ func CreateOrderByShopID(c *gin.Context) {
 
 		calculatedTotalPrice += body.ShippingPrice
 
+		// fbp (_fbp cookie) and ttp (_ttp cookie) identify the same browser/device
+		// across orders even when name, phone, or IP change — unlike fbclid/ttclid,
+		// which are per-ad-click and change every time. Whichever one matches this
+		// order's conversion source is the "client id" checked against past flags.
+		trackingPlatform, trackingClientID := "", ""
+		switch body.ConversionSource {
+		case "facebook":
+			trackingPlatform, trackingClientID = "facebook", body.FBp
+		case "tiktok":
+			trackingPlatform, trackingClientID = "tiktok", body.TTp
+		}
+
+		containsCussword := utils.ContainsBannedWords(body.Client.FullName)
+		previouslyFlagged := false
+		if trackingClientID != "" {
+			var flagged models.FlaggedClient
+			previouslyFlagged = tx.Where("shop_id = ? AND platform = ? AND client_id = ?", parsedShopID, trackingPlatform, trackingClientID).
+				First(&flagged).Error == nil
+		}
+
+		if containsCussword && !previouslyFlagged && trackingClientID != "" {
+			if flagErr := tx.Create(&models.FlaggedClient{ShopID: parsedShopID, Platform: trackingPlatform, ClientID: trackingClientID}).Error; flagErr != nil {
+				return flagErr
+			}
+		}
+
 		order = models.Order{
 			ShopID:         parsedShopID,
 			ClientID:       client.ID,
@@ -381,7 +409,10 @@ func CreateOrderByShopID(c *gin.Context) {
 			FBclid:           body.FBclid,
 			FBc:              body.FBc,
 			FBp:              body.FBp,
+			TTclid:           body.TTclid,
+			TTp:              body.TTp,
 			ConversionSource: body.ConversionSource,
+			IsHidden:         containsCussword || previouslyFlagged,
 			Items:            orderItems,
 		}
 
@@ -446,7 +477,9 @@ func CreateOrderByShopID(c *gin.Context) {
 			}
 		}
 
-		if isProduction && fullOrder.Status != "Confirmé" {
+		// Cussword orders are silently accepted for the client but kept out of
+		// sight of the admin entirely — no notification email, no live broadcast.
+		if isProduction && fullOrder.Status != "Confirmé" && !fullOrder.IsHidden {
 			var shop models.Shop
 			initializers.DB.Select("name").First(&shop, "id = ?", fullOrder.ShopID)
 
@@ -483,7 +516,7 @@ func CreateOrderByShopID(c *gin.Context) {
 			}
 		}
 
-		if fullOrder.Status == "Abandonné" {
+		if fullOrder.Status == "Abandonné" || fullOrder.IsHidden {
 			return
 		}
 
@@ -497,7 +530,11 @@ func CreateOrderByShopID(c *gin.Context) {
 			},
 		}
 
-		if fullOrder.ConversionSource == "facebook" {
+		// Test orders (fullName contains "test") are real orders shown in the
+		// admin panel, but shouldn't pollute ad-platform conversion data.
+		isTestOrder := strings.Contains(strings.ToLower(fullOrder.Client.FullName), "test")
+
+		if fullOrder.ConversionSource == "facebook" && !isTestOrder {
 			var fbPixel models.Pixel
 			pixelErr := initializers.DB.
 				Where("shop_id = ? AND platform = ? AND is_active = ?", fullOrder.ShopID, "facebook", true).

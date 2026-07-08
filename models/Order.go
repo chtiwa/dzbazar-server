@@ -41,8 +41,15 @@ type Order struct {
 	FBclid           string `json:"fbclid"`
 	FBc              string `json:"fbc"`
 	FBp              string `json:"fbp"`
+	TTclid           string `json:"ttclid"`
+	TTp              string `json:"ttp"`
 	ConversionSource string `json:"conversionSource"`
 	IsShipped        bool   `gorm:"default:false" json:"isShipped"`
+
+	// Set at creation when the client's fullName contains a banned cussword.
+	// Order still succeeds for the client, but it's hidden from the admin
+	// panel and no conversion pixel event is fired for it.
+	IsHidden bool `gorm:"default:false" json:"-"`
 
 	// Carrier the order was actually handed to, and when — set once at
 	// shipping time, independent of any later edits to the order (unlike
