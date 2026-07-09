@@ -9,7 +9,7 @@ import (
 func OffersRoutes(router *gin.Engine) {
 	admin := router.Group("/v1/shops/:shopId/offers",
 		middleware.RequireAuthentication,
-		middleware.RequireRoles("owner", "moderator"),
+		middleware.RequireShopAccess("owner", "moderator"),
 	)
 	{
 		admin.POST("", controllers.CreateOffer)

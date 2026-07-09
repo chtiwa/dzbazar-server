@@ -10,6 +10,6 @@ func LeopardRoutes(router *gin.Engine) {
 	g := router.Group("/v1/shops/:shopId/leopard")
 	g.Use(middleware.RequireAuthentication)
 	{
-		g.POST("/orders", middleware.RequireRoles("owner", "moderator", "confirmation"), controllers.CreateLeopardOrder)
+		g.POST("/orders", middleware.RequireShopAccess("owner", "moderator", "confirmation"), controllers.CreateLeopardOrder)
 	}
 }

@@ -10,6 +10,6 @@ func DashboardRoutes(router *gin.Engine) {
 	dashboard := router.Group("/v1/shops/:shopId/dashboard")
 	dashboard.Use(middleware.RequireAuthentication)
 	{
-		dashboard.GET("/orders", middleware.RequireRoles("owner", "moderator", "confirmation"), controllers.GetOrdersDashboard)
+		dashboard.GET("/orders", middleware.RequireShopAccess("owner", "moderator", "confirmation"), controllers.GetOrdersDashboard)
 	}
 }

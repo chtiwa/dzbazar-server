@@ -73,8 +73,8 @@ func IndexUserByShop(c *gin.Context) {
 	}
 
 	requester := c.MustGet("user").(models.User)
-	role := c.MustGet("role").(string)
-	if role != "owner" && requester.ID != userID {
+	shopRole := c.MustGet("userShopRole").(string)
+	if shopRole != "owner" && requester.ID != userID {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
 			"message": "You do not have permission to perform this action",

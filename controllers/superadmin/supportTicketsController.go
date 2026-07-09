@@ -139,6 +139,7 @@ func CreateSupportTicket(c *gin.Context) {
 		return
 	}
 
+	utils.LogAudit(c, "support_ticket.create", "SupportTicket", &ticket.ID, gin.H{"shopId": shop.ID, "priority": priority})
 	c.JSON(http.StatusCreated, gin.H{"success": true, "message": "Ticket created", "data": ticket})
 }
 
@@ -252,5 +253,6 @@ func AddTicketMessage(c *gin.Context) {
 		return
 	}
 
+	utils.LogAudit(c, "support_ticket.message", "SupportTicket", &ticket.ID, gin.H{"isInternalNote": message.IsInternalNote})
 	c.JSON(http.StatusCreated, gin.H{"success": true, "message": "Reply added", "data": message})
 }

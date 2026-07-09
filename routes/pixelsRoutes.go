@@ -17,10 +17,10 @@ func PixelsRoutes(router *gin.Engine) {
 	pixels := router.Group("/v1/shops/:shopId/pixels")
 	pixels.Use(middleware.RequireAuthentication)
 	{
-		pixels.GET("", middleware.RequireRoles("owner", "moderator"), controllers.GetPixelsByShop)
-		pixels.GET("/:id", middleware.RequireRoles("owner", "moderator"), controllers.IndexPixel)
-		pixels.POST("", middleware.RequireRoles("owner", "moderator"), controllers.CreatePixel)
-		pixels.PATCH("/:id", middleware.RequireRoles("owner", "moderator"), controllers.UpdatePixel)
-		pixels.DELETE("/:id", middleware.RequireRoles("owner"), controllers.DeletePixel)
+		pixels.GET("", middleware.RequireShopAccess("owner", "moderator"), controllers.GetPixelsByShop)
+		pixels.GET("/:id", middleware.RequireShopAccess("owner", "moderator"), controllers.IndexPixel)
+		pixels.POST("", middleware.RequireShopAccess("owner", "moderator"), controllers.CreatePixel)
+		pixels.PATCH("/:id", middleware.RequireShopAccess("owner", "moderator"), controllers.UpdatePixel)
+		pixels.DELETE("/:id", middleware.RequireShopAccess("owner"), controllers.DeletePixel)
 	}
 }

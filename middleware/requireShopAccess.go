@@ -42,8 +42,10 @@ func RequireShopPermission(action string) gin.HandlerFunc {
 	}
 }
 
-// RequireShopAccess verifies the user is a member of the shop in X-Shop-ID.
-// Pass allowed roles to restrict further (empty = any shop member is fine).
+// RequireShopAccess verifies the user is a member of the shop identified by
+// the :shopId route param (or the X-Shop-ID header on routes with no :shopId
+// segment). Pass allowed roles to restrict further (empty = any shop member
+// is fine).
 func RequireShopAccess(allowedRoles ...string) gin.HandlerFunc {
 	allowedMap := map[string]bool{}
 	for _, r := range allowedRoles {
@@ -51,11 +53,20 @@ func RequireShopAccess(allowedRoles ...string) gin.HandlerFunc {
 	}
 
 	return func(c *gin.Context) {
-		user, _ := c.Get("user")                 // Populated by RequireAuthentication
-		targetShopID := c.GetHeader("X-Shop-ID") // Passed by the frontend admin panel
+		user, _ := c.Get("user") // Populated by RequireAuthentication
+
+		// The :shopId route param is the resource actually being read/written,
+		// so it is the source of truth. Falling back to X-Shop-ID only covers
+		// routes with no :shopId segment; trusting the header when a :shopId
+		// param is also present would let it diverge from the URL and bypass
+		// the membership check below.
+		targetShopID := c.Param("shopId")
+		if targetShopID == "" {
+			targetShopID = c.GetHeader("X-Shop-ID")
+		}
 
 		if targetShopID == "" {
-			c.JSON(400, gin.H{"error": "Missing active workspace header"})
+			c.JSON(400, gin.H{"error": "Missing active workspace"})
 			c.Abort()
 			return
 		}

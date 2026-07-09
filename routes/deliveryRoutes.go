@@ -11,10 +11,10 @@ func DeliveryRatesRoutes(router *gin.Engine) {
 	rates.Use(middleware.RequireAuthentication)
 	{
 		// All roles can view rates (needed to create orders)
-		rates.GET("", middleware.RequireRoles("owner", "moderator", "confirmation"), controllers.GetDeliveryRates)
+		rates.GET("", middleware.RequireShopAccess("owner", "moderator", "confirmation"), controllers.GetDeliveryRates)
 		// Only owner and moderator can modify rates
-		rates.PATCH("", middleware.RequireRoles("owner", "moderator"), controllers.UpdateDeliveryRate)
-		rates.PATCH("/bulk", middleware.RequireRoles("owner", "moderator"), controllers.BulkUpdateDeliveryRates)
+		rates.PATCH("", middleware.RequireShopAccess("owner", "moderator"), controllers.UpdateDeliveryRate)
+		rates.PATCH("/bulk", middleware.RequireShopAccess("owner", "moderator"), controllers.BulkUpdateDeliveryRates)
 	}
 
 	// Public counterpart for the anonymous storefront checkout — no session exists there.

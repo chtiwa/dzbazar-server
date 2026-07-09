@@ -35,6 +35,7 @@ coverage.out
 # Environment and config files (if sensitive)
 .env
 .env.*
+!.env.example
 config.yaml
 *.local.*
 
