@@ -255,6 +255,33 @@ func CreateOrderByShopID(c *gin.Context) {
 		return
 	}
 
+	// Banned-client short circuit: a client id banned by the owner (via
+	// BanOrderClient) never touches the DB again — no client row, no order
+	// row, nothing to review or clean up. Same silent-success response as
+	// the phone rate limit below, so the troll sees an ordinary success page.
+	banPlatform, banClientID := "", ""
+	switch body.ConversionSource {
+	case "facebook":
+		banPlatform, banClientID = "facebook", body.FBp
+	case "tiktok":
+		banPlatform, banClientID = "tiktok", body.TTp
+	}
+
+	if banClientID != "" {
+		var banned models.FlaggedClient
+		isBanned := initializers.DB.
+			Where("shop_id = ? AND platform = ? AND client_id = ?", parsedShopID, banPlatform, banClientID).
+			First(&banned).Error == nil
+
+		if isBanned {
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"message": "Order received successfully",
+			})
+			return
+		}
+	}
+
 	// Phone-per-shop rate limit: 1 order per 30 min. Silent drop on breach.
 	phoneKey := phoneOrderKey(parsedShopID, body.Client.PhoneNumber)
 	set, redisErr := initializers.RClient.SetNX(initializers.Ctx, phoneKey, 1, phoneOrderWindow).Result()
@@ -367,28 +394,13 @@ func CreateOrderByShopID(c *gin.Context) {
 
 		calculatedTotalPrice += body.ShippingPrice
 
-		// fbp (_fbp cookie) and ttp (_ttp cookie) identify the same browser/device
-		// across orders even when name, phone, or IP change — unlike fbclid/ttclid,
-		// which are per-ad-click and change every time. Whichever one matches this
-		// order's conversion source is the "client id" checked against past flags.
-		trackingPlatform, trackingClientID := "", ""
-		switch body.ConversionSource {
-		case "facebook":
-			trackingPlatform, trackingClientID = "facebook", body.FBp
-		case "tiktok":
-			trackingPlatform, trackingClientID = "tiktok", body.TTp
-		}
-
+		// A banned client id never reaches this point at all (see the
+		// short-circuit above, before this transaction started). This is
+		// purely first-offense detection: a cussword name on an id that
+		// isn't banned yet gets auto-flagged for next time.
 		containsCussword := utils.ContainsBannedWords(body.Client.FullName)
-		previouslyFlagged := false
-		if trackingClientID != "" {
-			var flagged models.FlaggedClient
-			previouslyFlagged = tx.Where("shop_id = ? AND platform = ? AND client_id = ?", parsedShopID, trackingPlatform, trackingClientID).
-				First(&flagged).Error == nil
-		}
-
-		if containsCussword && !previouslyFlagged && trackingClientID != "" {
-			if flagErr := tx.Create(&models.FlaggedClient{ShopID: parsedShopID, Platform: trackingPlatform, ClientID: trackingClientID}).Error; flagErr != nil {
+		if containsCussword && banClientID != "" {
+			if flagErr := tx.Create(&models.FlaggedClient{ShopID: parsedShopID, Platform: banPlatform, ClientID: banClientID}).Error; flagErr != nil {
 				return flagErr
 			}
 		}
@@ -413,7 +425,7 @@ func CreateOrderByShopID(c *gin.Context) {
 			TTclid:           body.TTclid,
 			TTp:              body.TTp,
 			ConversionSource: body.ConversionSource,
-			IsHidden:         containsCussword || previouslyFlagged,
+			IsHidden:         containsCussword,
 			ClientIP:         clientIP,
 			Items:            orderItems,
 		}
