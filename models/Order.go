@@ -59,6 +59,16 @@ type Order struct {
 	// reliable identifier (unlike fbp/ttp, which are unique to the browser).
 	ClientIP string `json:"clientIp"`
 
+	// Customer's User-Agent captured at creation time — the only point the
+	// real customer UA is available. Replayed into the Meta CAPI Purchase
+	// call at confirmation time instead of the confirming admin's own UA.
+	ClientUserAgent string `json:"clientUserAgent"`
+
+	// Set once a Meta CAPI Purchase event has been successfully sent for
+	// this order. Doubles as the idempotency claim: NULL means eligible to
+	// send, non-NULL means already sent (or currently being attempted).
+	MetaPurchaseSentAt *time.Time `json:"metaPurchaseSentAt"`
+
 	// Carrier the order was actually handed to, and when — set once at
 	// shipping time, independent of any later edits to the order (unlike
 	// UpdatedAt, which bumps on every unrelated change).
