@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/chtiwa/dzbazar-server/controllers"
 	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/gin-gonic/gin"
@@ -14,7 +16,7 @@ func PlansRoutes(router *gin.Engine) {
 	// plan catalog.
 	plans := router.Group("/v1/plans")
 	{
-		plans.GET("", controllers.GetPlans)
+		plans.GET("", middleware.RateLimitByIP("plans", 30, time.Minute), controllers.GetPlans)
 	}
 
 	// Per-shop subscription

@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/chtiwa/dzbazar-server/controllers"
 	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/gin-gonic/gin"
@@ -10,6 +12,7 @@ func PixelsRoutes(router *gin.Engine) {
 	// Public route for marketplace / storefront usage
 	router.GET(
 		"/v1/shops/:shopId/pixels/active",
+		middleware.RateLimitByIP("pixels-active", 60, time.Minute),
 		controllers.IndexActivePixelByShop,
 	)
 

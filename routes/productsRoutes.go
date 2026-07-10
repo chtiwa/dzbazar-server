@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/chtiwa/dzbazar-server/controllers"
 	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/gin-gonic/gin"
@@ -18,6 +20,7 @@ func ProductsRoutes(router *gin.Engine) {
 	}
 
 	storeProducts := router.Group("/v1/store/:slug/products")
+	storeProducts.Use(middleware.RateLimitByIP("store-products", 120, time.Minute))
 	{
 		storeProducts.GET("", controllers.GetActiveProductsBySlug)
 		storeProducts.GET("/search", controllers.GetProductsBySearchBySlug)

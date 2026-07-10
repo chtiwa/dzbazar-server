@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/chtiwa/dzbazar-server/controllers"
 	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/gin-gonic/gin"
@@ -11,7 +13,7 @@ func DeliveryCompaniesRoutes(router *gin.Engine) {
 	// super-admin-only and live under /v1/super-admin/delivery-companies/available.
 	available := router.Group("/v1/delivery-companies/available")
 	{
-		available.GET("", controllers.GetAvailableDeliveryCompanies)
+		available.GET("", middleware.RateLimitByIP("delivery-companies-available", 60, time.Minute), controllers.GetAvailableDeliveryCompanies)
 	}
 
 	// Per-shop integrations (credentials)

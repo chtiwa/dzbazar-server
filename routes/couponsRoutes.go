@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/chtiwa/dzbazar-server/controllers"
 	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/gin-gonic/gin"
@@ -15,6 +17,6 @@ func CouponsRoutes(router *gin.Engine) {
 		adminCoupons.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess("owner"), controllers.DeleteCoupon)
 	}
 
-	router.POST("/v1/shops/:shopId/coupons/validate", controllers.ValidateCouponPublic)
-	router.GET("/v1/shops/:shopId/coupons/available", controllers.CouponAvailableForProduct)
+	router.POST("/v1/shops/:shopId/coupons/validate", middleware.RateLimitByIP("coupon-validate", 20, time.Minute), controllers.ValidateCouponPublic)
+	router.GET("/v1/shops/:shopId/coupons/available", middleware.RateLimitByIP("coupon-available", 60, time.Minute), controllers.CouponAvailableForProduct)
 }

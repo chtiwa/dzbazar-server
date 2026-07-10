@@ -12,7 +12,7 @@ func UsersRoutes(router *gin.Engine) {
 	users := router.Group("/v1/users")
 	{
 		users.POST("/login", middleware.RateLimitByIP("login", 10, 15*time.Minute), controllers.Login)
-		users.POST("/signup", controllers.SignUp)
+		users.POST("/signup", middleware.RateLimitByIP("signup", 5, time.Hour), controllers.SignUp)
 		users.GET("/logout", controllers.Logout)
 		users.POST("/verify-otp", middleware.RateLimitByIP("verify-otp", 10, 15*time.Minute), controllers.VerifyUser)
 		users.POST("/forgot-password", middleware.RateLimitByIP("forgot-password", 5, time.Hour), controllers.ForgotPassword)

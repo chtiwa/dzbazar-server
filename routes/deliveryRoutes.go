@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/chtiwa/dzbazar-server/controllers"
 	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/gin-gonic/gin"
@@ -20,6 +22,6 @@ func DeliveryRatesRoutes(router *gin.Engine) {
 	// Public counterpart for the anonymous storefront checkout — no session exists there.
 	public := router.Group("/v1/public/shops/:shopId/delivery-rates")
 	{
-		public.GET("", controllers.GetPublicDeliveryRates)
+		public.GET("", middleware.RateLimitByIP("public-delivery-rates", 120, time.Minute), controllers.GetPublicDeliveryRates)
 	}
 }

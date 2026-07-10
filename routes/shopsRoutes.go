@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/chtiwa/dzbazar-server/controllers"
 	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/gin-gonic/gin"
@@ -19,6 +21,6 @@ func ShopsRoutes(router *gin.Engine) {
 
 	store := router.Group("/v1/store")
 	{
-		store.GET("/:slug", controllers.IndexShopBySlug)
+		store.GET("/:slug", middleware.RateLimitByIP("store-lookup", 60, time.Minute), controllers.IndexShopBySlug)
 	}
 }
