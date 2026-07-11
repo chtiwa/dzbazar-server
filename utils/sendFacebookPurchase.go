@@ -80,7 +80,7 @@ func SendFacebookPurchase(pixelID, accessToken, orderID, fullName, phone string,
 		EventTime:      createdAt.UTC().Unix(),
 		EventId:        orderID,
 		ActionSource:   "website",
-		EventSourceURL: "https://lkparfumo.com",
+		EventSourceURL: "https://dzbazar.online",
 		UserData:       userData,
 		CustomData:     customData,
 	}
