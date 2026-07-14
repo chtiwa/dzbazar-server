@@ -17,7 +17,6 @@ import (
 type offerBody struct {
 	InternalName      *string                  `json:"internalName"`
 	Status            *string                  `json:"status"`
-	OfferType         *string                  `json:"offerType"`
 	Action            *string                  `json:"action"`
 	TriggerProductID  *string                  `json:"triggerProductId"`
 	LandingPageID     *string                  `json:"landingPageId"` // omit or null = base offer
@@ -54,10 +53,6 @@ func CreateOffer(c *gin.Context) {
 
 	if body.InternalName == nil || *body.InternalName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "internalName is required"})
-		return
-	}
-	if body.OfferType == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "offerType is required"})
 		return
 	}
 	if body.Action == nil {
@@ -114,7 +109,6 @@ func CreateOffer(c *gin.Context) {
 		ShopID:           shopID,
 		InternalName:     *body.InternalName,
 		Status:           "draft",
-		OfferType:        *body.OfferType,
 		Action:           *body.Action,
 		TriggerProductID: triggerProductID,
 		OfferProductID:   offerProductID,
@@ -448,7 +442,6 @@ type OfferedVariant struct {
 
 type OfferResult struct {
 	ID            uuid.UUID        `json:"id"`
-	OfferType     string           `json:"offerType"`
 	Action        string           `json:"action"`
 	Placement     string           `json:"placement"`
 	AnchorVariant *uuid.UUID       `json:"anchorVariant"` // for replace action
@@ -578,7 +571,6 @@ func resolveOffers(shopID, productID uuid.UUID, req EvaluateOffersRequest) ([]Of
 
 		result := OfferResult{
 			ID:            offer.ID,
-			OfferType:     offer.OfferType,
 			Action:        offer.Action,
 			Placement:     offer.Placement,
 			AnchorVariant: anchorVariant,
@@ -783,9 +775,6 @@ func applyOfferBodyFields(offer *models.Offer, body offerBody) {
 	}
 	if body.InternalName != nil {
 		offer.InternalName = *body.InternalName
-	}
-	if body.OfferType != nil {
-		offer.OfferType = *body.OfferType
 	}
 	if body.Action != nil {
 		offer.Action = *body.Action

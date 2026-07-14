@@ -27,9 +27,8 @@ type Offer struct {
 	BaseModel
 	ShopID       uuid.UUID `gorm:"not null;index"           json:"shopId"`
 	InternalName string    `gorm:"not null"                 json:"internalName"`
-	Status       string    `gorm:"not null;default:'draft'" json:"status"`    // draft|published|archived
-	OfferType    string    `gorm:"not null"                 json:"offerType"` // upsell|cross_sell|variant_upsell|quantity_upsell|order_bump
-	Action       string    `gorm:"not null"                 json:"action"`    // replace|append|mutate_qty
+	Status       string    `gorm:"not null;default:'draft'" json:"status"` // draft|published|archived
+	Action       string    `gorm:"not null"                 json:"action"`  // replace|append|mutate_qty — also the offer's "type": replace=upsell, append=cross_sell/order_bump (see placement), mutate_qty=quantity_upsell
 
 	TriggerProductID uuid.UUID `gorm:"not null;index"  json:"triggerProductId"`
 	TriggerProduct   *Product  `gorm:"foreignKey:TriggerProductID;references:ID;constraint:OnDelete:CASCADE" json:"triggerProduct,omitempty"`

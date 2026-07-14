@@ -88,21 +88,6 @@ func decrementOrderItemsStock(tx *gorm.DB, items []models.OrderItem) {
 	}
 }
 
-// shouldSendMetaPurchase gates the one-time Meta CAPI Purchase send: only a
-// confirmed, non-fake, non-test, Facebook-attributed order that hasn't sent
-// yet is eligible. Re-evaluated on every order save (not just on the
-// transition into "Confirmé"), which is what lets a failed send retry on
-// the next edit.
-func shouldSendMetaPurchase(status, conversionSource, fullName string, isHidden bool, sentAt *time.Time) bool {
-	if status != "Confirmé" || isHidden || sentAt != nil {
-		return false
-	}
-	if conversionSource != "facebook" {
-		return false
-	}
-	return !strings.Contains(strings.ToLower(fullName), "test")
-}
-
 func GetOrdersByShopID(c *gin.Context) {
 	user, ok := c.Get("user")
 	if !ok {
@@ -574,8 +559,44 @@ func CreateOrderByShopID(c *gin.Context) {
 			},
 		}
 
-		// Meta Purchase is no longer fired here — see UpdateOrderByShopID,
-		// which fires it once when an order is confirmed by an admin.
+		// Meta Purchase fires here, at creation. Firing it on confirmation instead
+		// tanked ad delivery — Meta's optimization needs the signal close to the
+		// click, not hours later once an admin gets to it.
+		if fullOrder.ConversionSource == "facebook" {
+			var px models.Pixel
+			pixelErr := initializers.DB.
+				Where("shop_id = ? AND platform = ? AND is_active = ?", fullOrder.ShopID, "facebook", true).
+				First(&px).Error
+
+			if pixelErr == nil && px.HasAccessToken && px.AccessToken != "" {
+				testCode := ""
+				if strings.Contains(strings.ToLower(fullOrder.Client.FullName), "test") {
+					testCode = os.Getenv("FACEBOOK_TEST_CODE")
+				}
+
+				fbErr := utils.SendFacebookPurchase(
+					px.PixelID,
+					px.AccessToken,
+					fullOrder.ID.String(),
+					fullOrder.Client.FullName,
+					fullOrder.Client.PhoneNumber,
+					fullOrder.TotalPrice,
+					"DZD",
+					fullOrder.FBc,
+					fullOrder.FBp,
+					fullOrder.CreatedAt,
+					fullOrder.ClientUserAgent,
+					fullOrder.ClientIP,
+					testCode,
+				)
+				if fbErr != nil {
+					fmt.Println("Meta CAPI purchase send failed:", fbErr)
+				} else {
+					initializers.DB.Model(&models.Order{}).Where("id = ?", orderID).
+						Update("meta_purchase_sent_at", time.Now())
+				}
+			}
+		}
 	}(order.ID)
 
 	InvalidateDashboardCache(parsedShopID)
@@ -731,7 +752,6 @@ func UpdateOrderByShopID(c *gin.Context) {
 	}
 
 	var oldStatus string
-	var metaClaimed bool
 
 	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
 		var order models.Order
@@ -862,21 +882,6 @@ func UpdateOrderByShopID(c *gin.Context) {
 			return err
 		}
 
-		newStatus := order.Status
-		if strings.TrimSpace(body.Status) != "" {
-			newStatus = strings.TrimSpace(body.Status)
-		}
-
-		if shouldSendMetaPurchase(newStatus, order.ConversionSource, order.Client.FullName, order.IsHidden, order.MetaPurchaseSentAt) {
-			res := tx.Model(&models.Order{}).
-				Where("id = ? AND shop_id = ? AND meta_purchase_sent_at IS NULL", order.ID, shopID).
-				Update("meta_purchase_sent_at", time.Now())
-			if res.Error != nil {
-				return res.Error
-			}
-			metaClaimed = res.RowsAffected == 1
-		}
-
 		return nil
 	})
 
@@ -902,57 +907,6 @@ func UpdateOrderByShopID(c *gin.Context) {
 			"from": oldStatus,
 			"to":   body.Status,
 		})
-	}
-
-	if metaClaimed {
-		go func(orderID, shopID uuid.UUID) {
-			defer func() {
-				if r := recover(); r != nil {
-					fmt.Printf("Recovered from panic in confirm-purchase routine: %v\n", r)
-				}
-			}()
-
-			var o models.Order
-			if err := initializers.DB.Preload("Client").First(&o, "id = ?", orderID).Error; err != nil {
-				fmt.Printf("confirm-purchase: hydrate failed: %v\n", err)
-				return
-			}
-
-			var px models.Pixel
-			pixelErr := initializers.DB.
-				Where("shop_id = ? AND platform = ? AND is_active = ?", shopID, "facebook", true).
-				First(&px).Error
-
-			if pixelErr != nil || !px.HasAccessToken || px.AccessToken == "" {
-				// No usable CAPI token — unclaim so a later save retries once one's configured.
-				initializers.DB.Model(&models.Order{}).Where("id = ?", orderID).
-					Updates(map[string]any{"meta_purchase_sent_at": nil})
-				return
-			}
-
-			fbErr := utils.SendFacebookPurchase(
-				px.PixelID,
-				px.AccessToken,
-				o.ID.String(),
-				o.Client.FullName,
-				o.Client.PhoneNumber,
-				o.TotalPrice,
-				"DZD",
-				o.FBc,
-				o.FBp,
-				time.Now(),
-				o.ClientUserAgent,
-				o.ClientIP,
-				os.Getenv("FACEBOOK_TEST_CODE"),
-			)
-			if fbErr != nil {
-				fmt.Println("Meta CAPI confirm-purchase send failed, unclaiming for retry:", fbErr)
-				initializers.DB.Model(&models.Order{}).Where("id = ?", orderID).
-					Updates(map[string]any{"meta_purchase_sent_at": nil})
-			} else {
-				fmt.Println("Meta CAPI confirm-purchase sent successfully")
-			}
-		}(orderID, shopID)
 	}
 
 	var updatedOrder models.Order

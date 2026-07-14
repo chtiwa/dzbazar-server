@@ -77,6 +77,10 @@ func Migrate() {
 	// still-NOT-NULL f_bp column left behind by the earlier AutoMigrate run.
 	initializers.DB.Exec(`ALTER TABLE flagged_clients DROP COLUMN IF EXISTS f_bp`)
 
+	// offer_type was a merchant-facing label redundant with (action, placement) and
+	// never read by the eval pipeline — dropped in favor of deriving the label client-side.
+	initializers.DB.Exec(`ALTER TABLE offers DROP COLUMN IF EXISTS offer_type`)
+
 	// orders.client_id -> clients.id was originally created as ON DELETE SET
 	// NULL, which is impossible since client_id is NOT NULL — deleting a
 	// client with orders violated that not-null constraint instead of
