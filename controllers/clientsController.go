@@ -61,7 +61,11 @@ func GetClientsByShopID(c *gin.Context) {
 		page = 1
 	}
 
-	limit := 20
+	limit, err := strconv.Atoi(c.DefaultQuery("perPage", "20"))
+	if err != nil || limit < 1 {
+		limit = 20
+	}
+
 	offset := (page - 1) * limit
 
 	var clients []models.Client
@@ -80,7 +84,9 @@ func GetClientsByShopID(c *gin.Context) {
 
 	if err := initializers.DB.
 		Where("shop_id = ?", shopID).
-		Preload("Orders").
+		Preload("Orders", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at DESC")
+		}).
 		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
@@ -132,7 +138,9 @@ func GetClientsBySearch(c *gin.Context) {
 			OR LOWER(phone_number) LIKE ?
 			OR LOWER(phone_number2) LIKE ?
 		`, like, like, like).
-		Preload("Orders").
+		Preload("Orders", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at DESC")
+		}).
 		Order("created_at DESC").
 		Find(&clients).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -172,7 +180,9 @@ func IndexClientByShopID(c *gin.Context) {
 	var client models.Client
 	err = initializers.DB.
 		Where("id = ? AND shop_id = ?", clientID, shopID).
-		Preload("Orders").
+		Preload("Orders", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at DESC")
+		}).
 		First(&client).Error
 
 	if err != nil {
@@ -367,7 +377,9 @@ func UpdateClientByShopID(c *gin.Context) {
 
 	if err := initializers.DB.
 		Where("id = ? AND shop_id = ?", clientID, shopID).
-		Preload("Orders").
+		Preload("Orders", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at DESC")
+		}).
 		First(&client).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

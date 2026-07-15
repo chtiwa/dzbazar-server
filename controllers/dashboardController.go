@@ -49,6 +49,8 @@ type DashboardData struct {
 	PendingRevenue    float64                  `json:"pendingRevenue"`
 	DeliveredOrders   int64                    `json:"deliveredOrders"`
 	AvgOrderValue     float64                  `json:"avgOrderValue"`
+	ShippedOrders     int64                    `json:"shippedOrders"`
+	DeliveryRate      float64                  `json:"deliveryRate"`
 }
 
 func dashboardCacheKey(shopID uuid.UUID) string {
@@ -102,7 +104,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	now := time.Now()
 
 	daily := []TimeCount{}
-	dailyQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL", shopID)
+	dailyQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
 	if hasDateFilter {
 		dailyQ = dailyQ.Where("created_at >= ? AND created_at < ?", fromTime, toTime)
 	} else {
@@ -115,7 +117,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 
 	weekly := []TimeCount{}
-	weeklyQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL", shopID)
+	weeklyQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
 	if hasDateFilter {
 		weeklyQ = weeklyQ.Where("created_at >= ? AND created_at < ?", fromTime, toTime)
 	} else {
@@ -128,7 +130,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 
 	monthly := []TimeCount{}
-	monthlyQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL", shopID)
+	monthlyQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
 	if hasDateFilter {
 		monthlyQ = monthlyQ.Where("created_at >= ? AND created_at < ?", fromTime, toTime)
 	} else {
@@ -141,7 +143,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 
 	var totalOrders int64
-	totalQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL", shopID)
+	totalQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
 	if hasDateFilter {
 		totalQ = totalQ.Where("created_at >= ? AND created_at < ?", fromTime, toTime)
 	}
@@ -156,15 +158,17 @@ func GetOrdersDashboard(c *gin.Context) {
 		DeliveredRevenue float64
 		PendingRevenue   float64
 		DeliveredOrders  int64
+		ShippedOrders    int64
 	}
-	revQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL", shopID)
+	revQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
 	if hasDateFilter {
 		revQ = revQ.Where("created_at >= ? AND created_at < ?", fromTime, toTime)
 	}
 	if err := revQ.Select(`
 			COALESCE(SUM(CASE WHEN status = 'Livré' THEN total_price END), 0) AS delivered_revenue,
 			COALESCE(SUM(CASE WHEN status NOT IN ('Livré', 'Annulé', 'Abandonné') THEN total_price END), 0) AS pending_revenue,
-			COUNT(*) FILTER (WHERE status = 'Livré') AS delivered_orders
+			COUNT(*) FILTER (WHERE status = 'Livré') AS delivered_orders,
+			COUNT(*) FILTER (WHERE is_shipped = true) AS shipped_orders
 		`).Scan(&rev).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching revenue stats", "error": err.Error()})
 		return
@@ -173,9 +177,20 @@ func GetOrdersDashboard(c *gin.Context) {
 	if rev.DeliveredOrders > 0 {
 		avgOrderValue = rev.DeliveredRevenue / float64(rev.DeliveredOrders)
 	}
+	// Of orders actually dispatched to a carrier (is_shipped), what fraction
+	// arrived. Denominator is shipment attempts, not all orders — orders
+	// still stuck pre-shipment (Confirmé, Reporté, ...) never had a delivery
+	// attempt, so counting them here would blame delivery for a confirmation
+	// problem. is_shipped is written in the same query as status on every
+	// ship path (manual PATCH, Osen/ZR/Leopard ship, sync jobs), unlike
+	// audit_logs which those carrier flows bypass entirely.
+	deliveryRate := 0.0
+	if rev.ShippedOrders > 0 {
+		deliveryRate = float64(rev.DeliveredOrders) * 100.0 / float64(rev.ShippedOrders)
+	}
 
 	statusStats := []StatusStat{}
-	statusQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL", shopID)
+	statusQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
 	if hasDateFilter {
 		statusQ = statusQ.Where("created_at >= ? AND created_at < ?", fromTime, toTime)
 	}
@@ -189,24 +204,34 @@ func GetOrdersDashboard(c *gin.Context) {
 		}
 	}
 
-	// Pool = En attente, Ne répond pas 1/2/3, Reporté, Annulé, Confirmé.
-	// Excluded: Abandonné, Expédié, Livré, Retour.
+	// "Confirmed" = the order's status was ever set to Confirmé, per the
+	// order.status_changed audit trail — not the current status column.
+	// Status is a snapshot that gets overwritten (Confirmé -> Expédié ->
+	// Livré), so reading it live silently drops every order that progressed
+	// past Confirmé from the numerator. The audit log is append-only and
+	// already written on every transition (see UpdateOrderByShopID), so it's
+	// the source of truth for "was this ever confirmed".
 	confirmationRates := []ProductConfirmationRate{}
 	confirmQ := db.Table("order_items oi").
 		Joins("JOIN orders o ON o.id = oi.order_id").
 		Joins("JOIN products p ON p.id = oi.product_id").
-		Where("o.shop_id = ? AND o.deleted_at IS NULL AND p.deleted_at IS NULL", shopID)
+		Where("o.shop_id = ? AND o.deleted_at IS NULL AND o.is_hidden = false AND o.status <> 'Abandonné' AND p.deleted_at IS NULL", shopID)
 	if hasDateFilter {
 		confirmQ = confirmQ.Where("o.created_at >= ? AND o.created_at < ?", fromTime, toTime)
 	}
+	const wasEverConfirmed = `EXISTS (
+			SELECT 1 FROM audit_logs al
+			WHERE al.target_type = 'Order' AND al.target_id = oi.order_id
+				AND al.action = 'order.status_changed' AND al.metadata::json->>'to' = 'Confirmé'
+		)`
 	if err := confirmQ.Select(`
 			p.id::text AS product_id,
 			p.title AS product_name,
-			COUNT(DISTINCT CASE WHEN o.status NOT IN ('Abandonné', 'Expédié', 'Livré', 'Retour') THEN oi.order_id END) AS total_orders,
-			COUNT(DISTINCT CASE WHEN o.status = 'Confirmé' THEN oi.order_id END) AS confirmed_orders,
+			COUNT(DISTINCT oi.order_id) AS total_orders,
+			COUNT(DISTINCT oi.order_id) FILTER (WHERE `+wasEverConfirmed+`) AS confirmed_orders,
 			ROUND(
-				COUNT(DISTINCT CASE WHEN o.status = 'Confirmé' THEN oi.order_id END) * 100.0
-				/ NULLIF(COUNT(DISTINCT CASE WHEN o.status NOT IN ('Abandonné', 'Expédié', 'Livré', 'Retour') THEN oi.order_id END), 0),
+				COUNT(DISTINCT oi.order_id) FILTER (WHERE `+wasEverConfirmed+`) * 100.0
+				/ NULLIF(COUNT(DISTINCT oi.order_id), 0),
 			2) AS confirmation_rate
 		`).Group("p.id, p.title").Order("total_orders DESC").Scan(&confirmationRates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching confirmation rates", "error": err.Error()})
@@ -216,7 +241,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	wilayaStats := []WilayaStat{}
 	wilayaQ := db.Table("orders o").
 		Joins("JOIN clients c ON c.id = o.client_id").
-		Where("o.shop_id = ? AND o.deleted_at IS NULL AND c.state != ''", shopID)
+		Where("o.shop_id = ? AND o.deleted_at IS NULL AND o.is_hidden = false AND o.status <> 'Abandonné' AND c.state != ''", shopID)
 	if hasDateFilter {
 		wilayaQ = wilayaQ.Where("o.created_at >= ? AND o.created_at < ?", fromTime, toTime)
 	}
@@ -238,6 +263,8 @@ func GetOrdersDashboard(c *gin.Context) {
 		PendingRevenue:    rev.PendingRevenue,
 		DeliveredOrders:   rev.DeliveredOrders,
 		AvgOrderValue:     avgOrderValue,
+		ShippedOrders:     rev.ShippedOrders,
+		DeliveryRate:      deliveryRate,
 	}
 
 	// Store in cache — failure is non-fatal; skip for date-filtered requests

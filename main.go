@@ -38,6 +38,7 @@ func main() {
 	routes.CouponsRoutes(router)
 	routes.ShopsRoutes(router)
 	routes.PixelsRoutes(router)
+	routes.VisitsRoutes(router)
 	routes.DashboardRoutes(router)
 	routes.DeliveryRatesRoutes(router)
 	routes.DeliveryCompaniesRoutes(router)
