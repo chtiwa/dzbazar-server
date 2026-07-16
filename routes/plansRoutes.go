@@ -23,8 +23,8 @@ func PlansRoutes(router *gin.Engine) {
 	sub := router.Group("/v1/shops/:shopId/subscription")
 	sub.Use(middleware.RequireAuthentication)
 	{
-		sub.GET("", controllers.GetShopSubscription)
-		sub.POST("", middleware.RequireShopAccess("owner"), controllers.SubscribeShopToPlan)
-		sub.DELETE("", middleware.RequireShopAccess("owner"), controllers.CancelShopSubscription)
+		sub.GET("", middleware.RequireShopAccess(), middleware.RequireShopPermission("subscription.view"), controllers.GetShopSubscription)
+		sub.POST("", middleware.RequireShopAccess(), middleware.RequireShopPermission("subscription.edit"), controllers.SubscribeShopToPlan)
+		sub.DELETE("", middleware.RequireShopAccess(), middleware.RequireShopPermission("subscription.edit"), controllers.CancelShopSubscription)
 	}
 }

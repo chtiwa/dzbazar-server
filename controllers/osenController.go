@@ -393,6 +393,7 @@ func shipOrderToOsen(order *models.Order, integration *models.DeliveryCompany) (
 	decrementOrderItemsStock(initializers.DB, order.Items)
 
 	bumpOsenOrdersCacheVersion(order.ShopID)
+	invalidateOrdersListCache(order.ShopID)
 
 	return osenOrder, nil
 }

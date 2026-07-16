@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -12,6 +14,7 @@ import (
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/chtiwa/dzbazar-server/realtime"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -88,6 +91,22 @@ func decrementOrderItemsStock(tx *gorm.DB, items []models.OrderItem) {
 	}
 }
 
+// Only the unfiltered first page gets cached — any status/search/date filter
+// hits the DB directly. That's the view merchants have open by default and
+// poll/refresh most; filtered views are one-off lookups not worth a cache key.
+const ordersListCacheTTL = 15 * time.Minute
+
+func ordersListCacheKey(shopID uuid.UUID) string {
+	return fmt.Sprintf("orders:list:default:%s", shopID)
+}
+
+// invalidateOrdersListCache must be called after ANY write to an order row
+// (create/update/delete/status change/ship), from any file — the cached page
+// renders order fields (status, tracking, etc), not just row presence.
+func invalidateOrdersListCache(shopID uuid.UUID) {
+	initializers.RClient.Del(initializers.Ctx, ordersListCacheKey(shopID))
+}
+
 func GetOrdersByShopID(c *gin.Context) {
 	user, ok := c.Get("user")
 	if !ok {
@@ -148,6 +167,17 @@ func GetOrdersByShopID(c *gin.Context) {
 	dateFrom := c.Query("dateFrom")
 	dateTo := c.Query("dateTo")
 	flaggedOnly := c.Query("flagged") == "true"
+	productID := strings.TrimSpace(c.Query("productId"))
+
+	isDefaultView := page == 1 && perPage == 10 && (status == "" || status == "Tous") &&
+		search == "" && dateFrom == "" && dateTo == "" && !flaggedOnly && productID == ""
+
+	if isDefaultView {
+		if cached, err := initializers.RClient.Get(initializers.Ctx, ordersListCacheKey(shopID)).Bytes(); err == nil {
+			c.Data(http.StatusOK, "application/json", cached)
+			return
+		}
+	}
 
 	baseQuery := initializers.DB.Model(&models.Order{}).Where("orders.shop_id = ? AND orders.is_hidden = ?", shopID, flaggedOnly)
 
@@ -177,6 +207,15 @@ func GetOrdersByShopID(c *gin.Context) {
 		baseQuery = baseQuery.
 			Joins("JOIN clients client ON client.id = orders.client_id").
 			Where("client.full_name ILIKE ? OR client.phone_number LIKE ?", likeSearch, likeSearch)
+	}
+
+	if productID != "" {
+		if parsedProductID, err := uuid.Parse(productID); err == nil {
+			baseQuery = baseQuery.Where(
+				"EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id AND oi.product_id = ?)",
+				parsedProductID,
+			)
+		}
 	}
 
 	var totalRows int64
@@ -222,12 +261,22 @@ func GetOrdersByShopID(c *gin.Context) {
 
 	pagination := utils.GetPaginationData(page, totalPages, "/orders")
 
-	c.JSON(http.StatusOK, gin.H{
+	body, err := json.Marshal(gin.H{
 		"success":    true,
 		"message":    "Orders were retrieved successfully",
 		"data":       orders,
 		"pagination": pagination,
 	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to encode orders response"})
+		return
+	}
+
+	if isDefaultView {
+		initializers.RClient.Set(initializers.Ctx, ordersListCacheKey(shopID), body, ordersListCacheTTL)
+	}
+
+	c.Data(http.StatusOK, "application/json", body)
 }
 
 const (
@@ -256,6 +305,19 @@ func CreateOrderByShopID(c *gin.Context) {
 	parsedShopID, err := uuid.Parse(body.ShopID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid Shop ID payload format"})
+		return
+	}
+
+	if err := services.CheckOrderLimit(parsedShopID); err != nil {
+		if errors.Is(err, services.ErrPlanLimitReached) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "This store has reached its order limit for the current plan and cannot accept new orders right now.",
+				"code":    "PLAN_LIMIT_REACHED",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
 		return
 	}
 
@@ -601,6 +663,7 @@ func CreateOrderByShopID(c *gin.Context) {
 
 	InvalidateDashboardCache(parsedShopID)
 	invalidateProductCaches(uuid.Nil, parsedShopID)
+	invalidateOrdersListCache(parsedShopID)
 	initializers.RClient.Del(initializers.Ctx, landingPagesCacheKeyByShop(parsedShopID))
 
 	isProduction := os.Getenv("APP_ENV") == "production"
@@ -925,6 +988,7 @@ func UpdateOrderByShopID(c *gin.Context) {
 	}
 
 	InvalidateDashboardCache(shopID)
+	invalidateOrdersListCache(shopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -1046,6 +1110,7 @@ func DeleteOrderByShopID(c *gin.Context) {
 
 	InvalidateDashboardCache(shopID)
 	invalidateProductCaches(uuid.Nil, shopID)
+	invalidateOrdersListCache(shopID)
 	initializers.RClient.Del(initializers.Ctx, landingPagesCacheKeyByShop(shopID))
 
 	c.JSON(http.StatusOK, gin.H{
@@ -1137,6 +1202,8 @@ func BanOrderClient(c *gin.Context) {
 		})
 		return
 	}
+
+	invalidateOrdersListCache(shopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

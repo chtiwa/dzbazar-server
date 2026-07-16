@@ -12,9 +12,9 @@ func CouponsRoutes(router *gin.Engine) {
 	adminCoupons := router.Group("/v1/shops/:shopId/coupons")
 	{
 		adminCoupons.GET("", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), controllers.GetCouponsByShop)
-		adminCoupons.POST("", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), controllers.CreateCoupon)
-		adminCoupons.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), controllers.UpdateCoupon)
-		adminCoupons.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess("owner"), controllers.DeleteCoupon)
+		adminCoupons.POST("", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("coupons.create"), controllers.CreateCoupon)
+		adminCoupons.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("coupons.edit"), controllers.UpdateCoupon)
+		adminCoupons.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("coupons.delete"), controllers.DeleteCoupon)
 	}
 
 	router.POST("/v1/shops/:shopId/coupons/validate", middleware.RateLimitByIP("coupon-validate", 20, time.Minute), controllers.ValidateCouponPublic)

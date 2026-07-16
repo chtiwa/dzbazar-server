@@ -15,7 +15,7 @@ func ClientsRoutes(router *gin.Engine) {
 		clients.POST("/excel", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator", "confirmation"), controllers.UploadExcelClients)
 
 		clients.GET("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator", "confirmation"), controllers.IndexClientByShopID)
-		clients.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator", "confirmation"), controllers.UpdateClientByShopID)
-		clients.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess("owner"), controllers.DeleteClientByShopID)
+		clients.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("clients.edit"), controllers.UpdateClientByShopID)
+		clients.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("clients.delete"), controllers.DeleteClientByShopID)
 	}
 }

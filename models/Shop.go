@@ -8,6 +8,9 @@ type Shop struct {
 	Name        string         `gorm:"not null" json:"name"`
 	Slug        string         `gorm:"uniqueIndex;not null" json:"slug"`
 	Description string         `json:"description"`
+	Phone       string         `json:"phone"`
+	Email       string         `json:"email"`
+	Address     string         `json:"address"`
 	OwnerID     uuid.UUID      `gorm:"type:uuid;not null;index" json:"ownerId"`
 	Owner       User           `gorm:"foreignKey:OwnerID;references:ID" json:"owner"`
 	IsActive    bool           `gorm:"default:true" json:"isActive"`

@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/chtiwa/dzbazar-server/dto"
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -139,6 +141,19 @@ func CreateLandingPageByShop(c *gin.Context) {
 			"message": "Invalid shop ID",
 			"error":   err.Error(),
 		})
+		return
+	}
+
+	if err := services.CheckLandingPageLimit(shopID); err != nil {
+		if errors.Is(err, services.ErrPlanLimitReached) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "Landing page limit reached for your plan. Upgrade to create more.",
+				"code":    "PLAN_LIMIT_REACHED",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
 		return
 	}
 

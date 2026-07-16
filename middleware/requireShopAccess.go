@@ -5,6 +5,7 @@ import (
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -18,23 +19,20 @@ func GetShopMembership(userID uuid.UUID, shopID string) (models.ShopMember, bool
 	return membership, err == nil
 }
 
-// roleCan reports whether role may perform action.
-// ponytail: perms in code; add shop_roles boolean columns only if shops need custom permissions.
-func roleCan(role, action string) bool {
-	switch action {
-	case "delete":
-		return role == "owner"
-	default:
-		return role == "owner" || role == "moderator"
-	}
-}
-
-// RequireShopPermission checks the shop role (set by RequireShopAccess) against action.
-// Must run after RequireShopAccess.
+// RequireShopPermission checks the shop role (set by RequireShopAccess),
+// combined with any per-member override, against action. Must run after
+// RequireShopAccess.
 func RequireShopPermission(action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, _ := c.Get("userShopRole")
-		if !roleCan(role.(string), action) {
+
+		var memberID *uuid.UUID
+		if v, ok := c.Get("shopMemberID"); ok {
+			id := v.(uuid.UUID)
+			memberID = &id
+		}
+
+		if !services.MemberCan(memberID, role.(string), action) {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You do not have permission to perform this action"})
 			return
 		}
@@ -99,6 +97,7 @@ func RequireShopAccess(allowedRoles ...string) gin.HandlerFunc {
 
 		c.Set("activeShopID", targetShopID)
 		c.Set("userShopRole", membership.Role)
+		c.Set("shopMemberID", membership.ID)
 		c.Next()
 	}
 }

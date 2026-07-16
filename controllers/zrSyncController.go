@@ -154,6 +154,7 @@ func syncShopZrOrders(shopID uuid.UUID) {
 				if err := initializers.DB.Model(&models.Order{}).
 					Where("id = ?", order.ID).
 					Update("status", newStatus).Error; err == nil {
+					invalidateOrdersListCache(shopID)
 					realtime.Broadcast <- realtime.Message{
 						Event:  "order_status_synced",
 						ShopID: shopID.String(),

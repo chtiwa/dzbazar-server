@@ -7,6 +7,7 @@ import (
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -189,6 +190,19 @@ func CreatePixel(c *gin.Context) {
 	title := strings.TrimSpace(body.Title)
 	pixelID := strings.TrimSpace(body.PixelID)
 	accessToken := strings.TrimSpace(body.AccessToken)
+
+	if err := services.CheckPixelLimit(shopID, platform); err != nil {
+		if errors.Is(err, services.ErrPlanLimitReached) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "Pixel limit reached for your plan. Upgrade to add more pixels.",
+				"code":    "PLAN_LIMIT_REACHED",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
+		return
+	}
 
 	pixel := models.Pixel{
 		ShopID:         shopID,

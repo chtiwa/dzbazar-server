@@ -11,7 +11,7 @@ import (
 func UsersRoutes(router *gin.Engine) {
 	users := router.Group("/v1/users")
 	{
-		users.POST("/login", middleware.RateLimitByIP("login", 10, 15*time.Minute), controllers.Login)
+		users.POST("/login", middleware.RateLimitByIP("login", 30, 15*time.Minute), controllers.Login)
 		users.POST("/signup", middleware.RateLimitByIP("signup", 5, time.Hour), controllers.SignUp)
 		users.GET("/logout", controllers.Logout)
 		users.POST("/verify-otp", middleware.RateLimitByIP("verify-otp", 10, 15*time.Minute), controllers.VerifyUser)
@@ -28,20 +28,23 @@ func UsersRoutes(router *gin.Engine) {
 		// Any shop member can view their own record (IndexUserByShop enforces self-or-owner).
 		shopUsers.GET("/:id", middleware.RequireShopAccess(), controllers.IndexUserByShop)
 
-		// owner and moderator can list, create, and edit members
+		// each independently gated so overrides can grant/deny per action
 		manageable := shopUsers.Group("")
-		manageable.Use(middleware.RequireShopAccess("owner", "moderator"))
+		manageable.Use(middleware.RequireShopAccess())
 		{
-			manageable.GET("", controllers.GetUsersByShop)
-			manageable.POST("", controllers.CreateUserByShop)
-			manageable.PATCH("/:id", controllers.UpdateUserByShop)
+			manageable.GET("", middleware.RequireShopPermission("users.view"), controllers.GetUsersByShop)
+			manageable.POST("", middleware.RequireShopPermission("users.create"), controllers.CreateUserByShop)
+			manageable.PATCH("/:id", middleware.RequireShopPermission("users.edit"), controllers.UpdateUserByShop)
+			manageable.DELETE("/:id", middleware.RequireShopPermission("users.delete"), controllers.DeleteUserByShop)
 		}
 
-		// only owner can remove members
-		deletable := shopUsers.Group("")
-		deletable.Use(middleware.RequireShopAccess("owner"))
+		// only owner can manage per-member permission overrides
+		permissions := shopUsers.Group("/:id/permissions")
+		permissions.Use(middleware.RequireShopAccess("owner"))
 		{
-			deletable.DELETE("/:id", controllers.DeleteUserByShop)
+			permissions.GET("", controllers.GetMemberPermissions)
+			permissions.PUT("/:action", controllers.SetMemberPermission)
+			permissions.DELETE("/:action", controllers.DeleteMemberPermission)
 		}
 	}
 }

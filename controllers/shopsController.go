@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/mail"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/google/uuid"
@@ -32,6 +34,9 @@ type UpdateShopInput struct {
 	Name        *string `form:"name"`
 	Slug        *string `form:"slug"`
 	Description *string `form:"description"`
+	Phone       *string `form:"phone"`
+	Email       *string `form:"email"`
+	Address     *string `form:"address"`
 	IsActive    *bool   `form:"isActive"`
 }
 
@@ -182,6 +187,19 @@ func CreateShop(c *gin.Context) {
 			"success": false,
 			"message": "Invalid session user structure context",
 		})
+		return
+	}
+
+	if err := services.CheckShopLimit(userData.ID); err != nil {
+		if errors.Is(err, services.ErrPlanLimitReached) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "You have reached the maximum number of shops allowed on your current plan.",
+				"code":    "PLAN_LIMIT_REACHED",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
 		return
 	}
 
@@ -490,6 +508,51 @@ func UpdateShop(c *gin.Context) {
 			return
 		}
 		updateData["description"] = trimmedDescription
+	}
+
+	if input.Phone != nil {
+		trimmedPhone := strings.TrimSpace(*input.Phone)
+		if len(trimmedPhone) > 30 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Phone number is too long",
+			})
+			return
+		}
+		updateData["phone"] = trimmedPhone
+	}
+
+	if input.Email != nil {
+		trimmedEmail := strings.TrimSpace(*input.Email)
+		if trimmedEmail != "" {
+			if len(trimmedEmail) > 254 {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": "Email address is too long",
+				})
+				return
+			}
+			if _, parseErr := mail.ParseAddress(trimmedEmail); parseErr != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": "Invalid email address",
+				})
+				return
+			}
+		}
+		updateData["email"] = trimmedEmail
+	}
+
+	if input.Address != nil {
+		trimmedAddress := strings.TrimSpace(*input.Address)
+		if len(trimmedAddress) > 200 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Address cannot exceed 200 characters",
+			})
+			return
+		}
+		updateData["address"] = trimmedAddress
 	}
 
 	if input.IsActive != nil {

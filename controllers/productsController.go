@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"mime/multipart"
@@ -18,6 +19,7 @@ import (
 	"github.com/chtiwa/dzbazar-server/dto"
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -64,6 +66,15 @@ func CreateProductByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(shopIDParam)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid shop ID"})
+		return
+	}
+
+	if err := services.CheckProductLimit(shopID); err != nil {
+		if errors.Is(err, services.ErrPlanLimitReached) {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Product limit reached for your plan. Upgrade to add more products.", "code": "PLAN_LIMIT_REACHED"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
 		return
 	}
 

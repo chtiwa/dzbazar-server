@@ -20,9 +20,9 @@ func DeliveryCompaniesRoutes(router *gin.Engine) {
 	integrations := router.Group("/v1/shops/:shopId/delivery-companies")
 	integrations.Use(middleware.RequireAuthentication)
 	{
-		integrations.GET("", controllers.GetShopDeliveryCompanies)
-		integrations.POST("", middleware.RequireShopAccess("owner", "moderator"), controllers.ConnectDeliveryCompany)
-		integrations.PATCH("/:id", middleware.RequireShopAccess("owner", "moderator"), controllers.UpdateDeliveryCompanyCredentials)
-		integrations.DELETE("/:id", middleware.RequireShopAccess("owner"), controllers.DisconnectDeliveryCompany)
+		integrations.GET("", middleware.RequireShopAccess(), middleware.RequireShopPermission("delivery_companies.view"), controllers.GetShopDeliveryCompanies)
+		integrations.POST("", middleware.RequireShopAccess(), middleware.RequireShopPermission("delivery_companies.edit"), controllers.ConnectDeliveryCompany)
+		integrations.PATCH("/:id", middleware.RequireShopAccess(), middleware.RequireShopPermission("delivery_companies.edit"), controllers.UpdateDeliveryCompanyCredentials)
+		integrations.DELETE("/:id", middleware.RequireShopAccess(), middleware.RequireShopPermission("delivery_companies.edit"), controllers.DisconnectDeliveryCompany)
 	}
 }

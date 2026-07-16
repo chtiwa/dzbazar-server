@@ -334,6 +334,7 @@ func shipOrderToZr(order *models.Order, integration *models.DeliveryCompany) (ma
 	decrementOrderItemsStock(initializers.DB, order.Items)
 
 	bumpZrOrdersCacheVersion(order.ShopID)
+	invalidateOrdersListCache(order.ShopID)
 
 	return zrParcel, nil
 }

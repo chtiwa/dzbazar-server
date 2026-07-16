@@ -6,6 +6,7 @@ import (
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -154,6 +155,19 @@ func CreateUserByShop(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid role"})
 			return
 		}
+	}
+
+	if err := services.CheckUserLimit(shopID); err != nil {
+		if errors.Is(err, services.ErrPlanLimitReached) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "Staff member limit reached for your plan. Upgrade to add more users.",
+				"code":    "PLAN_LIMIT_REACHED",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
+		return
 	}
 
 	tx := initializers.DB.Begin()

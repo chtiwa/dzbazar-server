@@ -9,20 +9,17 @@ import (
 )
 
 func OffersRoutes(router *gin.Engine) {
-	admin := router.Group("/v1/shops/:shopId/offers",
-		middleware.RequireAuthentication,
-		middleware.RequireShopAccess("owner", "moderator"),
-	)
+	admin := router.Group("/v1/shops/:shopId/offers", middleware.RequireAuthentication)
 	{
-		admin.POST("", controllers.CreateOffer)
-		admin.GET("", controllers.GetOffersByShop)
-		admin.GET("/:id", controllers.GetOffer)
-		admin.PATCH("/:id", controllers.UpdateOffer)
-		admin.POST("/:id/publish", controllers.PublishOffer)
-		admin.POST("/:id/archive", controllers.ArchiveOffer)
-		admin.DELETE("/:id", controllers.DeleteOffer)
-		admin.PUT("/:id/overrides/:landingPageId", controllers.UpsertOfferOverride)
-		admin.DELETE("/:id/overrides/:landingPageId", controllers.DeleteOfferOverride)
+		admin.POST("", middleware.RequireShopAccess(), middleware.RequireShopPermission("offers.create"), controllers.CreateOffer)
+		admin.GET("", middleware.RequireShopAccess("owner", "moderator"), controllers.GetOffersByShop)
+		admin.GET("/:id", middleware.RequireShopAccess("owner", "moderator"), controllers.GetOffer)
+		admin.PATCH("/:id", middleware.RequireShopAccess(), middleware.RequireShopPermission("offers.edit"), controllers.UpdateOffer)
+		admin.POST("/:id/publish", middleware.RequireShopAccess(), middleware.RequireShopPermission("offers.archive"), controllers.PublishOffer)
+		admin.POST("/:id/archive", middleware.RequireShopAccess(), middleware.RequireShopPermission("offers.archive"), controllers.ArchiveOffer)
+		admin.DELETE("/:id", middleware.RequireShopAccess(), middleware.RequireShopPermission("offers.delete"), controllers.DeleteOffer)
+		admin.PUT("/:id/overrides/:landingPageId", middleware.RequireShopAccess(), middleware.RequireShopPermission("offers.edit"), controllers.UpsertOfferOverride)
+		admin.DELETE("/:id/overrides/:landingPageId", middleware.RequireShopAccess(), middleware.RequireShopPermission("offers.edit"), controllers.DeleteOfferOverride)
 	}
 
 	store := router.Group("/v1/store/:slug")

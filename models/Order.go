@@ -11,7 +11,7 @@ type OrderStatus string
 // 1. The Main Order (The Box being shipped)
 type Order struct {
 	BaseModel
-	ShopID uuid.UUID `gorm:"not null;index" json:"shopId"`
+	ShopID uuid.UUID `gorm:"not null;index;index:idx_orders_shop_hidden_created,priority:1" json:"shopId"`
 
 	// THE FIX: Link the order to the new Client model
 	ClientID uuid.UUID `gorm:"not null;index" json:"clientId"`
@@ -51,7 +51,7 @@ type Order struct {
 	// order still succeeds for the client (no different UX, no tip-off), but
 	// it's excluded from the default admin order list and fires no pixel
 	// event. Owners can still view these under the "flagged" list filter.
-	IsHidden bool `gorm:"default:false" json:"isHidden"`
+	IsHidden bool `gorm:"default:false;index:idx_orders_shop_hidden_created,priority:2" json:"isHidden"`
 
 	// IP address of the client at order time — informational only, shown to
 	// the owner reviewing a flagged order. Not used to match/ban clients:

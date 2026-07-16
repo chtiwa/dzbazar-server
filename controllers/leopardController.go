@@ -145,6 +145,7 @@ func shipOrderToLeopard(order *models.Order, integration *models.DeliveryCompany
 	}
 
 	decrementOrderItemsStock(initializers.DB, order.Items)
+	invalidateOrdersListCache(order.ShopID)
 
 	return map[string]any{"tracking": tracking, "raw": string(respBody)}, nil
 }
