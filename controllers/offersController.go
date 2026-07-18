@@ -2,13 +2,13 @@ package controllers
 
 import (
 	"fmt"
-	"math"
 	"net/http"
 	"sort"
 	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -68,19 +68,6 @@ func validateOfferTypeConsistency(offer *models.Offer) error {
 	default:
 		return fmt.Errorf("invalid offerType: %s", *offer.OfferType)
 	}
-}
-
-// packageForQuantity finds the tier matching an exact requested quantity.
-// Shared by offer evaluation (to display) and order creation (to reprice
-// server-side) so the two can never compute a different price for the same
-// tier.
-func packageForQuantity(pkgs []models.OfferQuantityPackage, quantity int) (models.OfferQuantityPackage, bool) {
-	for _, p := range pkgs {
-		if p.Quantity == quantity {
-			return p, true
-		}
-	}
-	return models.OfferQuantityPackage{}, false
 }
 
 // ─── Admin: CRUD ─────────────────────────────────────────────────────────────
@@ -850,7 +837,7 @@ func buildOfferedVariants(
 		}
 		variants = append(variants, OfferedVariant{
 			ID:                vid,
-			OfferedPrice:      computeOfferedPrice(combo.Price, offer.DiscountType, offer.DiscountValue),
+			OfferedPrice:      services.ComputeOfferedPrice(combo.Price, offer.DiscountType, offer.DiscountValue),
 			Available:         available,
 			CombinationString: combo.CombinationString,
 			ProductID:         combo.ProductID,
@@ -877,18 +864,6 @@ func findAnchorVariant(selectedVariants []string, triggerProductID uuid.UUID) *u
 		return nil
 	}
 	return &combo.ID
-}
-
-func computeOfferedPrice(basePrice float64, discountType string, discountValue float64) float64 {
-	switch discountType {
-	case "percent":
-		return math.Round(basePrice * (1 - discountValue/100))
-	case "fixed":
-		return math.Max(0, basePrice-discountValue)
-	case "override_price":
-		return discountValue
-	}
-	return basePrice
 }
 
 // applyOverrideToOffer merges non-nil override fields onto the base offer (in-place).

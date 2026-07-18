@@ -96,25 +96,6 @@ func TestMatchesConditions_EmptyAlwaysTrue(t *testing.T) {
 	}
 }
 
-func TestComputeOfferedPrice(t *testing.T) {
-	cases := []struct {
-		base, value float64
-		dtype       string
-		want        float64
-	}{
-		{2500, 10, "percent", 2250},
-		{2500, 500, "fixed", 2000},
-		{2500, 900, "override_price", 900},
-		{2500, 0, "percent", 2500},
-	}
-	for _, tc := range cases {
-		got := computeOfferedPrice(tc.base, tc.dtype, tc.value)
-		if got != tc.want {
-			t.Errorf("computeOfferedPrice(%v, %q, %v) = %v, want %v", tc.base, tc.dtype, tc.value, got, tc.want)
-		}
-	}
-}
-
 func TestDeriveActionFromOfferType(t *testing.T) {
 	cases := []struct {
 		offerType  string
@@ -192,21 +173,6 @@ func TestValidateOfferTypeConsistency(t *testing.T) {
 	// unknown offerType must fail.
 	if err := validateOfferTypeConsistency(&models.Offer{OfferType: &invalid}); err == nil {
 		t.Error("expected error for invalid offerType")
-	}
-}
-
-func TestPackageForQuantity(t *testing.T) {
-	pkgs := []models.OfferQuantityPackage{
-		{Quantity: 1, TotalPrice: 2900},
-		{Quantity: 2, TotalPrice: 5300},
-		{Quantity: 3, TotalPrice: 7500},
-	}
-
-	if pkg, ok := packageForQuantity(pkgs, 2); !ok || pkg.TotalPrice != 5300 {
-		t.Errorf("packageForQuantity(2) = (%+v, %v), want (TotalPrice:5300, true)", pkg, ok)
-	}
-	if _, ok := packageForQuantity(pkgs, 5); ok {
-		t.Error("packageForQuantity(5) should not match — no tier configured for that quantity")
 	}
 }
 

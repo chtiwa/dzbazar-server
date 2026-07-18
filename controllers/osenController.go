@@ -14,6 +14,7 @@ import (
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -390,7 +391,7 @@ func shipOrderToOsen(order *models.Order, integration *models.DeliveryCompany) (
 		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez Osen Express mais le statut local n'a pas pu être mis à jour"}
 	}
 
-	if err := decrementOrderItemsStock(initializers.DB, order.Items); err != nil {
+	if err := services.DecrementOrderItemsStock(initializers.DB, order.Items); err != nil {
 		log.Printf("osen: order %s shipped but stock decrement failed: %v", order.ID, err)
 		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez Osen Express mais échec de la mise à jour du stock"}
 	}

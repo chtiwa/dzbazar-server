@@ -86,93 +86,10 @@ type UpdateOrderInput struct {
 	Items          []OrderItemInput  `json:"items"`
 }
 
-// decrementOrderItemsStock reduces the stock quantity of each ordered variant
-// combination by the quantity ordered. Called once, when an order transitions
-// to "shipped" for the first time. Returns the first write error encountered
-// so a failed decrement can never pass silently as a successful ship.
-func decrementOrderItemsStock(tx *gorm.DB, items []models.OrderItem) error {
-	for _, item := range items {
-		if err := tx.Model(&models.ProductVariantCombination{}).
-			Where("id = ?", item.ProductVariantCombinationID).
-			UpdateColumn("quantity", gorm.Expr("quantity - ?", item.Quantity)).Error; err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Only the unfiltered first page gets cached — any status/search/date filter
 // hits the DB directly. That's the view merchants have open by default and
 // poll/refresh most; filtered views are one-off lookups not worth a cache key.
 const ordersListCacheTTL = 15 * time.Minute
-
-// fetchPublishedOffersForShop batch-fetches every offer referenced by
-// OfferID across the checkout's items, scoped to this shop and to
-// currently-published offers only. A draft/archived/foreign-shop offer id
-// simply won't be in the map, so priceForOrderItem falls back to combo.Price.
-func fetchPublishedOffersForShop(tx *gorm.DB, shopID uuid.UUID, items []OrderItemInput) (map[uuid.UUID]models.Offer, error) {
-	ids := make([]uuid.UUID, 0, len(items))
-	for _, item := range items {
-		if item.OfferID == nil {
-			continue
-		}
-		id, err := uuid.Parse(*item.OfferID)
-		if err != nil {
-			continue
-		}
-		ids = append(ids, id)
-	}
-	byID := map[uuid.UUID]models.Offer{}
-	if len(ids) == 0 {
-		return byID, nil
-	}
-	var offers []models.Offer
-	if err := tx.Where("id IN ? AND shop_id = ? AND status = 'published' AND deleted_at IS NULL", ids, shopID).
-		Find(&offers).Error; err != nil {
-		return nil, err
-	}
-	for _, o := range offers {
-		byID[o.ID] = o
-	}
-	return byID, nil
-}
-
-// pricedOrderItem is the single authority for what a checkout line actually
-// costs. combo.Price is the always-safe default; an item.OfferID that
-// resolves to a published offer in offerByID can only lower/override it
-// through the offer's own server-known rule — never from item.Price.
-//
-// It returns both the per-unit price to store on the OrderItem row and the
-// exact line total to add to the order's total — these can differ for a
-// quantity_upsell tier, since TotalPrice doesn't always divide evenly by
-// Quantity (e.g. 7700/3 = 2566.67). Charging round(unitPrice)*quantity would
-// drift from the merchant's configured total (7701 instead of 7700); the
-// line total must always be the exact configured amount, the per-unit price
-// is a rounded display value only.
-func pricedOrderItem(combo models.ProductVariantCombination, item OrderItemInput, offerByID map[uuid.UUID]models.Offer) (unitPrice float64, lineTotal float64) {
-	fallback := func() (float64, float64) { return combo.Price, combo.Price * float64(item.Quantity) }
-
-	if item.OfferID == nil {
-		return fallback()
-	}
-	offerID, err := uuid.Parse(*item.OfferID)
-	if err != nil {
-		return fallback()
-	}
-	offer, ok := offerByID[offerID]
-	if !ok {
-		return fallback()
-	}
-	if offer.OfferType != nil && *offer.OfferType == "quantity_upsell" {
-		pkg, found := packageForQuantity(offer.QuantityPackages, int(item.Quantity))
-		if !found {
-			return fallback()
-		}
-		return math.Round(pkg.TotalPrice / float64(item.Quantity)), pkg.TotalPrice
-	}
-	unitPrice = computeOfferedPrice(combo.Price, offer.DiscountType, offer.DiscountValue)
-	return unitPrice, unitPrice * float64(item.Quantity)
-}
 
 func ordersListCacheKey(shopID uuid.UUID) string {
 	return fmt.Sprintf("orders:list:default:%s", shopID)
@@ -527,7 +444,11 @@ func CreateOrderByShopID(c *gin.Context) {
 		// from the client's item.Price. An offerId that doesn't resolve to a
 		// published offer owned by this shop is silently ignored and the item
 		// falls back to plain combo.Price, same as an item with no offerId.
-		offerByID, err := fetchPublishedOffersForShop(tx, parsedShopID, body.Items)
+		offerIDs := make([]*string, len(body.Items))
+		for i, item := range body.Items {
+			offerIDs[i] = item.OfferID
+		}
+		offerByID, err := services.FetchPublishedOffersForShop(tx, parsedShopID, offerIDs)
 		if err != nil {
 			return err
 		}
@@ -538,7 +459,7 @@ func CreateOrderByShopID(c *gin.Context) {
 				return fmt.Errorf("combination not found for this shop: %s", item.ProductVariantCombinationID)
 			}
 
-			unitPrice, lineTotal := pricedOrderItem(combo, item, offerByID)
+			unitPrice, lineTotal := services.PricedOrderItem(combo, item.Quantity, item.OfferID, offerByID)
 
 			orderItems = append(orderItems, models.OrderItem{
 				ProductID:                   combo.ProductID,
@@ -965,7 +886,7 @@ func UpdateOrderByShopID(c *gin.Context) {
 		if body.IsShipped != nil {
 			updates["is_shipped"] = *body.IsShipped
 			if *body.IsShipped && !order.IsShipped {
-				if err := decrementOrderItemsStock(tx, order.Items); err != nil {
+				if err := services.DecrementOrderItemsStock(tx, order.Items); err != nil {
 					return err
 				}
 				updates["shipped_at"] = time.Now()
