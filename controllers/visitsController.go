@@ -49,6 +49,58 @@ func RecordVisit(c *gin.Context) {
 	c.JSON(http.StatusNoContent, nil)
 }
 
+type RecordPageVisitInput struct {
+	VisitorID string `json:"visitorId" binding:"required"`
+	PageType  string `json:"pageType" binding:"required"`
+	EntityID  string `json:"entityId" binding:"required"`
+}
+
+// RecordPageVisit — public storefront beacon for a product page or landing
+// page view. Same upsert-dedup shape as RecordVisit, one dimension wider
+// (page_type + entity_id) so product and landing-page views are counted
+// separately from each other and from the shop-level beacon.
+func RecordPageVisit(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	var body RecordPageVisitInput
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "visitorId, pageType and entityId required"})
+		return
+	}
+
+	visitorID := strings.TrimSpace(body.VisitorID)
+	if visitorID == "" || len(visitorID) > 64 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid visitorId"})
+		return
+	}
+
+	if body.PageType != "product" && body.PageType != "landing_page" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid pageType"})
+		return
+	}
+
+	entityID, err := uuid.Parse(body.EntityID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid entityId"})
+		return
+	}
+
+	if err := initializers.DB.Exec(`
+		INSERT INTO page_visits (id, shop_id, page_type, entity_id, day, visitor_id, created_at)
+		VALUES (uuid_generate_v4(), ?, ?, ?, CURRENT_DATE, ?, NOW())
+		ON CONFLICT (shop_id, page_type, entity_id, day, visitor_id) DO NOTHING
+	`, shopID, body.PageType, entityID, visitorID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to record visit"})
+		return
+	}
+
+	c.JSON(http.StatusNoContent, nil)
+}
+
 // GetVisits — protected. Unique daily visitors for the last N days (default 30).
 // Reuses TimeCount from dashboardController.
 func GetVisits(c *gin.Context) {

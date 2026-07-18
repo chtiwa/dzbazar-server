@@ -21,6 +21,19 @@ type OfferPredicate struct {
 	Value interface{} `json:"value"`
 }
 
+// OfferQuantityPackage is one selectable quantity tier of a quantity_upsell
+// offer, e.g. {Quantity: 2, TotalPrice: 5300} for "2 for 5300". TotalPrice is
+// the flat total for that tier, authored directly by the merchant — never
+// derived from DiscountType/DiscountValue, which stay reserved for the
+// single-variant replace/append discount math.
+type OfferQuantityPackage struct {
+	Quantity   int     `json:"quantity"`
+	TotalPrice float64 `json:"totalPrice"`
+	// Description is a free-text label the merchant authors for this tier
+	// (e.g. "10% off", "best value") — display-only, never used in pricing.
+	Description string `json:"description"`
+}
+
 // Offer is a merchant-authored upsell or cross-sell scoped to a trigger product.
 // LandingPageID = nil means it applies to the product page and every LP for that product.
 type Offer struct {
@@ -28,7 +41,14 @@ type Offer struct {
 	ShopID       uuid.UUID `gorm:"not null;index"           json:"shopId"`
 	InternalName string    `gorm:"not null"                 json:"internalName"`
 	Status       string    `gorm:"not null;default:'draft'" json:"status"` // draft|published|archived
-	Action       string    `gorm:"not null"                 json:"action"`  // replace|append|mutate_qty — also the offer's "type": replace=upsell, append=cross_sell/order_bump (see placement), mutate_qty=quantity_upsell
+	Action       string    `gorm:"not null"                 json:"action"`  // replace|append|mutate_qty — the cart mechanic. See OfferType for the merchant-facing business label.
+
+	// OfferType is the merchant-facing business label (quantity_upsell|variant_upsell|cross_sell).
+	// Nil on offers created before this field existed — Action alone still fully
+	// describes their cart behavior, so evaluation and order pricing never require it.
+	// When set, it's the source of truth and Action is derived from it (see
+	// deriveActionFromOfferType), so the two can never disagree.
+	OfferType *string `gorm:"type:text;index" json:"offerType"`
 
 	TriggerProductID uuid.UUID `gorm:"not null;index"  json:"triggerProductId"`
 	TriggerProduct   *Product  `gorm:"foreignKey:TriggerProductID;references:ID;constraint:OnDelete:CASCADE" json:"triggerProduct,omitempty"`
@@ -44,6 +64,13 @@ type Offer struct {
 	OfferVariantIDs []uuid.UUID `gorm:"type:text;serializer:json" json:"offerVariantIds"`
 	QuantityRule    int         `gorm:"not null;default:1"        json:"quantityRule"`
 
+	// QuantityPackages holds the selectable qty/price tiers for a quantity_upsell
+	// offer (e.g. 1 for 2900, 2 for 5300, 3 for 7500). Empty for every other
+	// offer type. Stored the same way as OfferVariantIDs/Conditions above —
+	// JSON-serialized text column, since packages are only ever read as a whole
+	// alongside their parent offer, never queried independently.
+	QuantityPackages []OfferQuantityPackage `gorm:"type:text;serializer:json" json:"quantityPackages"`
+
 	DiscountType  string  `gorm:"not null;default:'percent'" json:"discountType"`  // percent|fixed|override_price
 	DiscountValue float64 `gorm:"not null;default:0"         json:"discountValue"`
 
@@ -52,7 +79,7 @@ type Offer struct {
 	ButtonText  string `gorm:"not null;default:'Add to my order'" json:"buttonText"`
 	MediaURL    string `json:"mediaUrl"`
 
-	Placement string `gorm:"not null"         json:"placement"` // under_variant|above_submit|order_form
+	Placement string `gorm:"not null"         json:"placement"` // under_variant|above_submit|order_form|pre_submit_modal
 	Priority  int    `gorm:"not null;default:100" json:"priority"`
 
 	Conditions        OfferConditions `gorm:"type:text;serializer:json"       json:"conditions"`

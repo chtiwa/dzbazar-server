@@ -13,7 +13,6 @@ import (
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
-	"github.com/chtiwa/dzbazar-server/realtime"
 	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
@@ -38,6 +37,8 @@ type CreateOrderInput struct {
 	TTclid           string  `json:"ttclid"`
 	TTp              string  `json:"ttp"`
 	CouponCode       string  `json:"couponCode"`
+	// Landing page this order originated from, if any. Optional, attribution-only.
+	LandingPageID string `json:"landingPageId"`
 
 	// Nested client object matches your new JSON payload
 	Client OrderClientInput `json:"client" binding:"required"`
@@ -63,6 +64,11 @@ type OrderItemInput struct {
 	ProductVariantCombinationID string  `json:"productVariantCombinationID" binding:"required"` // Match JSON exactly
 	Quantity                    uint    `json:"quantity" binding:"required,min=1"`
 	Price                       float64 `json:"price" binding:"required"`
+	// OfferID is optional and only ever used to look up which published offer's
+	// discount rule applies — the resulting price is always recomputed
+	// server-side (see priceForOrderItem in ordersController.go). Price above
+	// is never trusted, same as everywhere else in this handler.
+	OfferID *string `json:"offerId"`
 }
 
 type UpdateOrderInput struct {
@@ -82,19 +88,91 @@ type UpdateOrderInput struct {
 
 // decrementOrderItemsStock reduces the stock quantity of each ordered variant
 // combination by the quantity ordered. Called once, when an order transitions
-// to "shipped" for the first time.
-func decrementOrderItemsStock(tx *gorm.DB, items []models.OrderItem) {
+// to "shipped" for the first time. Returns the first write error encountered
+// so a failed decrement can never pass silently as a successful ship.
+func decrementOrderItemsStock(tx *gorm.DB, items []models.OrderItem) error {
 	for _, item := range items {
-		tx.Model(&models.ProductVariantCombination{}).
+		if err := tx.Model(&models.ProductVariantCombination{}).
 			Where("id = ?", item.ProductVariantCombinationID).
-			UpdateColumn("quantity", gorm.Expr("quantity - ?", item.Quantity))
+			UpdateColumn("quantity", gorm.Expr("quantity - ?", item.Quantity)).Error; err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // Only the unfiltered first page gets cached — any status/search/date filter
 // hits the DB directly. That's the view merchants have open by default and
 // poll/refresh most; filtered views are one-off lookups not worth a cache key.
 const ordersListCacheTTL = 15 * time.Minute
+
+// fetchPublishedOffersForShop batch-fetches every offer referenced by
+// OfferID across the checkout's items, scoped to this shop and to
+// currently-published offers only. A draft/archived/foreign-shop offer id
+// simply won't be in the map, so priceForOrderItem falls back to combo.Price.
+func fetchPublishedOffersForShop(tx *gorm.DB, shopID uuid.UUID, items []OrderItemInput) (map[uuid.UUID]models.Offer, error) {
+	ids := make([]uuid.UUID, 0, len(items))
+	for _, item := range items {
+		if item.OfferID == nil {
+			continue
+		}
+		id, err := uuid.Parse(*item.OfferID)
+		if err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	byID := map[uuid.UUID]models.Offer{}
+	if len(ids) == 0 {
+		return byID, nil
+	}
+	var offers []models.Offer
+	if err := tx.Where("id IN ? AND shop_id = ? AND status = 'published' AND deleted_at IS NULL", ids, shopID).
+		Find(&offers).Error; err != nil {
+		return nil, err
+	}
+	for _, o := range offers {
+		byID[o.ID] = o
+	}
+	return byID, nil
+}
+
+// pricedOrderItem is the single authority for what a checkout line actually
+// costs. combo.Price is the always-safe default; an item.OfferID that
+// resolves to a published offer in offerByID can only lower/override it
+// through the offer's own server-known rule — never from item.Price.
+//
+// It returns both the per-unit price to store on the OrderItem row and the
+// exact line total to add to the order's total — these can differ for a
+// quantity_upsell tier, since TotalPrice doesn't always divide evenly by
+// Quantity (e.g. 7700/3 = 2566.67). Charging round(unitPrice)*quantity would
+// drift from the merchant's configured total (7701 instead of 7700); the
+// line total must always be the exact configured amount, the per-unit price
+// is a rounded display value only.
+func pricedOrderItem(combo models.ProductVariantCombination, item OrderItemInput, offerByID map[uuid.UUID]models.Offer) (unitPrice float64, lineTotal float64) {
+	fallback := func() (float64, float64) { return combo.Price, combo.Price * float64(item.Quantity) }
+
+	if item.OfferID == nil {
+		return fallback()
+	}
+	offerID, err := uuid.Parse(*item.OfferID)
+	if err != nil {
+		return fallback()
+	}
+	offer, ok := offerByID[offerID]
+	if !ok {
+		return fallback()
+	}
+	if offer.OfferType != nil && *offer.OfferType == "quantity_upsell" {
+		pkg, found := packageForQuantity(offer.QuantityPackages, int(item.Quantity))
+		if !found {
+			return fallback()
+		}
+		return math.Round(pkg.TotalPrice / float64(item.Quantity)), pkg.TotalPrice
+	}
+	unitPrice = computeOfferedPrice(combo.Price, offer.DiscountType, offer.DiscountValue)
+	return unitPrice, unitPrice * float64(item.Quantity)
+}
 
 func ordersListCacheKey(shopID uuid.UUID) string {
 	return fmt.Sprintf("orders:list:default:%s", shopID)
@@ -425,26 +503,51 @@ func CreateOrderByShopID(c *gin.Context) {
 		var orderItems []models.OrderItem
 		var calculatedTotalPrice float64
 
-		// 2. Loop and map checkout lines into database OrderItems structures
+		// 2. Loop and map checkout lines into database OrderItems structures.
+		// Price and ProductID are never taken from the client — both are looked
+		// up from the combination's own DB row inside this tx, scoped to this
+		// shop, so a tampered checkout payload can't set an arbitrary price or
+		// attach an item to a product it doesn't belong to.
+		comboIDs := make([]uuid.UUID, 0, len(body.Items))
 		for _, item := range body.Items {
-			prodID, parseErr := uuid.Parse(item.ProductID)
-			if parseErr != nil {
-				return fmt.Errorf("invalid product uuid provided: %s", item.ProductID)
-			}
-
-			prodVarComID, parseErr := uuid.Parse(item.ProductVariantCombinationID)
+			comboID, parseErr := uuid.Parse(item.ProductVariantCombinationID)
 			if parseErr != nil {
 				return fmt.Errorf("invalid combination uuid provided: %s", item.ProductVariantCombinationID)
 			}
+			comboIDs = append(comboIDs, comboID)
+		}
+
+		comboByID, err := services.FetchCombinationsForShop(tx, parsedShopID, comboIDs)
+		if err != nil {
+			return err
+		}
+
+		// Offer-linked items (offerId set) get their price recomputed from the
+		// offer's own discount rule — never from combo.Price alone, and never
+		// from the client's item.Price. An offerId that doesn't resolve to a
+		// published offer owned by this shop is silently ignored and the item
+		// falls back to plain combo.Price, same as an item with no offerId.
+		offerByID, err := fetchPublishedOffersForShop(tx, parsedShopID, body.Items)
+		if err != nil {
+			return err
+		}
+
+		for i, item := range body.Items {
+			combo, ok := comboByID[comboIDs[i]]
+			if !ok {
+				return fmt.Errorf("combination not found for this shop: %s", item.ProductVariantCombinationID)
+			}
+
+			unitPrice, lineTotal := pricedOrderItem(combo, item, offerByID)
 
 			orderItems = append(orderItems, models.OrderItem{
-				ProductID:                   prodID,
-				ProductVariantCombinationID: prodVarComID,
+				ProductID:                   combo.ProductID,
+				ProductVariantCombinationID: combo.ID,
 				Quantity:                    item.Quantity,
-				Price:                       item.Price,
+				Price:                       unitPrice,
 			})
 
-			calculatedTotalPrice += item.Price * float64(item.Quantity)
+			calculatedTotalPrice += lineTotal
 		}
 
 		// Coupon discount is recomputed server-side, never trusted from the client —
@@ -469,7 +572,21 @@ func CreateOrderByShopID(c *gin.Context) {
 			}
 		}
 
-		calculatedTotalPrice += body.ShippingPrice
+		// Shipping price is looked up from this shop's DeliveryRate for the
+		// client's wilaya, never trusted from body.ShippingPrice.
+		wilayaID, atoiErr := strconv.Atoi(body.Client.StateCode)
+		if atoiErr != nil {
+			return fmt.Errorf("invalid or missing wilaya code: %q", body.Client.StateCode)
+		}
+		var rate models.DeliveryRate
+		if err := tx.Where("shop_id = ? AND wilaya_id = ?", parsedShopID, wilayaID).First(&rate).Error; err != nil {
+			return err
+		}
+		shippingPrice, shipErr := services.ResolveShipping(rate, body.ShippingMethod)
+		if shipErr != nil {
+			return shipErr
+		}
+		calculatedTotalPrice += shippingPrice
 
 		// A banned client id never reaches this point at all (see the
 		// short-circuit above, before this transaction started). This is
@@ -482,11 +599,20 @@ func CreateOrderByShopID(c *gin.Context) {
 			}
 		}
 
+		// Attribution only — an unparseable or missing landing page id just means this
+		// order isn't attributed to one, never a reason to fail checkout.
+		var landingPageID *uuid.UUID
+		if trimmed := strings.TrimSpace(body.LandingPageID); trimmed != "" {
+			if parsed, parseErr := uuid.Parse(trimmed); parseErr == nil {
+				landingPageID = &parsed
+			}
+		}
+
 		order = models.Order{
 			ShopID:         parsedShopID,
 			ClientID:       client.ID,
 			ShippingMethod: body.ShippingMethod,
-			ShippingPrice:  body.ShippingPrice,
+			ShippingPrice:  shippingPrice,
 			TotalPrice:     calculatedTotalPrice,
 			Status:         "En attente",
 			Note:           body.Note,
@@ -502,6 +628,7 @@ func CreateOrderByShopID(c *gin.Context) {
 			TTclid:           body.TTclid,
 			TTp:              body.TTp,
 			ConversionSource: body.ConversionSource,
+			LandingPageID:    landingPageID,
 			IsHidden:         containsCussword,
 			ClientIP:         clientIP,
 			ClientUserAgent:  clientUserAgent,
@@ -531,135 +658,9 @@ func CreateOrderByShopID(c *gin.Context) {
 		return
 	}
 
-	// 3. Asynchronous Micro-tasks (Safe fire-and-forget routines)
-	go func(orderID uuid.UUID) {
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Printf("Recovered from panic inside order async tasks routine: %v\n", r)
-			}
-		}()
-
-		var fullOrder models.Order
-		preloadErr := initializers.DB.
-			Preload("Client").
-			Preload("Items").
-			Preload("Items.Product").
-			Preload("Items.ProductVariantCombination").
-			First(&fullOrder, "id = ?", orderID).Error
-
-		if preloadErr != nil {
-			fmt.Printf("Error hydrating order details context for async tasks: %v\n", preloadErr)
-			return
-		}
-
-		isProduction := os.Getenv("APP_ENV") == "production"
-
-		mainProductName := "Multi-item Order"
-		if len(fullOrder.Items) > 0 {
-			item := fullOrder.Items[0]
-			if item.Product.Title != "" {
-				mainProductName = item.Product.Title
-			} else {
-				comboStr := item.ProductVariantCombination.CombinationString
-				if comboStr == "" {
-					comboStr = "Standard"
-				}
-				mainProductName = fmt.Sprintf("Product SKU Variant: %s", comboStr)
-			}
-		}
-
-		// Cussword orders are silently accepted for the client but kept out of
-		// sight of the admin entirely — no notification email, no live broadcast.
-		if isProduction && fullOrder.Status != "Confirmé" && !fullOrder.IsHidden {
-			var shop models.Shop
-			initializers.DB.Select("name").First(&shop, "id = ?", fullOrder.ShopID)
-
-			var members []models.ShopMember
-			initializers.DB.Preload("User").Where("shop_id = ?", fullOrder.ShopID).Find(&members)
-
-			recipients := make([]string, 0, len(members))
-			seen := make(map[string]struct{})
-			for _, m := range members {
-				if m.User.Email != "" {
-					if _, ok := seen[m.User.Email]; !ok {
-						seen[m.User.Email] = struct{}{}
-						recipients = append(recipients, m.User.Email)
-					}
-				}
-			}
-
-			if emailErr := utils.SendOrderEmail(
-				shop.Name,
-				recipients,
-				fullOrder.Client.FullName,
-				fullOrder.Client.PhoneNumber,
-				fullOrder.Client.State,
-				fullOrder.Client.City,
-				mainProductName,
-				"See order components explicitly",
-				fullOrder.ShippingMethod,
-				1,
-				fullOrder.TotalPrice,
-				fullOrder.ShippingPrice,
-				fullOrder.TotalPrice,
-			); emailErr != nil {
-				fmt.Println("Error sending notification alert email flow:", emailErr)
-			}
-		}
-
-		if fullOrder.Status == "Abandonné" || fullOrder.IsHidden {
-			return
-		}
-
-		realtime.Broadcast <- realtime.Message{
-			Event:  "order_created",
-			ShopID: fullOrder.ShopID.String(),
-			Data: map[string]any{
-				"productName": mainProductName,
-				"totalPrice":  fullOrder.TotalPrice,
-				"itemsCount":  len(fullOrder.Items),
-			},
-		}
-
-		// Meta Purchase fires here, at creation. Firing it on confirmation instead
-		// tanked ad delivery — Meta's optimization needs the signal close to the
-		// click, not hours later once an admin gets to it.
-		if fullOrder.ConversionSource == "facebook" {
-			var px models.Pixel
-			pixelErr := initializers.DB.
-				Where("shop_id = ? AND platform = ? AND is_active = ?", fullOrder.ShopID, "facebook", true).
-				First(&px).Error
-
-			if pixelErr == nil && px.HasAccessToken && px.AccessToken != "" {
-				testCode := ""
-				if strings.Contains(strings.ToLower(fullOrder.Client.FullName), "test") {
-					testCode = os.Getenv("FACEBOOK_TEST_CODE")
-				}
-
-				fbErr := utils.SendFacebookPurchase(
-					px.PixelID,
-					px.AccessToken,
-					fullOrder.ID.String(),
-					fullOrder.Client.FullName,
-					fullOrder.Client.PhoneNumber,
-					fullOrder.TotalPrice,
-					"DZD",
-					fullOrder.FBc,
-					fullOrder.FBp,
-					fullOrder.CreatedAt,
-					fullOrder.ClientUserAgent,
-					fullOrder.ClientIP,
-					testCode,
-				)
-				if fbErr != nil {
-					fmt.Println("Meta CAPI purchase send failed:", fbErr)
-				} else {
-					initializers.DB.Model(&models.Order{}).Where("id = ?", orderID).
-						Update("meta_purchase_sent_at", time.Now())
-				}
-			}
-		}
-	}(order.ID)
+	// 3. Async side-effects (email, Meta CAPI, live broadcast) run on the
+	// bounded order-event worker pool — see controllers/orderEvents.go.
+	enqueueOrderEvent(order.ID)
 
 	InvalidateDashboardCache(parsedShopID)
 	invalidateProductCaches(uuid.Nil, parsedShopID)
@@ -841,9 +842,33 @@ func UpdateOrderByShopID(c *gin.Context) {
 			}
 		}
 
+		// Shipping price is only recomputed when the caller signals intent to
+		// change it (body.ShippingPrice != nil); the value stored is always
+		// looked up from DeliveryRate, never taken from the client.
 		shippingPrice := order.ShippingPrice
 		if body.ShippingPrice != nil {
-			shippingPrice = *body.ShippingPrice
+			method := order.ShippingMethod
+			if body.ShippingMethod != nil {
+				method = *body.ShippingMethod
+			}
+			stateCode := order.Client.StateCode
+			if body.Client != nil {
+				stateCode = body.Client.StateCode
+			}
+
+			wilayaID, atoiErr := strconv.Atoi(stateCode)
+			if atoiErr != nil {
+				return fmt.Errorf("invalid or missing wilaya code: %q", stateCode)
+			}
+			var rate models.DeliveryRate
+			if err := tx.Where("shop_id = ? AND wilaya_id = ?", shopID, wilayaID).First(&rate).Error; err != nil {
+				return err
+			}
+			resolved, shipErr := services.ResolveShipping(rate, method)
+			if shipErr != nil {
+				return shipErr
+			}
+			shippingPrice = resolved
 		}
 		calculatedTotalPrice := shippingPrice
 		newOrderItems := make([]models.OrderItem, 0)
@@ -853,26 +878,37 @@ func UpdateOrderByShopID(c *gin.Context) {
 				return err
 			}
 
+			// Price and ProductID are looked up from the combination's own DB
+			// row, scoped to this shop — never taken from the client body.
+			comboIDs := make([]uuid.UUID, 0, len(body.Items))
 			for _, item := range body.Items {
-				prodID, parseErr := uuid.Parse(item.ProductID)
-				if parseErr != nil {
-					return fmt.Errorf("invalid product uuid provided: %s", item.ProductID)
-				}
-
-				prodVarComID, parseErr := uuid.Parse(item.ProductVariantCombinationID)
+				comboID, parseErr := uuid.Parse(item.ProductVariantCombinationID)
 				if parseErr != nil {
 					return fmt.Errorf("invalid combination uuid provided: %s", item.ProductVariantCombinationID)
+				}
+				comboIDs = append(comboIDs, comboID)
+			}
+
+			comboByID, err := services.FetchCombinationsForShop(tx, shopID, comboIDs)
+			if err != nil {
+				return err
+			}
+
+			for i, item := range body.Items {
+				combo, ok := comboByID[comboIDs[i]]
+				if !ok {
+					return fmt.Errorf("combination not found for this shop: %s", item.ProductVariantCombinationID)
 				}
 
 				newOrderItems = append(newOrderItems, models.OrderItem{
 					OrderID:                     order.ID,
-					ProductID:                   prodID,
-					ProductVariantCombinationID: prodVarComID,
+					ProductID:                   combo.ProductID,
+					ProductVariantCombinationID: combo.ID,
 					Quantity:                    item.Quantity,
-					Price:                       item.Price,
+					Price:                       combo.Price,
 				})
 
-				calculatedTotalPrice += item.Price * float64(item.Quantity)
+				calculatedTotalPrice += combo.Price * float64(item.Quantity)
 			}
 
 			if err := tx.Create(&newOrderItems).Error; err != nil {
@@ -929,7 +965,9 @@ func UpdateOrderByShopID(c *gin.Context) {
 		if body.IsShipped != nil {
 			updates["is_shipped"] = *body.IsShipped
 			if *body.IsShipped && !order.IsShipped {
-				decrementOrderItemsStock(tx, order.Items)
+				if err := decrementOrderItemsStock(tx, order.Items); err != nil {
+					return err
+				}
 				updates["shipped_at"] = time.Now()
 				if body.ShippedViaID != nil {
 					if shippedViaID, parseErr := uuid.Parse(*body.ShippedViaID); parseErr == nil {

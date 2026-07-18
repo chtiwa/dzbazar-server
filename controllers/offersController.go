@@ -1,8 +1,10 @@
 package controllers
 
 import (
+	"fmt"
 	"math"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
@@ -12,12 +14,83 @@ import (
 	"github.com/google/uuid"
 )
 
+// offerTypeToAction is the fixed, one-way mapping from the merchant-facing
+// business label to the cart mechanic. OfferType is always the source of
+// truth when present — Action is derived from it, never set independently,
+// so the two fields can never disagree.
+var offerTypeToAction = map[string]string{
+	"quantity_upsell": "mutate_qty",
+	"variant_upsell":  "replace",
+	"cross_sell":      "append",
+}
+
+func deriveActionFromOfferType(offerType string) (string, bool) {
+	action, ok := offerTypeToAction[offerType]
+	return action, ok
+}
+
+// validateQuantityPackages enforces the invariants a quantity_upsell offer's
+// tiers must hold: at least one tier, positive quantities, non-negative
+// totals, no duplicate quantity across tiers.
+func validateQuantityPackages(pkgs []models.OfferQuantityPackage) error {
+	if len(pkgs) == 0 {
+		return fmt.Errorf("quantityPackages is required for offerType quantity_upsell")
+	}
+	seen := make(map[int]bool, len(pkgs))
+	for _, p := range pkgs {
+		if p.Quantity < 1 {
+			return fmt.Errorf("package quantity must be at least 1")
+		}
+		if p.TotalPrice < 0 {
+			return fmt.Errorf("package totalPrice cannot be negative")
+		}
+		if seen[p.Quantity] {
+			return fmt.Errorf("duplicate package quantity: %d", p.Quantity)
+		}
+		seen[p.Quantity] = true
+	}
+	return nil
+}
+
+// validateOfferTypeConsistency checks the business-label fields after they've
+// been merged onto the offer struct. Offers without an OfferType (every offer
+// created before this field existed) are untouched — Action alone still
+// governs them.
+func validateOfferTypeConsistency(offer *models.Offer) error {
+	if offer.OfferType == nil {
+		return nil
+	}
+	switch *offer.OfferType {
+	case "quantity_upsell":
+		return validateQuantityPackages(offer.QuantityPackages)
+	case "variant_upsell", "cross_sell":
+		return nil
+	default:
+		return fmt.Errorf("invalid offerType: %s", *offer.OfferType)
+	}
+}
+
+// packageForQuantity finds the tier matching an exact requested quantity.
+// Shared by offer evaluation (to display) and order creation (to reprice
+// server-side) so the two can never compute a different price for the same
+// tier.
+func packageForQuantity(pkgs []models.OfferQuantityPackage, quantity int) (models.OfferQuantityPackage, bool) {
+	for _, p := range pkgs {
+		if p.Quantity == quantity {
+			return p, true
+		}
+	}
+	return models.OfferQuantityPackage{}, false
+}
+
 // ─── Admin: CRUD ─────────────────────────────────────────────────────────────
 
 type offerBody struct {
 	InternalName      *string                  `json:"internalName"`
 	Status            *string                  `json:"status"`
 	Action            *string                  `json:"action"`
+	OfferType         *string                  `json:"offerType"` // quantity_upsell|variant_upsell|cross_sell — derives Action when present
+	QuantityPackages  *[]models.OfferQuantityPackage `json:"quantityPackages"`
 	TriggerProductID  *string                  `json:"triggerProductId"`
 	LandingPageID     *string                  `json:"landingPageId"` // omit or null = base offer
 	OfferProductID    *string                  `json:"offerProductId"`
@@ -49,6 +122,15 @@ func CreateOffer(c *gin.Context) {
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
 		return
+	}
+
+	if body.OfferType != nil {
+		action, ok := deriveActionFromOfferType(*body.OfferType)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid offerType"})
+			return
+		}
+		body.Action = &action
 	}
 
 	if body.InternalName == nil || *body.InternalName == "" {
@@ -124,6 +206,11 @@ func CreateOffer(c *gin.Context) {
 	}
 
 	applyOfferBodyFields(&offer, body)
+
+	if err := validateOfferTypeConsistency(&offer); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
 
 	if err := initializers.DB.Create(&offer).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to create offer", "error": err.Error()})
@@ -209,6 +296,15 @@ func UpdateOffer(c *gin.Context) {
 		return
 	}
 
+	if body.OfferType != nil {
+		action, ok := deriveActionFromOfferType(*body.OfferType)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid offerType"})
+			return
+		}
+		body.Action = &action
+	}
+
 	if body.TriggerProductID != nil {
 		id, err := uuid.Parse(*body.TriggerProductID)
 		if err != nil {
@@ -245,6 +341,11 @@ func UpdateOffer(c *gin.Context) {
 	}
 
 	applyOfferBodyFields(&offer, body)
+
+	if err := validateOfferTypeConsistency(&offer); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
 
 	if err := initializers.DB.Save(&offer).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update offer", "error": err.Error()})
@@ -443,6 +544,7 @@ type OfferedVariant struct {
 type OfferResult struct {
 	ID            uuid.UUID        `json:"id"`
 	Action        string           `json:"action"`
+	OfferType     string           `json:"offerType"` // "" for offers created before OfferType existed
 	Placement     string           `json:"placement"`
 	AnchorVariant *uuid.UUID       `json:"anchorVariant"` // for replace action
 	Headline      string           `json:"headline"`
@@ -452,6 +554,11 @@ type OfferResult struct {
 	AnalyticsTag  string           `json:"analyticsTag"`
 	QuantityRule  int              `json:"quantityRule"`
 	Variants      []OfferedVariant `json:"variants"`
+	// Packages is populated only for offerType=="quantity_upsell" — the
+	// selectable qty/price tiers. Variants stays empty for that offer type,
+	// since packages apply to whichever variant the customer already picked,
+	// not to a merchant-preselected combination.
+	Packages []models.OfferQuantityPackage `json:"packages"`
 }
 
 func EvaluateOffersPublic(c *gin.Context) {
@@ -487,11 +594,15 @@ func EvaluateOffersPublic(c *gin.Context) {
 func resolveOffers(shopID, productID uuid.UUID, req EvaluateOffersRequest) ([]OfferResult, error) {
 	now := time.Now()
 
-	// 1. Fetch published offers for this product.
+	// 1. Fetch published offers for this product, in a fixed deterministic
+	// order. Winner-per-placement selection below relies on this order
+	// (first offer seen per placement wins) instead of Go map iteration,
+	// which is intentionally randomized and must never be a tie-break.
 	var offers []models.Offer
 	if err := initializers.DB.
 		Where("shop_id = ? AND trigger_product_id = ? AND status = 'published' AND deleted_at IS NULL AND (start_at IS NULL OR start_at <= ?) AND (end_at IS NULL OR end_at >= ?)",
 			shopID, productID, now, now).
+		Order("priority DESC, updated_at DESC, id DESC").
 		Find(&offers).Error; err != nil {
 		return nil, err
 	}
@@ -517,9 +628,16 @@ func resolveOffers(shopID, productID uuid.UUID, req EvaluateOffersRequest) ([]Of
 	}
 
 	// 3. Collect all offered variant IDs for a single inventory batch query.
+	// quantity_upsell offers have no OfferVariantIDs of their own — the
+	// packages apply to whichever variant the customer already selected — so
+	// pull those in too, for the same OOS check.
+	selectedVariantIDs, _ := parseUUIDs(req.SelectedVariants)
 	allVariantIDs := []uuid.UUID{}
 	for _, o := range offers {
 		allVariantIDs = append(allVariantIDs, o.OfferVariantIDs...)
+		if o.OfferType != nil && *o.OfferType == "quantity_upsell" {
+			allVariantIDs = append(allVariantIDs, selectedVariantIDs...)
+		}
 	}
 	comboMap := map[uuid.UUID]models.ProductVariantCombination{}
 	if len(allVariantIDs) > 0 {
@@ -557,21 +675,45 @@ func resolveOffers(shopID, productID uuid.UUID, req EvaluateOffersRequest) ([]Of
 			continue
 		}
 
-		// Build offered variants with inventory check.
-		variants, hasAvailable := buildOfferedVariants(offer, comboMap, existingSet)
-		if !hasAvailable {
-			continue
+		isQuantityUpsell := offer.OfferType != nil && *offer.OfferType == "quantity_upsell"
+
+		var variants []OfferedVariant
+		var anchorVariant *uuid.UUID
+		var packages []models.OfferQuantityPackage
+
+		if isQuantityUpsell {
+			// Packages apply to whichever variant is already selected — check
+			// that single combo's stock instead of a merchant-picked list.
+			if len(selectedVariantIDs) > 0 {
+				combo, found := comboMap[selectedVariantIDs[0]]
+				available := found && combo.Quantity > 0
+				if !available && offer.InventoryBehavior == "skip_when_oos" {
+					continue
+				}
+			}
+			packages = offer.QuantityPackages
+		} else {
+			// Build offered variants with inventory check.
+			var hasAvailable bool
+			variants, hasAvailable = buildOfferedVariants(offer, comboMap, existingSet)
+			if !hasAvailable {
+				continue
+			}
+			// Anchor variant for replace action.
+			if offer.Action == "replace" {
+				anchorVariant = findAnchorVariant(req.SelectedVariants, offer.TriggerProductID)
+			}
 		}
 
-		// Anchor variant for replace action.
-		var anchorVariant *uuid.UUID
-		if offer.Action == "replace" {
-			anchorVariant = findAnchorVariant(req.SelectedVariants, offer.TriggerProductID)
+		offerType := ""
+		if offer.OfferType != nil {
+			offerType = *offer.OfferType
 		}
 
 		result := OfferResult{
 			ID:            offer.ID,
 			Action:        offer.Action,
+			OfferType:     offerType,
 			Placement:     offer.Placement,
 			AnchorVariant: anchorVariant,
 			Headline:      offer.Headline,
@@ -581,22 +723,28 @@ func resolveOffers(shopID, productID uuid.UUID, req EvaluateOffersRequest) ([]Of
 			AnalyticsTag:  offer.AnalyticsTag,
 			QuantityRule:  offer.QuantityRule,
 			Variants:      variants,
+			Packages:      packages,
 		}
 
-		// Dedup: keep highest priority per slot, tie-break by newest.
-		if existing, seen := byPlacement[offer.Placement]; !seen || offer.Priority > existing.priority {
+		// Dedup: offers arrived pre-sorted by priority desc/updated_at
+		// desc/id desc (step 1), so the first offer seen for a given
+		// placement is deterministically the winner — no Go map iteration
+		// order involved.
+		if _, seen := byPlacement[offer.Placement]; !seen {
 			byPlacement[offer.Placement] = candidate{result: result, priority: offer.Priority}
 		}
 	}
 
-	// 6. Collect results (max 2 slots).
+	// 6. Collect results — one per placement (there are only 4 valid
+	// placement values, so no arbitrary cap), sorted by placement name for a
+	// stable, deterministic response order.
 	results := make([]OfferResult, 0, len(byPlacement))
 	for _, c := range byPlacement {
 		results = append(results, c.result)
-		if len(results) == 2 {
-			break
-		}
 	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Placement < results[j].Placement
+	})
 	return results, nil
 }
 
@@ -778,6 +926,12 @@ func applyOfferBodyFields(offer *models.Offer, body offerBody) {
 	}
 	if body.Action != nil {
 		offer.Action = *body.Action
+	}
+	if body.OfferType != nil {
+		offer.OfferType = body.OfferType
+	}
+	if body.QuantityPackages != nil {
+		offer.QuantityPackages = *body.QuantityPackages
 	}
 	if body.LandingPageID != nil {
 		if *body.LandingPageID == "" {

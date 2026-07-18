@@ -35,7 +35,8 @@ func RequireAuthentication(c *gin.Context) {
 			exp, expOk := claims["exp"].(float64)
 			sub, subOk := claims["sub"].(string)
 
-			if expOk && subOk && float64(time.Now().Unix()) < exp {
+			if expOk && subOk && float64(time.Now().Unix()) < exp &&
+				!utils.IsTokenRevoked(claims) && !utils.IsTokenBeforeRevokeAll(sub, claims) {
 				id, uuidErr := uuid.Parse(sub)
 				if uuidErr == nil {
 					var user models.User
@@ -79,7 +80,8 @@ func RequireAuthentication(c *gin.Context) {
 			exp, expOk := claims["exp"].(float64)
 			sub, subOk := claims["sub"].(string)
 
-			if expOk && subOk && float64(time.Now().Unix()) < exp {
+			if expOk && subOk && float64(time.Now().Unix()) < exp &&
+				!utils.IsTokenRevoked(claims) && !utils.IsTokenBeforeRevokeAll(sub, claims) {
 				id, uuidErr := uuid.Parse(sub)
 				if uuidErr == nil {
 					var user models.User

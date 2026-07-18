@@ -366,8 +366,36 @@ func GetLandingPagesByShop(c *gin.Context) {
 		})
 		return
 	}
+
+	landingPageIDs := make([]uuid.UUID, len(landingPages))
+	for i, lp := range landingPages {
+		landingPageIDs[i] = lp.ID
+	}
+	views, err := viewsByEntityIDs("landing_page", landingPageIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to count views per landing page",
+			"error":   err.Error(),
+		})
+		return
+	}
+	// Numerator is orders attributed to this specific landing page (orders.landing_page_id),
+	// not orders.Orders (all orders for the underlying product) — a product can have several
+	// landing pages, so conversion rate must stay scoped to the page that drove the sale.
+	landingPageOrders, err := countOrdersByLandingPageIDs(landingPageIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to count attributed orders per landing page",
+			"error":   err.Error(),
+		})
+		return
+	}
 	for i := range landingPages {
 		landingPages[i].Orders = orderCounts[landingPages[i].ProductID]
+		landingPages[i].Views = views[landingPages[i].ID]
+		landingPages[i].ConversionRate = conversionRate(landingPageOrders[landingPages[i].ID], landingPages[i].Views)
 	}
 
 	if jsonData, err := json.Marshal(landingPages); err == nil {

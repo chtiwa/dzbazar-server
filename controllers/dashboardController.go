@@ -24,14 +24,6 @@ type StatusStat struct {
 	Percentage float64 `json:"percentage"`
 }
 
-type ProductConfirmationRate struct {
-	ProductID        string  `json:"productId"`
-	ProductName      string  `json:"productName"`
-	TotalOrders      int64   `json:"totalOrders"`
-	ConfirmedOrders  int64   `json:"confirmedOrders"`
-	ConfirmationRate float64 `json:"confirmationRate"`
-}
-
 type WilayaStat struct {
 	Wilaya string `json:"wilaya"`
 	Count  int64  `json:"count"`
@@ -43,7 +35,6 @@ type DashboardData struct {
 	Monthly           []TimeCount              `json:"monthly"`
 	StatusStats       []StatusStat             `json:"statusStats"`
 	TotalOrders       int64                    `json:"totalOrders"`
-	ConfirmationRates []ProductConfirmationRate `json:"confirmationRates"`
 	WilayaStats       []WilayaStat             `json:"wilayaStats"`
 	DeliveredRevenue  float64                  `json:"deliveredRevenue"`
 	PendingRevenue    float64                  `json:"pendingRevenue"`
@@ -204,40 +195,6 @@ func GetOrdersDashboard(c *gin.Context) {
 		}
 	}
 
-	// "Confirmed" = the order's status was ever set to Confirmé, per the
-	// order.status_changed audit trail — not the current status column.
-	// Status is a snapshot that gets overwritten (Confirmé -> Expédié ->
-	// Livré), so reading it live silently drops every order that progressed
-	// past Confirmé from the numerator. The audit log is append-only and
-	// already written on every transition (see UpdateOrderByShopID), so it's
-	// the source of truth for "was this ever confirmed".
-	confirmationRates := []ProductConfirmationRate{}
-	confirmQ := db.Table("order_items oi").
-		Joins("JOIN orders o ON o.id = oi.order_id").
-		Joins("JOIN products p ON p.id = oi.product_id").
-		Where("o.shop_id = ? AND o.deleted_at IS NULL AND o.is_hidden = false AND o.status <> 'Abandonné' AND p.deleted_at IS NULL", shopID)
-	if hasDateFilter {
-		confirmQ = confirmQ.Where("o.created_at >= ? AND o.created_at < ?", fromTime, toTime)
-	}
-	const wasEverConfirmed = `EXISTS (
-			SELECT 1 FROM audit_logs al
-			WHERE al.target_type = 'Order' AND al.target_id = oi.order_id
-				AND al.action = 'order.status_changed' AND al.metadata::json->>'to' = 'Confirmé'
-		)`
-	if err := confirmQ.Select(`
-			p.id::text AS product_id,
-			p.title AS product_name,
-			COUNT(DISTINCT oi.order_id) AS total_orders,
-			COUNT(DISTINCT oi.order_id) FILTER (WHERE `+wasEverConfirmed+`) AS confirmed_orders,
-			ROUND(
-				COUNT(DISTINCT oi.order_id) FILTER (WHERE `+wasEverConfirmed+`) * 100.0
-				/ NULLIF(COUNT(DISTINCT oi.order_id), 0),
-			2) AS confirmation_rate
-		`).Group("p.id, p.title").Order("total_orders DESC").Scan(&confirmationRates).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching confirmation rates", "error": err.Error()})
-		return
-	}
-
 	wilayaStats := []WilayaStat{}
 	wilayaQ := db.Table("orders o").
 		Joins("JOIN clients c ON c.id = o.client_id").
@@ -257,7 +214,6 @@ func GetOrdersDashboard(c *gin.Context) {
 		Monthly:           monthly,
 		StatusStats:       statusStats,
 		TotalOrders:       totalOrders,
-		ConfirmationRates: confirmationRates,
 		WilayaStats:       wilayaStats,
 		DeliveredRevenue:  rev.DeliveredRevenue,
 		PendingRevenue:    rev.PendingRevenue,

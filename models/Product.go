@@ -17,6 +17,14 @@ type Product struct {
 
 	// Count of non-deleted orders containing this product. Computed per-request, not stored.
 	Orders int64 `gorm:"-" json:"orders"`
+	// % of shipped orders containing this product that reached "Livré". Nil when no shipped orders yet.
+	DeliveryRate *float64 `gorm:"-" json:"deliveryRate"`
+	// Unique visitors to this product's page (all-time). Computed per-request, not stored.
+	Views int64 `gorm:"-" json:"views"`
+	// Orders / Views * 100. Nil when there are no views yet.
+	ConversionRate *float64 `gorm:"-" json:"conversionRate"`
+	// % of orders containing this product that were ever confirmed (audit-log based). Nil when no orders yet.
+	ConfirmationRate *float64 `gorm:"-" json:"confirmationRate"`
 }
 
 type ProductImage struct {
@@ -38,6 +46,10 @@ type LandingPage struct {
 
 	// Count of non-deleted orders containing this landing page's product. Computed per-request, not stored.
 	Orders int64 `gorm:"-" json:"orders"`
+	// Unique visitors to this landing page (all-time). Computed per-request, not stored.
+	Views int64 `gorm:"-" json:"views"`
+	// Orders attributed to this landing page / Views * 100. Nil when there are no views yet.
+	ConversionRate *float64 `gorm:"-" json:"conversionRate"`
 }
 
 type LandingPageImage struct {

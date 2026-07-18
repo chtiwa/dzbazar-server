@@ -144,7 +144,10 @@ func shipOrderToLeopard(order *models.Order, integration *models.DeliveryCompany
 		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez Leopard Express mais le statut local n'a pas pu être mis à jour"}
 	}
 
-	decrementOrderItemsStock(initializers.DB, order.Items)
+	if err := decrementOrderItemsStock(initializers.DB, order.Items); err != nil {
+		log.Printf("leopard: order %s shipped but stock decrement failed: %v", order.ID, err)
+		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez Leopard Express mais échec de la mise à jour du stock"}
+	}
 	invalidateOrdersListCache(order.ShopID)
 
 	return map[string]any{"tracking": tracking, "raw": string(respBody)}, nil

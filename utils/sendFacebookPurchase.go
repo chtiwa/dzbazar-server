@@ -101,7 +101,7 @@ func SendFacebookPurchase(pixelID, accessToken, orderID, fullName, phone string,
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %v", err)

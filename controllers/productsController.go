@@ -55,6 +55,170 @@ func countOrdersByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]int64, error
 	return counts, nil
 }
 
+// countOrdersByLandingPageIDs returns, per landing page, how many non-deleted orders were
+// attributed to it (orders.landing_page_id, set at checkout time) — distinct from
+// countOrdersByProductIDs, which counts all orders for the underlying product regardless of
+// which landing page (if any) they came through.
+func countOrdersByLandingPageIDs(landingPageIDs []uuid.UUID) (map[uuid.UUID]int64, error) {
+	counts := make(map[uuid.UUID]int64, len(landingPageIDs))
+	if len(landingPageIDs) == 0 {
+		return counts, nil
+	}
+
+	var rows []struct {
+		LandingPageID uuid.UUID
+		Count         int64
+	}
+
+	err := initializers.DB.
+		Table("orders").
+		Where("landing_page_id IN ? AND deleted_at IS NULL", landingPageIDs).
+		Select("landing_page_id, COUNT(*) AS count").
+		Group("landing_page_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range rows {
+		counts[r.LandingPageID] = r.Count
+	}
+	return counts, nil
+}
+
+// deliveryRatesByProductIDs returns, per product, the % of shipped orders containing it that
+// currently sit at "Livré" (delivered). Nil for a product with no shipped orders yet.
+func deliveryRatesByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]*float64, error) {
+	rates := make(map[uuid.UUID]*float64, len(productIDs))
+	if len(productIDs) == 0 {
+		return rates, nil
+	}
+
+	var rows []struct {
+		ProductID uuid.UUID
+		Shipped   int64
+		Delivered int64
+	}
+
+	err := initializers.DB.
+		Table("order_items").
+		Joins("JOIN orders ON orders.id = order_items.order_id").
+		Where("order_items.product_id IN ? AND orders.deleted_at IS NULL", productIDs).
+		Select(`order_items.product_id AS product_id,
+			COUNT(DISTINCT order_items.order_id) FILTER (WHERE orders.is_shipped) AS shipped,
+			COUNT(DISTINCT order_items.order_id) FILTER (WHERE orders.status = 'Livré') AS delivered`).
+		Group("order_items.product_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range rows {
+		rates[r.ProductID] = deliveryRate(r.Shipped, r.Delivered)
+	}
+	return rates, nil
+}
+
+// deliveryRate computes delivered% of shipped orders. Nil means nothing has shipped yet
+// (distinct from a real 0%, which means shipped orders that were never delivered).
+//
+// ponytail: numerator reads current order status, not audit_logs history — matches
+// dashboardController's DeliveryRate philosophy (Livré is terminal/non-overwritten on the normal
+// path). If a courier later flips a delivered order back (e.g. a late return recorded as
+// "Annulé"), this silently drops it from the count. Upgrade to an audit_logs EXISTS check (like
+// ConfirmationRates) only if merchants report the number disagreeing with reality.
+func deliveryRate(shipped, delivered int64) *float64 {
+	if shipped == 0 {
+		return nil
+	}
+	rate := float64(delivered) * 100 / float64(shipped)
+	return &rate
+}
+
+// viewsByEntityIDs returns, per entity (product or landing page), the count of unique visitors
+// (all-time) recorded in page_visits for that page_type.
+func viewsByEntityIDs(pageType string, entityIDs []uuid.UUID) (map[uuid.UUID]int64, error) {
+	views := make(map[uuid.UUID]int64, len(entityIDs))
+	if len(entityIDs) == 0 {
+		return views, nil
+	}
+
+	var rows []struct {
+		EntityID uuid.UUID
+		Count    int64
+	}
+
+	err := initializers.DB.
+		Table("page_visits").
+		Where("page_type = ? AND entity_id IN ?", pageType, entityIDs).
+		Select("entity_id, COUNT(DISTINCT visitor_id) AS count").
+		Group("entity_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range rows {
+		views[r.EntityID] = r.Count
+	}
+	return views, nil
+}
+
+// conversionRate computes orders% of unique views. Nil means no views recorded yet
+// (distinct from a real 0%, which means views happened but nothing converted).
+func conversionRate(orders, views int64) *float64 {
+	if views == 0 {
+		return nil
+	}
+	rate := float64(orders) * 100 / float64(views)
+	return &rate
+}
+
+// confirmationRatesByProductIDs returns, per product, % of its (non-deleted, non-Abandonné)
+// orders that were ever set to "Confirmé", per the order.status_changed audit trail — same
+// "was ever confirmed" philosophy as GetOrdersDashboard's confirmation-rate query, scoped to
+// specific product IDs and all-time (no date filter), matching deliveryRatesByProductIDs.
+func confirmationRatesByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]*float64, error) {
+	rates := make(map[uuid.UUID]*float64, len(productIDs))
+	if len(productIDs) == 0 {
+		return rates, nil
+	}
+
+	var rows []struct {
+		ProductID   uuid.UUID
+		TotalOrders int64
+		Confirmed   int64
+	}
+
+	const wasEverConfirmed = `EXISTS (
+			SELECT 1 FROM audit_logs al
+			WHERE al.target_type = 'Order' AND al.target_id = order_items.order_id
+				AND al.action = 'order.status_changed' AND al.metadata::json->>'to' = 'Confirmé'
+		)`
+
+	err := initializers.DB.
+		Table("order_items").
+		Joins("JOIN orders ON orders.id = order_items.order_id").
+		Where("order_items.product_id IN ? AND orders.deleted_at IS NULL AND orders.is_hidden = false AND orders.status <> 'Abandonné'", productIDs).
+		Select(`order_items.product_id AS product_id,
+			COUNT(DISTINCT order_items.order_id) AS total_orders,
+			COUNT(DISTINCT order_items.order_id) FILTER (WHERE `+wasEverConfirmed+`) AS confirmed`).
+		Group("order_items.product_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range rows {
+		if r.TotalOrders == 0 {
+			continue
+		}
+		rate := float64(r.Confirmed) * 100 / float64(r.TotalOrders)
+		rates[r.ProductID] = &rate
+	}
+	return rates, nil
+}
+
 type VariantItemSimple struct {
 	ID    string `json:"id"`
 	Value string `json:"value"`
@@ -495,8 +659,39 @@ func GetProductsByShopAdmin(c *gin.Context) {
 		})
 		return
 	}
+	deliveryRates, err := deliveryRatesByProductIDs(productIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error while computing delivery rate per product",
+			"error":   err.Error(),
+		})
+		return
+	}
+	views, err := viewsByEntityIDs("product", productIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error while computing views per product",
+			"error":   err.Error(),
+		})
+		return
+	}
+	confirmationRates, err := confirmationRatesByProductIDs(productIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error while computing confirmation rate per product",
+			"error":   err.Error(),
+		})
+		return
+	}
 	for i := range products {
 		products[i].Orders = orderCounts[products[i].ID]
+		products[i].DeliveryRate = deliveryRates[products[i].ID]
+		products[i].Views = views[products[i].ID]
+		products[i].ConversionRate = conversionRate(products[i].Orders, products[i].Views)
+		products[i].ConfirmationRate = confirmationRates[products[i].ID]
 	}
 
 	response := gin.H{
@@ -568,7 +763,19 @@ func GetActiveProductsBySlug(c *gin.Context) {
 		}
 	}
 
-	cacheKey := fmt.Sprintf("products:slug:%s:client:page:%d", slug, page)
+	var minPrice, maxPrice float64
+	hasMinPrice := false
+	hasMaxPrice := false
+	if v, err := strconv.ParseFloat(c.Query("minPrice"), 64); err == nil && v >= 0 {
+		minPrice = v
+		hasMinPrice = true
+	}
+	if v, err := strconv.ParseFloat(c.Query("maxPrice"), 64); err == nil && v >= 0 {
+		maxPrice = v
+		hasMaxPrice = true
+	}
+
+	cacheKey := fmt.Sprintf("products:slug:%s:client:page:%d:min:%v:max:%v", slug, page, minPrice, maxPrice)
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
 		var cachedResponse map[string]interface{}
@@ -605,6 +812,13 @@ func GetActiveProductsBySlug(c *gin.Context) {
 		Where("products.shop_id = ?", shop.ID).
 		Where("products.active = ?", true).
 		Preload("Images")
+
+	if hasMinPrice {
+		db = db.Where("products.price >= ?", minPrice)
+	}
+	if hasMaxPrice {
+		db = db.Where("products.price <= ?", maxPrice)
+	}
 
 	if err := db.Count(&totalRows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

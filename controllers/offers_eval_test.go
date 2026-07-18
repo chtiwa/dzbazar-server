@@ -115,5 +115,100 @@ func TestComputeOfferedPrice(t *testing.T) {
 	}
 }
 
+func TestDeriveActionFromOfferType(t *testing.T) {
+	cases := []struct {
+		offerType  string
+		wantAction string
+		wantOK     bool
+	}{
+		{"quantity_upsell", "mutate_qty", true},
+		{"variant_upsell", "replace", true},
+		{"cross_sell", "append", true},
+		{"something_else", "", false},
+		{"", "", false},
+	}
+	for _, tc := range cases {
+		action, ok := deriveActionFromOfferType(tc.offerType)
+		if ok != tc.wantOK || action != tc.wantAction {
+			t.Errorf("deriveActionFromOfferType(%q) = (%q, %v), want (%q, %v)", tc.offerType, action, ok, tc.wantAction, tc.wantOK)
+		}
+	}
+}
+
+func TestValidateQuantityPackages(t *testing.T) {
+	cases := []struct {
+		name    string
+		pkgs    []models.OfferQuantityPackage
+		wantErr bool
+	}{
+		{"empty rejected", []models.OfferQuantityPackage{}, true},
+		{
+			"valid tiers",
+			[]models.OfferQuantityPackage{{Quantity: 1, TotalPrice: 2900}, {Quantity: 2, TotalPrice: 5300}, {Quantity: 3, TotalPrice: 7500}},
+			false,
+		},
+		{"zero quantity rejected", []models.OfferQuantityPackage{{Quantity: 0, TotalPrice: 100}}, true},
+		{"negative price rejected", []models.OfferQuantityPackage{{Quantity: 1, TotalPrice: -1}}, true},
+		{
+			"duplicate quantity rejected",
+			[]models.OfferQuantityPackage{{Quantity: 2, TotalPrice: 100}, {Quantity: 2, TotalPrice: 200}},
+			true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateQuantityPackages(tc.pkgs)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("validateQuantityPackages(%+v) error = %v, wantErr %v", tc.pkgs, err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateOfferTypeConsistency(t *testing.T) {
+	quantityUpsell := "quantity_upsell"
+	crossSell := "cross_sell"
+	invalid := "not_a_real_type"
+
+	// quantity_upsell with no packages must fail.
+	if err := validateOfferTypeConsistency(&models.Offer{OfferType: &quantityUpsell}); err == nil {
+		t.Error("expected error for quantity_upsell with no packages")
+	}
+	// quantity_upsell with valid packages must pass.
+	if err := validateOfferTypeConsistency(&models.Offer{
+		OfferType:        &quantityUpsell,
+		QuantityPackages: []models.OfferQuantityPackage{{Quantity: 1, TotalPrice: 2900}},
+	}); err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	// cross_sell never needs packages.
+	if err := validateOfferTypeConsistency(&models.Offer{OfferType: &crossSell}); err != nil {
+		t.Errorf("expected no error for cross_sell, got %v", err)
+	}
+	// nil OfferType (legacy offer) always passes — Action alone governs it.
+	if err := validateOfferTypeConsistency(&models.Offer{}); err != nil {
+		t.Errorf("expected no error for legacy offer with nil OfferType, got %v", err)
+	}
+	// unknown offerType must fail.
+	if err := validateOfferTypeConsistency(&models.Offer{OfferType: &invalid}); err == nil {
+		t.Error("expected error for invalid offerType")
+	}
+}
+
+func TestPackageForQuantity(t *testing.T) {
+	pkgs := []models.OfferQuantityPackage{
+		{Quantity: 1, TotalPrice: 2900},
+		{Quantity: 2, TotalPrice: 5300},
+		{Quantity: 3, TotalPrice: 7500},
+	}
+
+	if pkg, ok := packageForQuantity(pkgs, 2); !ok || pkg.TotalPrice != 5300 {
+		t.Errorf("packageForQuantity(2) = (%+v, %v), want (TotalPrice:5300, true)", pkg, ok)
+	}
+	if _, ok := packageForQuantity(pkgs, 5); ok {
+		t.Error("packageForQuantity(5) should not match — no tier configured for that quantity")
+	}
+}
+
 func strPtr(s string) *string { return &s }
 func intPtr(i int) *int       { return &i }

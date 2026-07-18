@@ -15,8 +15,10 @@ import (
 	"gorm.io/gorm"
 )
 
+const refreshTokenTTLSeconds = 60 * 60 * 24 * 7 // 7d, per CLAUDE.md
+
 func setAuthCookies(c *gin.Context, user models.User) error {
-	refreshToken := utils.GenerateToken(user.ID, 60*60*24*30, user.Role)
+	refreshToken := utils.GenerateToken(user.ID, refreshTokenTTLSeconds, user.Role)
 	accessToken := utils.GenerateToken(user.ID, 60*15, user.Role)
 
 	refreshTokenString, err := refreshToken.SignedString([]byte(os.Getenv("JWT_SECRET")))
@@ -31,7 +33,7 @@ func setAuthCookies(c *gin.Context, user models.User) error {
 
 	isProduction := os.Getenv("APP_ENV") == "production"
 	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("RefreshToken", refreshTokenString, 60*60*24*30, "/", "", isProduction, true)
+	c.SetCookie("RefreshToken", refreshTokenString, refreshTokenTTLSeconds, "/", "", isProduction, true)
 	c.SetCookie("AccessToken", accessTokenString, 60*15, "/", "", isProduction, true)
 
 	return nil
@@ -429,10 +431,24 @@ func ResetPassword(c *gin.Context) {
 		return
 	}
 
+	// A leaked/stolen refresh token must stop working once the account owner
+	// resets their password — otherwise the reset doesn't actually lock the
+	// attacker out.
+	utils.RevokeAllSessions(user.ID.String())
+
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Mot de passe réinitialisé avec succès"})
 }
 
 func Logout(c *gin.Context) {
+	// Best-effort: denylist the refresh token's jti so a copy of it (already
+	// exfiltrated, cached by a proxy, etc) stops working immediately instead
+	// of remaining valid for the rest of its 7d life.
+	if refreshTokenString, err := c.Cookie("RefreshToken"); err == nil {
+		if _, claims, err := utils.ParseJWT(refreshTokenString); err == nil {
+			utils.RevokeToken(claims)
+		}
+	}
+
 	isProduction := os.Getenv("APP_ENV") == "production"
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("RefreshToken", "", -1, "/", "", isProduction, true)

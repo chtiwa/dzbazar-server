@@ -331,7 +331,10 @@ func shipOrderToZr(order *models.Order, integration *models.DeliveryCompany) (ma
 		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez ZR Express mais le statut local n'a pas pu être mis à jour"}
 	}
 
-	decrementOrderItemsStock(initializers.DB, order.Items)
+	if err := decrementOrderItemsStock(initializers.DB, order.Items); err != nil {
+		log.Printf("zr: order %s shipped but stock decrement failed: %v", order.ID, err)
+		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez ZR Express mais échec de la mise à jour du stock"}
+	}
 
 	bumpZrOrdersCacheVersion(order.ShopID)
 	invalidateOrdersListCache(order.ShopID)

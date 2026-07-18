@@ -11,7 +11,11 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	// Same allowlist as HTTP CORS — without this, any website can open an
+	// authenticated dashboard websocket using a logged-in victim's cookies.
+	CheckOrigin: func(r *http.Request) bool {
+		return middleware.IsAllowedOrigin(r.Header.Get("Origin"))
+	},
 }
 
 func WebSocketHandler(c *gin.Context) {

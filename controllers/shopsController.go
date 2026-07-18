@@ -422,24 +422,6 @@ func CreateShop(c *gin.Context) {
 }
 
 func UpdateShop(c *gin.Context) {
-	user, ok := c.Get("user")
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to retrieve authenticated session user",
-		})
-		return
-	}
-
-	userData, ok := user.(models.User)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Invalid session user structure context",
-		})
-		return
-	}
-
 	shopIDStr := c.Param("shopId")
 	shopID, err := uuid.Parse(shopIDStr)
 	if err != nil {
@@ -472,14 +454,6 @@ func UpdateShop(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Database tracking error",
-		})
-		return
-	}
-
-	if shop.OwnerID != userData.ID {
-		c.JSON(http.StatusForbidden, gin.H{
-			"success": false,
-			"message": "You do not have administrative ownership over this shop workspace",
 		})
 		return
 	}

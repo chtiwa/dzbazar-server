@@ -15,6 +15,11 @@ func VisitsRoutes(router *gin.Engine) {
 		middleware.RateLimitByIP("visits-record", 120, time.Minute),
 		controllers.RecordVisit,
 	)
+	router.POST(
+		"/v1/shops/:shopId/page-visits",
+		middleware.RateLimitByIP("page-visits-record", 120, time.Minute),
+		controllers.RecordPageVisit,
+	)
 
 	// Protected merchant read
 	visits := router.Group("/v1/shops/:shopId/visits")

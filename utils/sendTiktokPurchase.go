@@ -136,7 +136,7 @@ func SendTikTokPurchase(orderID, productName, fullName, phone, ttclid string, va
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Access-Token", accessToken)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %v", err)

@@ -17,6 +17,10 @@ go run .
 # Add a dependency
 go get <package>
 go mod tidy
+
+# New schema migration
+goose -dir migrate/migrations create <name> sql
+# edit the generated file's -- +goose Up / -- +goose Down, then just boot the app — Migrate() runs it
 ```
 
 There are no tests in this project currently.
@@ -31,7 +35,7 @@ Go REST API using **Gin** (HTTP router) + **GORM** (ORM) + **PostgreSQL**. Entry
 3. Connect to PostgreSQL (`initializers.DB`)
 4. Initialize Backblaze B2 S3-compatible client (`initializers.S3Client`)
 5. Connect to Redis (`initializers.RedisClient`)
-6. Run GORM `AutoMigrate` (`migrate/migrate.go`) — two-phase to handle FK ordering
+6. Run versioned SQL migrations (`migrate/migrate.go`, via `goose`) from `migrate/migrations/`, embedded into the binary. `00001_baseline.sql` is a `pg_dump --schema-only` snapshot of the schema as GORM `AutoMigrate` had left it — new schema changes are new numbered `.sql` files from here on, not AutoMigrate or ad-hoc `Exec` calls
 7. Register all routes and start the server on the port from `$PORT` (default `:8080`)
 
 ### Request lifecycle

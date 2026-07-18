@@ -46,6 +46,10 @@ type Order struct {
 	ConversionSource string `json:"conversionSource"`
 	IsShipped        bool   `gorm:"default:false" json:"isShipped"`
 
+	// Landing page this order was placed from, if any (nil for plain product-page orders).
+	// Attribution only — never blocks checkout if missing/invalid.
+	LandingPageID *uuid.UUID `gorm:"type:uuid" json:"landingPageId"`
+
 	// Set at creation when the client's fullName contains a banned cussword,
 	// or when their fbp/ttp was previously banned by the store owner. The
 	// order still succeeds for the client (no different UX, no tip-off), but

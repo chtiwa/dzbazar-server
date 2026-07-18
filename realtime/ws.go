@@ -20,7 +20,10 @@ type Message struct {
 var (
 	clients   = make(map[*websocket.Conn]string) // conn -> shopID it's scoped to
 	clientMu  sync.Mutex
-	Broadcast = make(chan Message)
+	// Buffered so a burst of order events doesn't block senders on StartHub
+	// keeping up; callers still guard the send with a timeout (see
+	// controllers.processOrderEvent) in case the hub is stalled entirely.
+	Broadcast = make(chan Message, 256)
 )
 
 func RegisterClient(conn *websocket.Conn, shopID string) {
