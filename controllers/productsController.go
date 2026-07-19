@@ -962,6 +962,9 @@ func IndexProductBySlug(c *gin.Context) {
 		Preload("Variants").
 		Preload("Variants.VariantItems").
 		Preload("Combinations").
+		Preload("Combinations.Option1").
+		Preload("Combinations.Option2").
+		Preload("Combinations.Option3").
 		First(&product).Error
 
 	if err != nil {

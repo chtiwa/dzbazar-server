@@ -18,6 +18,11 @@ const (
 // exceeded ipOrderMax submissions within the past hour.
 func OrderIPRateLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if IsStaffOrder(c) {
+			c.Next()
+			return
+		}
+
 		ip := c.ClientIP()
 		key := fmt.Sprintf("ratelimit:order:ip:%s", ip)
 

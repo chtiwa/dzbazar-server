@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
+	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/chtiwa/dzbazar-server/utils"
@@ -316,15 +317,20 @@ func CreateOrderByShopID(c *gin.Context) {
 		return
 	}
 
+	isStaffOrder := middleware.IsStaffOrder(c)
+
 	// Per-browser, per-shop 24h cooldown. Unlike the guards below, this is an
-	// honest UX rule — tell the customer, don't fake success.
-	if _, err := c.Cookie(orderCooldownCookie(parsedShopID)); err == nil {
-		c.JSON(http.StatusTooManyRequests, gin.H{
-			"success": false,
-			"message": "لقد قمت بطلب من هذا المتجر مؤخراً. يرجى الانتظار قبل إرسال طلب آخر.",
-			"code":    "ORDER_COOLDOWN",
-		})
-		return
+	// honest UX rule — tell the customer, don't fake success. Staff placing
+	// orders from the dashboard aren't the customer this guards against.
+	if !isStaffOrder {
+		if _, err := c.Cookie(orderCooldownCookie(parsedShopID)); err == nil {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"success": false,
+				"message": "لقد قمت بطلب من هذا المتجر مؤخراً. يرجى الانتظار قبل إرسال طلب آخر.",
+				"code":    "ORDER_COOLDOWN",
+			})
+			return
+		}
 	}
 
 	// Banned-client short circuit: a client id banned by the owner (via
@@ -355,9 +361,11 @@ func CreateOrderByShopID(c *gin.Context) {
 	}
 
 	// Phone-per-shop rate limit: 1 order per 30 min. Silent drop on breach.
+	// Staff manually creating orders (e.g. re-entering the same customer) are
+	// exempt — this guard exists for anonymous spam, not their workflow.
 	phoneKey := phoneOrderKey(parsedShopID, body.Client.PhoneNumber)
 	set, redisErr := initializers.RClient.SetNX(initializers.Ctx, phoneKey, 1, phoneOrderWindow).Result()
-	if redisErr == nil && !set {
+	if !isStaffOrder && redisErr == nil && !set {
 		// Key already exists — this phone already ordered within the window.
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,

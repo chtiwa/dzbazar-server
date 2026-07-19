@@ -10,7 +10,7 @@ func OrdersRoutes(router *gin.Engine) {
 	orders := router.Group("/v1/shops/:shopId/orders")
 	{
 		orders.GET("", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.view"), controllers.GetOrdersByShopID)
-		orders.POST("", middleware.OrderIPRateLimit(), controllers.CreateOrderByShopID)
+		orders.POST("", middleware.DetectStaffOrder, middleware.OrderIPRateLimit(), controllers.CreateOrderByShopID)
 		orders.POST("/excel", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.export"), controllers.ExportAsExcel)
 
 		orders.GET("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.view"), controllers.IndexOrderByShopID)
