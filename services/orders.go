@@ -3,11 +3,23 @@ package services
 import (
 	"fmt"
 	"math"
+	"regexp"
 
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// Must match the client-side regex in client/src/components/OrderForm.tsx
+// (isValidPhoneNumber) exactly — this is the server-side enforcement of the
+// same rule, since hitting the API directly bypasses client JS entirely.
+var phoneNumberPattern = regexp.MustCompile(`^(05|06|07)\d{8}$`)
+
+// IsValidPhoneNumber checks an Algerian mobile number against the standard
+// 05/06/07 + 8-digit format.
+func IsValidPhoneNumber(phone string) bool {
+	return phoneNumberPattern.MatchString(phone)
+}
 
 // ResolveShipping picks the authoritative shipping price off a shop's
 // DeliveryRate row for the wilaya being shipped to — never trust a

@@ -15,6 +15,10 @@ type Client struct {
 	City          string `json:"city"`
 	StopdeskPoint string `json:"stopdeskPoint"`
 
+	// Set by BanOrderClient as the phone-based ban mechanism — the fallback
+	// for organic orders that never had an fbp/ttp click-id to ban instead.
+	Banned bool `gorm:"not null;default:false" json:"banned"`
+
 	// ClientID on Order is NOT NULL, so "SET NULL" here would itself violate
 	// that constraint on delete — CASCADE is the only valid option: deleting
 	// a client deletes their orders (which cascades further into OrderItems).

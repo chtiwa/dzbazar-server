@@ -35,10 +35,10 @@ func SendFacebookPurchase(pixelID, accessToken, orderID, fullName, phone string,
 
 	url := fmt.Sprintf("https://graph.facebook.com/v24.0/%s/events?access_token=%s", pixelID, accessToken)
 
-	// normalize phone
-	phone = strings.TrimSpace(phone)
-	// Hash phone (SHA256)
-	hashedPhone := hashData(phone)
+	// Hash phone (SHA256) — Meta requires digits-only, country code, no
+	// leading 0 (see "conditions de formatage" in Events Manager); local
+	// numbers are stored as 05xxxxxxxx, so a raw hash never matches.
+	hashedPhone := hashData(normalizePhoneForHashing(phone))
 
 	parts := strings.Split(fullName, " ")
 	first := parts[0]
@@ -50,23 +50,23 @@ func SendFacebookPurchase(pixelID, accessToken, orderID, fullName, phone string,
 	// normalize first and last name
 	first = strings.ToLower(strings.TrimSpace(first))
 	last = strings.ToLower(strings.TrimSpace(last))
-	var hashedFirstName, hashedLastName string
 
-	// Hash fn and ln (SHA256)
-	hashedFirstName = hashData(first)
-	if last != "" {
-		hashedLastName = hashData((last))
-	}
-
-	// Include fbp and fbc in user_data
+	// Include fbp and fbc in user_data. Meta flags empty-string hashed
+	// values as malformed — omit a field entirely rather than send "".
 	userData := map[string]interface{}{
-		"fn":                hashedFirstName,
-		"ln":                hashedLastName,
-		"ph":                hashedPhone,
 		"fbp":               fbp,
 		"fbc":               fbc,
 		"client_user_agent": clientUserAgent,
 		"client_ip_address": clientIP,
+	}
+	if hashedFirstName := hashData(first); hashedFirstName != "" {
+		userData["fn"] = hashedFirstName
+	}
+	if hashedLastName := hashData(last); hashedLastName != "" {
+		userData["ln"] = hashedLastName
+	}
+	if hashedPhone != "" {
+		userData["ph"] = hashedPhone
 	}
 
 	customData := map[string]interface{}{
@@ -118,6 +118,25 @@ func SendFacebookPurchase(pixelID, accessToken, orderID, fullName, phone string,
 
 	fmt.Printf("Facebook API response: status %d, body: %s\n", resp.StatusCode, respBody.String())
 	return nil
+}
+
+// normalizePhoneForHashing converts a local Algerian number (e.g. "05 54 12 34 56")
+// into Meta's required ph format: digits only, country code, no leading 0.
+func normalizePhoneForHashing(phone string) string {
+	digits := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, phone)
+	digits = strings.TrimPrefix(digits, "0")
+	if digits == "" {
+		return ""
+	}
+	if !strings.HasPrefix(digits, "213") {
+		digits = "213" + digits
+	}
+	return digits
 }
 
 // hashData computes SHA256 hash of a string and returns lowercase hex

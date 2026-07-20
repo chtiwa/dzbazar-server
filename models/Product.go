@@ -44,6 +44,11 @@ type LandingPage struct {
 	Images    []LandingPageImage `gorm:"foreignKey:LandingPageID;constraint:OnDelete:CASCADE" json:"images"`
 	Active    bool               `gorm:"default:true" json:"active"`
 
+	// ExperimentID nil = standalone page. Non-nil = this page is one "set" of an
+	// A/B test, and ExperimentPosition is its stable round-robin slot (0,1,2...).
+	ExperimentID       *uuid.UUID `gorm:"type:uuid;index" json:"experimentId"`
+	ExperimentPosition int        `gorm:"not null;default:0" json:"experimentPosition"`
+
 	// Count of non-deleted orders containing this landing page's product. Computed per-request, not stored.
 	Orders int64 `gorm:"-" json:"orders"`
 	// Unique visitors to this landing page (all-time). Computed per-request, not stored.

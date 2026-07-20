@@ -86,6 +86,39 @@ func countOrdersByLandingPageIDs(landingPageIDs []uuid.UUID) (map[uuid.UUID]int6
 	return counts, nil
 }
 
+// countDirectProductOrdersByProductIDs is countOrdersByProductIDs scoped to
+// orders.landing_page_id IS NULL — i.e. orders that came from the product page itself, not
+// through a landing page. Conversion rate needs this instead of countOrdersByProductIDs:
+// mixing landing-page-attributed orders into a product-page-views denominator produces a
+// bogus rate (e.g. >100%) since those orders' views were counted against the landing page.
+func countDirectProductOrdersByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]int64, error) {
+	counts := make(map[uuid.UUID]int64, len(productIDs))
+	if len(productIDs) == 0 {
+		return counts, nil
+	}
+
+	var rows []struct {
+		ProductID uuid.UUID
+		Count     int64
+	}
+
+	err := initializers.DB.
+		Table("order_items").
+		Joins("JOIN orders ON orders.id = order_items.order_id").
+		Where("order_items.product_id IN ? AND orders.deleted_at IS NULL AND orders.landing_page_id IS NULL", productIDs).
+		Select("order_items.product_id AS product_id, COUNT(DISTINCT order_items.order_id) AS count").
+		Group("order_items.product_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range rows {
+		counts[r.ProductID] = r.Count
+	}
+	return counts, nil
+}
+
 // deliveryRatesByProductIDs returns, per product, the % of shipped orders containing it that
 // currently sit at "Livré" (delivered). Nil for a product with no shipped orders yet.
 func deliveryRatesByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]*float64, error) {
@@ -677,6 +710,15 @@ func GetProductsByShopAdmin(c *gin.Context) {
 		})
 		return
 	}
+	directOrderCounts, err := countDirectProductOrdersByProductIDs(productIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "error while counting direct product-page orders per product",
+			"error":   err.Error(),
+		})
+		return
+	}
 	confirmationRates, err := confirmationRatesByProductIDs(productIDs)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -690,7 +732,7 @@ func GetProductsByShopAdmin(c *gin.Context) {
 		products[i].Orders = orderCounts[products[i].ID]
 		products[i].DeliveryRate = deliveryRates[products[i].ID]
 		products[i].Views = views[products[i].ID]
-		products[i].ConversionRate = conversionRate(products[i].Orders, products[i].Views)
+		products[i].ConversionRate = conversionRate(directOrderCounts[products[i].ID], products[i].Views)
 		products[i].ConfirmationRate = confirmationRates[products[i].ID]
 	}
 

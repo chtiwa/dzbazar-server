@@ -29,23 +29,9 @@ import (
 const maxLandingPageImages = 10
 const maxLandingPageImageSize = 10 * 1024 * 1024 // 10 MB
 
-func landingPageCacheKeyByID(id uuid.UUID) string {
-	return fmt.Sprintf("landing-page:id=%s", id.String())
-}
-
-func landingPagesCacheKeyByShop(shopID uuid.UUID) string {
-	return fmt.Sprintf("landing-pages:shop=%s", shopID.String())
-}
-
-func invalidateLandingPageCaches(shopID uuid.UUID, landingPageID uuid.UUID) {
-	keys := []string{
-		landingPageCacheKeyByID(landingPageID),
-		landingPagesCacheKeyByShop(shopID),
-	}
-	if err := initializers.RClient.Del(initializers.Ctx, keys...).Err(); err != nil {
-		fmt.Println("Failed to delete landing page cache keys:", err)
-	}
-}
+// landingPageCacheKeyByID, landingPagesCacheKeyByShop, invalidateLandingPageCaches
+// live in services (LandingPageCacheKeyByID / LandingPagesCacheKeyByShop /
+// InvalidateLandingPageCaches) so services/experiments.go can invalidate them too.
 
 func loadLandingPageByShop(tx *gorm.DB, shopID, landingPageID uuid.UUID, landingPage *models.LandingPage) error {
 	return tx.
@@ -302,7 +288,7 @@ func CreateLandingPageByShop(c *gin.Context) {
 		return
 	}
 
-	invalidateLandingPageCaches(shopID, landingPage.ID)
+	services.InvalidateLandingPageCaches(shopID, landingPage.ID)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
@@ -322,7 +308,7 @@ func GetLandingPagesByShop(c *gin.Context) {
 		return
 	}
 
-	cacheKey := landingPagesCacheKeyByShop(shopID)
+	cacheKey := services.LandingPagesCacheKeyByShop(shopID)
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
 		var cachedResponse []models.LandingPage
@@ -430,7 +416,7 @@ func GetLandingPageByShop(c *gin.Context) {
 		return
 	}
 
-	cacheKey := landingPageCacheKeyByID(landingPageID)
+	cacheKey := services.LandingPageCacheKeyByID(landingPageID)
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
 		var cachedResponse models.LandingPage
@@ -476,7 +462,7 @@ func IndexLandingPage(c *gin.Context) {
 		return
 	}
 
-	cacheKey := landingPageCacheKeyByID(landingPageID)
+	cacheKey := services.LandingPageCacheKeyByID(landingPageID)
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
 		var cachedResponse models.LandingPage
@@ -779,7 +765,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 		return
 	}
 
-	invalidateLandingPageCaches(shopID, landingPageID)
+	services.InvalidateLandingPageCaches(shopID, landingPageID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -873,7 +859,7 @@ func DeleteLandingPageByShop(c *gin.Context) {
 		}
 	}
 
-	invalidateLandingPageCaches(shopID, landingPageID)
+	services.InvalidateLandingPageCaches(shopID, landingPageID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

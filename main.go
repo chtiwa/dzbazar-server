@@ -50,6 +50,7 @@ func main() {
 	routes.ProductsRoutes(router)
 	routes.StockRoutes(router)
 	routes.LandingPagesRoutes(router)
+	routes.LandingPageExperimentsRoutes(router)
 	routes.CouponsRoutes(router)
 	routes.ShopsRoutes(router)
 	routes.PixelsRoutes(router)

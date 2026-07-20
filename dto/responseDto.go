@@ -1,5 +1,38 @@
 package dto
 
+import "time"
+
+// ExperimentSetStandingResponse is one set's live standing inside an A/B test —
+// views/conversions/rate come straight from the same queries the standalone
+// landing-page PagePerf panel already uses, just scoped to this set's ID.
+type ExperimentSetStandingResponse struct {
+	LandingPageID  string   `json:"landingPageId"`
+	Position       int      `json:"position"`
+	Title          string   `json:"title"`
+	Views          int64    `json:"views"`
+	Conversions    int64    `json:"conversions"`
+	ConversionRate *float64 `json:"conversionRate"`
+	Active         bool     `json:"active"`
+	IsWinner       bool     `json:"isWinner"`
+}
+
+// ExperimentResponse is an experiment plus its live per-set standings.
+// LeadingLandingPageID/PValue/IsSignificant describe the current rate-leader
+// vs the rest, pre-decision — nil/false until enough data exists to compute.
+type ExperimentResponse struct {
+	ID                   string                          `json:"id"`
+	Name                 string                          `json:"name"`
+	ProductID            string                          `json:"productId"`
+	TargetConversions    int                             `json:"targetConversions"`
+	Status               string                          `json:"status"`
+	WinnerLandingPageID  *string                         `json:"winnerLandingPageId,omitempty"`
+	LeadingLandingPageID *string                         `json:"leadingLandingPageId,omitempty"`
+	PValue               *float64                        `json:"pValue,omitempty"`
+	IsSignificant        bool                            `json:"isSignificant"`
+	Standings            []ExperimentSetStandingResponse `json:"standings"`
+	CreatedAt            time.Time                       `json:"createdAt"`
+}
+
 type ProductResponse struct {
 	ID           string                 `json:"id"`
 	Title        string                 `json:"title"`

@@ -41,6 +41,11 @@ type CreateOrderInput struct {
 	// Landing page this order originated from, if any. Optional, attribution-only.
 	LandingPageID string `json:"landingPageId"`
 
+	// Honeypot: hidden "Email" field no real customer sees or fills (this
+	// form has no genuine email field). Bot autofillers populate it; any
+	// non-empty value here means the request is spam.
+	Email string `json:"email"`
+
 	// Nested client object matches your new JSON payload
 	Client OrderClientInput `json:"client" binding:"required"`
 
@@ -304,6 +309,17 @@ func CreateOrderByShopID(c *gin.Context) {
 		return
 	}
 
+	// Honeypot short-circuit: as early as possible, before any DB round trip.
+	// A real customer never sees this field; a bot autofiller that populates
+	// it gets the same silent-success response as the banned-client paths.
+	if strings.TrimSpace(body.Email) != "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Order received successfully",
+		})
+		return
+	}
+
 	if err := services.CheckOrderLimit(parsedShopID); err != nil {
 		if errors.Is(err, services.ErrPlanLimitReached) {
 			c.JSON(http.StatusForbidden, gin.H{
@@ -333,6 +349,17 @@ func CreateOrderByShopID(c *gin.Context) {
 		}
 	}
 
+	// Server-side enforcement of the same 05/06/07 + 8-digit rule the client
+	// checks in OrderForm.tsx — hitting this endpoint directly bypasses the
+	// client entirely, so it must be re-checked here.
+	if !services.IsValidPhoneNumber(body.Client.PhoneNumber) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid phone number format",
+		})
+		return
+	}
+
 	// Banned-client short circuit: a client id banned by the owner (via
 	// BanOrderClient) never touches the DB again — no client row, no order
 	// row, nothing to review or clean up. Same silent-success response as
@@ -358,6 +385,20 @@ func CreateOrderByShopID(c *gin.Context) {
 			})
 			return
 		}
+	}
+
+	// Phone-based ban short circuit: complementary to the fbp/ttp mechanism
+	// above — catches clients banned via BanOrderClient's organic fallback
+	// (see BanOrderClient), who never had a platform click-id to ban by.
+	var banCheckClient models.Client
+	if initializers.DB.
+		Where("phone_number = ? AND shop_id = ?", body.Client.PhoneNumber, parsedShopID).
+		First(&banCheckClient).Error == nil && banCheckClient.Banned {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Order received successfully",
+		})
+		return
 	}
 
 	// Phone-per-shop rate limit: 1 order per 30 min. Silent drop on breach.
@@ -575,6 +616,11 @@ func CreateOrderByShopID(c *gin.Context) {
 			return delErr
 		}
 
+		// A/B test winner check — best-effort, must never fail checkout.
+		if landingPageID != nil {
+			services.DecideExperimentIfReady(tx, *landingPageID)
+		}
+
 		return nil
 	})
 
@@ -594,7 +640,7 @@ func CreateOrderByShopID(c *gin.Context) {
 	InvalidateDashboardCache(parsedShopID)
 	invalidateProductCaches(uuid.Nil, parsedShopID)
 	invalidateOrdersListCache(parsedShopID)
-	initializers.RClient.Del(initializers.Ctx, landingPagesCacheKeyByShop(parsedShopID))
+	initializers.RClient.Del(initializers.Ctx, services.LandingPagesCacheKeyByShop(parsedShopID))
 
 	isProduction := os.Getenv("APP_ENV") == "production"
 	c.SetSameSite(http.SameSiteLaxMode)
@@ -1078,7 +1124,7 @@ func DeleteOrderByShopID(c *gin.Context) {
 	InvalidateDashboardCache(shopID)
 	invalidateProductCaches(uuid.Nil, shopID)
 	invalidateOrdersListCache(shopID)
-	initializers.RClient.Del(initializers.Ctx, landingPagesCacheKeyByShop(shopID))
+	initializers.RClient.Del(initializers.Ctx, services.LandingPagesCacheKeyByShop(shopID))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -1139,7 +1185,10 @@ func BanOrderClient(c *gin.Context) {
 		platform, clientID = "tiktok", order.TTp
 	}
 
-	if clientID == "" {
+	hasPlatformID := clientID != ""
+	hasResolvableClient := order.ClientID != uuid.Nil
+
+	if !hasPlatformID && !hasResolvableClient {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "This order has no trackable browser ID (organic order) — nothing to ban",
@@ -1148,12 +1197,22 @@ func BanOrderClient(c *gin.Context) {
 	}
 
 	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
-		var existing models.FlaggedClient
-		alreadyBanned := tx.Where("shop_id = ? AND platform = ? AND client_id = ?", shopID, platform, clientID).
-			First(&existing).Error == nil
+		if hasPlatformID {
+			var existing models.FlaggedClient
+			alreadyBanned := tx.Where("shop_id = ? AND platform = ? AND client_id = ?", shopID, platform, clientID).
+				First(&existing).Error == nil
 
-		if !alreadyBanned {
-			if err := tx.Create(&models.FlaggedClient{ShopID: shopID, Platform: platform, ClientID: clientID}).Error; err != nil {
+			if !alreadyBanned {
+				if err := tx.Create(&models.FlaggedClient{ShopID: shopID, Platform: platform, ClientID: clientID}).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		// Complementary, not exclusive: also ban the Client row itself, so an
+		// organic order (no fbp/ttp) is no longer permanently unbannable.
+		if hasResolvableClient {
+			if err := tx.Model(&models.Client{}).Where("id = ?", order.ClientID).Update("banned", true).Error; err != nil {
 				return err
 			}
 		}
