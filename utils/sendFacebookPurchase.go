@@ -54,10 +54,14 @@ func SendFacebookPurchase(pixelID, accessToken, orderID, fullName, phone string,
 	// Include fbp and fbc in user_data. Meta flags empty-string hashed
 	// values as malformed — omit a field entirely rather than send "".
 	userData := map[string]interface{}{
-		"fbp":               fbp,
-		"fbc":               fbc,
 		"client_user_agent": clientUserAgent,
 		"client_ip_address": clientIP,
+	}
+	if fbp != "" {
+		userData["fbp"] = fbp
+	}
+	if fbc != "" {
+		userData["fbc"] = fbc
 	}
 	if hashedFirstName := hashData(first); hashedFirstName != "" {
 		userData["fn"] = hashedFirstName
