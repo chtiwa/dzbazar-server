@@ -37,7 +37,12 @@ type CreateOrderInput struct {
 	FBp              string  `json:"fbp"`
 	TTclid           string  `json:"ttclid"`
 	TTp              string  `json:"ttp"`
-	CouponCode       string  `json:"couponCode"`
+	// The customer's browser URL at checkout (window.location.href),
+	// forwarded as event_source_url/page.url on the Meta/TikTok CAPI Purchase
+	// sends (see orderEvents.go) instead of a hardcoded domain literal.
+	// Attribution/display only — never blocks checkout if missing.
+	PageURL    string `json:"pageUrl"`
+	CouponCode string `json:"couponCode"`
 	// Landing page this order originated from, if any. Optional, attribution-only.
 	LandingPageID string `json:"landingPageId"`
 
@@ -170,7 +175,11 @@ func GetOrdersByShopID(c *gin.Context) {
 	flaggedOnly := c.Query("flagged") == "true"
 	productID := strings.TrimSpace(c.Query("productId"))
 
-	isDefaultView := page == 1 && perPage == 10 && (status == "" || status == "Tous") &&
+	// A confirmatrice only ever sees orders assigned to her — never the
+	// shop's shared default-view cache, which isn't scoped per-member.
+	isConfirmatrice := membership.Role == "confirmation"
+
+	isDefaultView := !isConfirmatrice && page == 1 && perPage == 10 && (status == "" || status == "Tous") &&
 		search == "" && dateFrom == "" && dateTo == "" && !flaggedOnly && productID == ""
 
 	if isDefaultView {
@@ -181,6 +190,10 @@ func GetOrdersByShopID(c *gin.Context) {
 	}
 
 	baseQuery := initializers.DB.Model(&models.Order{}).Where("orders.shop_id = ? AND orders.is_hidden = ?", shopID, flaggedOnly)
+
+	if isConfirmatrice {
+		baseQuery = baseQuery.Where("orders.assigned_member_id = ?", membership.ID)
+	}
 
 	if status != "" && status != "Tous" {
 		baseQuery = baseQuery.Where("status = ?", status)
@@ -248,6 +261,8 @@ func GetOrdersByShopID(c *gin.Context) {
 		Preload("Items.ProductVariantCombination").
 		Preload("ShippedVia").
 		Preload("ShippedVia.Image").
+		Preload("AssignedMember").
+		Preload("AssignedMember.User").
 		Order("created_at DESC").
 		Limit(perPage).
 		Offset(offset).
@@ -598,6 +613,7 @@ func CreateOrderByShopID(c *gin.Context) {
 			TTclid:           body.TTclid,
 			TTp:              body.TTp,
 			ConversionSource: body.ConversionSource,
+			PageURL:          body.PageURL,
 			LandingPageID:    landingPageID,
 			IsHidden:         containsCussword,
 			ClientIP:         clientIP,
@@ -607,6 +623,12 @@ func CreateOrderByShopID(c *gin.Context) {
 
 		if createOrderErr := tx.Omit("Client", "Items.Product", "Items.ProductVariantCombination").Create(&order).Error; createOrderErr != nil {
 			return createOrderErr
+		}
+
+		// Best-effort round-robin assignment to an eligible confirmatrice — never
+		// fails checkout (mirrors DecideExperimentIfReady below).
+		if assignErr := services.AutoAssignOrder(tx, parsedShopID, &order); assignErr != nil {
+			fmt.Println("AutoAssignOrder: failed to auto-assign order:", assignErr)
 		}
 
 		// A completed order means this phone number is no longer "abandoned" —
@@ -1235,4 +1257,110 @@ func BanOrderClient(c *gin.Context) {
 		"success": true,
 		"message": "Client banned — future orders from this browser will be silently hidden",
 	})
+}
+
+type AssignOrderInput struct {
+	MemberID *string `json:"memberId"`
+}
+
+// AssignOrderByShopID manually assigns/reassigns/clears which confirmatrice
+// owns this order. memberID nil clears the assignment.
+func AssignOrderByShopID(c *gin.Context) {
+	shopIDStr := c.Param("shopId")
+	shopID, err := uuid.Parse(shopIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid or missing Shop ID"})
+		return
+	}
+
+	orderIDStr := c.Param("id")
+	orderID, err := uuid.Parse(orderIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid Order ID format"})
+		return
+	}
+
+	var body AssignOrderInput
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error while binding JSON request context", "error": err.Error()})
+		return
+	}
+
+	var memberID *uuid.UUID
+	if body.MemberID != nil && strings.TrimSpace(*body.MemberID) != "" {
+		parsed, parseErr := uuid.Parse(*body.MemberID)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid member ID format"})
+			return
+		}
+		memberID = &parsed
+	}
+
+	if err := services.AssignOrder(shopID, orderID, memberID); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Order not found, or member is not a confirmatrice of this shop"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to assign order", "error": err.Error()})
+		return
+	}
+
+	invalidateOrdersListCache(shopID)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Order assignment updated"})
+}
+
+type BulkAssignOrdersInput struct {
+	OrderIDs []string `json:"orderIds" binding:"required,min=1"`
+	MemberID *string  `json:"memberId"`
+}
+
+// BulkAssignOrdersByShopID assigns/reassigns/clears a batch of orders in one
+// request — the "worker called in sick, hand off her queue" path.
+func BulkAssignOrdersByShopID(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid or missing Shop ID"})
+		return
+	}
+
+	var body BulkAssignOrdersInput
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error while binding JSON request context", "error": err.Error()})
+		return
+	}
+
+	orderIDs := make([]uuid.UUID, 0, len(body.OrderIDs))
+	for _, idStr := range body.OrderIDs {
+		parsed, parseErr := uuid.Parse(idStr)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid order ID: " + idStr})
+			return
+		}
+		orderIDs = append(orderIDs, parsed)
+	}
+
+	var memberID *uuid.UUID
+	if body.MemberID != nil && strings.TrimSpace(*body.MemberID) != "" {
+		parsed, parseErr := uuid.Parse(*body.MemberID)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid member ID format"})
+			return
+		}
+		memberID = &parsed
+	}
+
+	assigned, err := services.BulkAssignOrders(shopID, orderIDs, memberID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Member is not a confirmatrice of this shop"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to bulk-assign orders", "error": err.Error()})
+		return
+	}
+
+	invalidateOrdersListCache(shopID)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Orders assigned", "assigned": assigned})
 }

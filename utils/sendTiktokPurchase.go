@@ -5,12 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 )
-
-// needs stape integration
 
 // TikTokEvent represents a single event
 type TikTokEvent struct {
@@ -53,18 +50,20 @@ type TikTokPayload struct {
 	TestEventCode string        `json:"test_event_code,omitempty"`
 }
 
-// SendTikTokPurchase sends a purchase event via TikTok CAPI
-func SendTikTokPurchase(orderID, productName, fullName, phone, ttclid string, value float64, currency string, createdAt time.Time, testCode, clientUserAgent, clientIP string) error {
-	pixelID := os.Getenv("TIKTOK_PIXEL_ID")
-	accessToken := os.Getenv("TIKTOK_ACCESS_TOKEN")
-
+// SendTikTokPurchase sends a purchase event via TikTok CAPI, using the
+// shop's own pixel ID and access token (each shop configures its own via
+// models.Pixel, same as the Facebook sender — see orderEvents.go).
+func SendTikTokPurchase(orderID, productName, fullName, phone, ttclid string, value float64, currency string, createdAt time.Time, testCode, clientUserAgent, clientIP, pixelID, accessToken, pageURL string) error {
 	if pixelID == "" || accessToken == "" {
-		return fmt.Errorf("missing TIKTOK_PIXEL_ID or TIKTOK_ACCESS_TOKEN")
+		return fmt.Errorf("missing pixel ID or access token")
 	}
 
 	url := "https://business-api.tiktok.com/open_api/v1.3/event/track/"
 
-	hashedPhone := hashData(phone)
+	// Same normalization the Facebook sender uses — Algerian numbers are
+	// stored as 05xxxxxxxx, so a raw hash never matches Meta/TikTok's
+	// digits-only, country-code, no-leading-0 format.
+	hashedPhone := hashData(normalizePhoneForHashing(phone))
 	parts := strings.Split(fullName, " ")
 	first := parts[0]
 	last := ""
@@ -101,7 +100,7 @@ func SendTikTokPurchase(orderID, productName, fullName, phone, ttclid string, va
 				"ip":         clientIP, // add params
 				"user_agent": clientUserAgent,
 				"ad":         map[string]string{"callback": ttclid},
-				"page":       map[string]string{"url": "https://lkparfumo.com"},
+				"page":       map[string]string{"url": pageURL},
 			},
 		},
 	}

@@ -14,8 +14,8 @@ func LandingPageExperimentsRoutes(router *gin.Engine) {
 		adminExperiments := adminShop.Group("/:shopId/landing-page-experiments")
 		{
 			adminExperiments.POST("", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("landing_pages.create"), controllers.CreateExperimentByShop)
-			adminExperiments.GET("", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), controllers.GetExperimentsByShop)
-			adminExperiments.GET("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), controllers.GetExperimentByShop)
+			adminExperiments.GET("", middleware.RequireAuthentication, middleware.RequireShopAccess("owner"), controllers.GetExperimentsByShop)
+			adminExperiments.GET("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess("owner"), controllers.GetExperimentByShop)
 			adminExperiments.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("landing_pages.edit"), controllers.UpdateExperimentByShop)
 			adminExperiments.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("landing_pages.delete"), controllers.DeleteExperimentByShop)
 		}

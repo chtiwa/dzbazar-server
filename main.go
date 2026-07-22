@@ -65,12 +65,14 @@ func main() {
 	routes.ZrRoutes(router)
 	routes.OffersRoutes(router)
 	routes.AbandonedLeadsRoutes(router)
+	routes.ConfirmatricesRoutes(router)
 	routes.SuperAdminRoutes(router)
 	routes.WebSocketRoutes(router)
 
 	// Order side-effects (email/pixel/broadcast) run on a bounded worker
 	// pool — must start before any order can be created.
 	controllers.StartOrderEventWorkers(4)
+	go controllers.StartMetaPurchaseRetrySweep()
 
 	go realtime.StartHub()
 	go realtime.StartSubscriber()

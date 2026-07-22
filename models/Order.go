@@ -73,12 +73,34 @@ type Order struct {
 	// send, non-NULL means already sent (or currently being attempted).
 	MetaPurchaseSentAt *time.Time `json:"metaPurchaseSentAt"`
 
+	// Counts every Meta CAPI Purchase send attempt for this order (success or
+	// failure). StartMetaPurchaseRetrySweep stops retrying once this hits
+	// metaPurchaseMaxAttempts, so a permanently-broken pixel config doesn't
+	// retry forever.
+	MetaPurchaseAttempts int `gorm:"not null;default:0" json:"metaPurchaseAttempts"`
+
+	// The actual page URL the customer's browser was on at checkout
+	// (window.location.href, captured client-side). Used as the
+	// event_source_url / page.url for the Meta and TikTok CAPI sends instead
+	// of a hardcoded domain literal — this platform is one multi-tenant
+	// client serving shops by slug, not one storefront domain per shop.
+	PageURL string `json:"pageUrl"`
+
 	// Carrier the order was actually handed to, and when — set once at
 	// shipping time, independent of any later edits to the order (unlike
 	// UpdatedAt, which bumps on every unrelated change).
 	ShippedAt    *time.Time                `json:"shippedAt"`
 	ShippedViaID *uuid.UUID                `gorm:"type:uuid" json:"shippedViaId"`
 	ShippedVia   *AvailableDeliveryCompany `gorm:"foreignKey:ShippedViaID;references:ID" json:"shippedVia"`
+
+	// Confirmatrice (ShopMember with role='confirmation') responsible for
+	// calling/confirming this order. Nil until assigned (auto round-robin at
+	// creation, or manual). "Was it confirmed" is answered from the
+	// order.status_changed audit trail (see services.ConfirmationRates), not
+	// a column here — the audit log already records that.
+	AssignedMemberID *uuid.UUID  `gorm:"type:uuid" json:"assignedMemberId"`
+	AssignedAt       *time.Time  `json:"assignedAt"`
+	AssignedMember   *ShopMember `gorm:"foreignKey:AssignedMemberID;references:ID" json:"assignedMember,omitempty"`
 
 	// THE FIX: One Order has Many Items
 	Items []OrderItem `gorm:"foreignKey:OrderID;constraint:OnDelete:CASCADE" json:"items"`

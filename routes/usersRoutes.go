@@ -36,6 +36,9 @@ func UsersRoutes(router *gin.Engine) {
 			manageable.POST("", middleware.RequireShopPermission("users.create"), controllers.CreateUserByShop)
 			manageable.PATCH("/:id", middleware.RequireShopPermission("users.edit"), controllers.UpdateUserByShop)
 			manageable.DELETE("/:id", middleware.RequireShopPermission("users.delete"), controllers.DeleteUserByShop)
+
+			manageable.GET("/:id/confirmatrice-products", middleware.RequireShopPermission("users.view"), controllers.GetConfirmatriceProducts)
+			manageable.PUT("/:id/confirmatrice-products", middleware.RequireShopPermission("users.edit"), controllers.SetConfirmatriceProducts)
 		}
 
 		// only owner can manage per-member permission overrides

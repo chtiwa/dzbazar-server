@@ -16,6 +16,8 @@ func OrdersRoutes(router *gin.Engine) {
 		orders.GET("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.view"), controllers.IndexOrderByShopID)
 		orders.GET("/:id/status-history", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.status_history"), controllers.GetOrderStatusHistory)
 		orders.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.edit"), controllers.UpdateOrderByShopID)
+		orders.PATCH("/:id/assignment", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.assign"), controllers.AssignOrderByShopID)
+		orders.PATCH("/bulk-assignment", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.assign"), controllers.BulkAssignOrdersByShopID)
 		orders.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.delete"), controllers.DeleteOrderByShopID)
 		orders.POST("/:id/ban-client", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ban_client"), controllers.BanOrderClient)
 	}

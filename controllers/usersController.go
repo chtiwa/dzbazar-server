@@ -26,9 +26,15 @@ func GetUsersByShop(c *gin.Context) {
 
 	var users []models.User
 
-	err = initializers.DB.
+	query := initializers.DB.
 		Joins("JOIN shop_members ON shop_members.user_id = users.id").
-		Where("shop_members.shop_id = ?", shopID).
+		Where("shop_members.shop_id = ?", shopID)
+
+	if role := c.Query("role"); role != "" {
+		query = query.Where("shop_members.role = ?", role)
+	}
+
+	err = query.
 		Preload("Memberships", "shop_id = ?", shopID).
 		Find(&users).Error
 
@@ -315,6 +321,7 @@ func UpdateUserByShop(c *gin.Context) {
 		Email       *string `json:"email" binding:"omitempty,email"`
 		Password    *string `json:"password" binding:"omitempty,min=6"`
 		Role        *string `json:"role" binding:"omitempty"`
+		Active      *bool   `json:"active"`
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -414,6 +421,19 @@ func UpdateUserByShop(c *gin.Context) {
 		user.Role = *body.Role
 	}
 
+	if body.Active != nil {
+		if err := tx.Model(&models.ShopMember{}).
+			Where("shop_id = ? AND user_id = ?", shopID, userID).
+			Update("active", *body.Active).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to update membership availability",
+			})
+			return
+		}
+	}
+
 	if err := tx.Commit().Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -484,4 +504,65 @@ func DeleteUserByShop(c *gin.Context) {
 		"success": true,
 		"message": "User was removed from the shop",
 	})
+}
+
+// GetConfirmatriceProducts lists the product scope for a confirmation-role
+// member — an empty list means she sees nothing until scoped.
+func GetConfirmatriceProducts(c *gin.Context) {
+	member, ok := findShopMember(c)
+	if !ok {
+		return
+	}
+
+	var productIDs []uuid.UUID
+	if err := initializers.DB.Model(&models.ConfirmatriceProduct{}).
+		Where("shop_member_id = ?", member.ID).
+		Pluck("product_id", &productIDs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error while retrieving product scope", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": productIDs})
+}
+
+// SetConfirmatriceProducts replaces a member's product scope wholesale.
+func SetConfirmatriceProducts(c *gin.Context) {
+	member, ok := findShopMember(c)
+	if !ok {
+		return
+	}
+
+	var body struct {
+		ProductIDs []string `json:"productIds"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error while binding JSON request context", "error": err.Error()})
+		return
+	}
+
+	rows := make([]models.ConfirmatriceProduct, 0, len(body.ProductIDs))
+	for _, idStr := range body.ProductIDs {
+		productID, parseErr := uuid.Parse(idStr)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid product ID: " + idStr})
+			return
+		}
+		rows = append(rows, models.ConfirmatriceProduct{ShopMemberID: member.ID, ProductID: productID})
+	}
+
+	err := initializers.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("shop_member_id = ?", member.ID).Delete(&models.ConfirmatriceProduct{}).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		return tx.Create(&rows).Error
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error while saving product scope", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Product scope updated"})
 }

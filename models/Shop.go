@@ -17,6 +17,9 @@ type Shop struct {
 	IsVerified  bool           `gorm:"default:false" json:"isVerified"`
 	LogoImage   *ShopLogoImage `gorm:"foreignKey:ShopID;references:ID" json:"logoImage"`
 
+	// Round-robin cursor for confirmatrice auto-assignment (services.AutoAssignOrder).
+	ConfirmatriceCursor int64 `gorm:"not null;default:0" json:"-"`
+
 	Members  []ShopMember `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"members,omitempty"`
 	Products []Product    `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"products"`
 	Orders   []Order      `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"orders"`

@@ -28,7 +28,7 @@ type FacebookPayload struct {
 
 // SendFacebookPurchase fires a confirmed purchase event via Conversion API,
 // using the shop's own pixel ID and access token (each shop configures its own).
-func SendFacebookPurchase(pixelID, accessToken, orderID, fullName, phone string, value float64, currency, fbc, fbp string, createdAt time.Time, clientUserAgent, clientIP, testCode string) error {
+func SendFacebookPurchase(pixelID, accessToken, orderID, fullName, phone string, value float64, currency, fbc, fbp string, createdAt time.Time, clientUserAgent, clientIP, testCode, eventSourceURL string) error {
 	if pixelID == "" || accessToken == "" {
 		return fmt.Errorf("missing pixel ID or access token")
 	}
@@ -84,7 +84,7 @@ func SendFacebookPurchase(pixelID, accessToken, orderID, fullName, phone string,
 		EventTime:      createdAt.UTC().Unix(),
 		EventId:        orderID,
 		ActionSource:   "website",
-		EventSourceURL: "https://dzbazar.online",
+		EventSourceURL: eventSourceURL,
 		UserData:       userData,
 		CustomData:     customData,
 	}

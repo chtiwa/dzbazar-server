@@ -44,6 +44,11 @@ type ShopMember struct {
 	Shop Shop `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"shop"`
 
 	Role string `gorm:"type:text;not null;default:'moderator'" json:"role"`
+
+	// Active gates round-robin eligibility (services.EligibleConfirmatrices) —
+	// an owner flips this off for a confirmatrice who's out (sick day, leave)
+	// without deleting the account or touching her product scope.
+	Active bool `gorm:"not null;default:true" json:"active"`
 }
 
 // PermissionAction is the source-of-truth table for gate-able action names,
