@@ -258,10 +258,93 @@ func GetExperimentByShop(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Experiment retrieved successfully", "data": response})
 }
 
+type addExperimentSetBody struct {
+	LandingPageID string `json:"landingPageId"`
+}
+
+// AddLandingPageToExperimentByShop appends one more standalone landing page
+// (same product, not already in a test) as a new set on a running
+// experiment. Round-robin picks it up automatically next assignment —
+// AssignExperimentVariant re-reads active sets from DB on every call, no
+// cursor/position rebalancing needed.
+func AddLandingPageToExperimentByShop(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID", "error": err.Error()})
+		return
+	}
+	experimentID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid experiment ID", "error": err.Error()})
+		return
+	}
+
+	var experiment models.LandingPageExperiment
+	if err := initializers.DB.Where("id = ? AND shop_id = ?", experimentID, shopID).First(&experiment).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Experiment not found", "error": err.Error()})
+		return
+	}
+	if experiment.Status != models.ExperimentStatusRunning {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Landing pages can only be added to a running test"})
+		return
+	}
+
+	var body addExperimentSetBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		return
+	}
+	landingPageID, err := uuid.Parse(body.LandingPageID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid landing page ID", "error": err.Error()})
+		return
+	}
+
+	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
+		var setCount int64
+		if err := tx.Model(&models.LandingPage{}).Where("experiment_id = ?", experimentID).Count(&setCount).Error; err != nil {
+			return err
+		}
+
+		res := tx.Model(&models.LandingPage{}).
+			Where("id = ? AND shop_id = ? AND product_id = ? AND experiment_id IS NULL", landingPageID, shopID, experiment.ProductID).
+			Updates(map[string]interface{}{"experiment_id": experimentID, "experiment_position": setCount})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Landing page is invalid, belongs to a different product, or is already in a test"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to add landing page to the test", "error": err.Error()})
+		return
+	}
+
+	var updated models.LandingPageExperiment
+	if err := loadExperimentWithSets(initializers.DB, shopID, experimentID, &updated); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to reload experiment", "error": err.Error()})
+		return
+	}
+
+	response, err := buildExperimentResponse(updated)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to compute experiment standings", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Landing page added to the test successfully", "data": response})
+}
+
 type updateExperimentBody struct {
 	Name              *string `json:"name"`
 	TargetConversions *int    `json:"targetConversions"`
-	Status            *string `json:"status"` // only "stopped" is accepted here
+	Status            *string `json:"status"` // "stopped", or "running" to reactivate a stopped test
 }
 
 func UpdateExperimentByShop(c *gin.Context) {
@@ -298,11 +381,19 @@ func UpdateExperimentByShop(c *gin.Context) {
 		updates["target_conversions"] = *body.TargetConversions
 	}
 	if body.Status != nil {
-		if *body.Status != models.ExperimentStatusStopped {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Status can only be set to 'stopped' here"})
+		switch *body.Status {
+		case models.ExperimentStatusStopped:
+			updates["status"] = models.ExperimentStatusStopped
+		case models.ExperimentStatusRunning:
+			if experiment.Status != models.ExperimentStatusStopped {
+				c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Only a stopped test can be reactivated"})
+				return
+			}
+			updates["status"] = models.ExperimentStatusRunning
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Status can only be set to 'stopped' or 'running' here"})
 			return
 		}
-		updates["status"] = models.ExperimentStatusStopped
 	}
 
 	if len(updates) > 0 {
