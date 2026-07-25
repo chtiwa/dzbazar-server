@@ -127,52 +127,57 @@ func BulkAssignOrders(shopID uuid.UUID, orderIDs []uuid.UUID, memberID *uuid.UUI
 	return result.RowsAffected, result.Error
 }
 
-// ConfirmatriceRate is one confirmatrice's assigned/confirmed tally over an
-// optional date window.
+// ConfirmatriceRate is one shop member's confirmation/delivery tally over an
+// optional date window. Includes all roles (owner, moderator, confirmation);
+// counts orders where this member is the actor on any status-change audit entry,
+// not just orders formally assigned to them.
 type ConfirmatriceRate struct {
-	MemberID  uuid.UUID `json:"memberId"`
-	FirstName string    `json:"firstName"`
-	LastName  string    `json:"lastName"`
-	Email     string    `json:"email"`
-	Total     int64     `json:"total"`
-	Confirmed int64     `json:"confirmed"`
-	Rate      *float64  `json:"rate"`
+	MemberID      uuid.UUID `json:"memberId"`
+	Role          string    `json:"role"`
+	FirstName     string    `json:"firstName"`
+	LastName      string    `json:"lastName"`
+	Email         string    `json:"email"`
+	Total         int64     `json:"total"`
+	Confirmed     int64     `json:"confirmed"`
+	Delivered     int64     `json:"delivered"`
+	Rate          *float64  `json:"rate"`
+	DeliveredRate *float64  `json:"deliveredRate"`
 }
 
-// ConfirmationRates returns the "taux de confirmation" leaderboard: per
-// confirmation-role member, how many assigned orders (excluding still-pending
-// "En attente") reached a confirmed-or-downstream status. "Confirmed" is read
-// from the order.status_changed audit trail already written by
-// UpdateOrderByShopID — same "was it ever confirmed" philosophy as
-// confirmationRatesByProductIDs in productsController.go — not a separate
-// stamp column, the audit log already has it.
+// ConfirmationRates returns the "taux de confirmation" report: per shop member
+// (all roles), how many orders this member acted upon (as the audit-log actor on
+// any status-change), excluding still-pending "En attente". Confirms are read
+// from audit_logs where metadata->>'to' = 'Confirmé'; delivered is the current
+// orders.status = 'Livré' of confirmed orders (carrier syncs bypass LogAudit,
+// so we read live status, not the audit trail — same pattern as deliveryRate
+// in productsController.go).
 func ConfirmationRates(shopID uuid.UUID, from, to *time.Time) ([]ConfirmatriceRate, error) {
-	db := initializers.DB.
-		Table("orders o").
-		Joins("JOIN shop_members sm ON sm.id = o.assigned_member_id").
-		Joins("JOIN users u ON u.id = sm.user_id").
-		Where("o.shop_id = ? AND o.deleted_at IS NULL AND o.assigned_member_id IS NOT NULL", shopID)
-
+	// Shop/date scope lives in the orders JOIN's ON clause (not WHERE) so a
+	// member with zero touched orders still gets a row via the LEFT JOINs.
+	ordersJoin := "LEFT JOIN orders o ON o.id = al.target_id AND o.shop_id = ? AND o.deleted_at IS NULL"
+	ordersArgs := []any{shopID}
 	if from != nil {
-		db = db.Where("o.created_at >= ?", *from)
+		ordersJoin += " AND o.created_at >= ?"
+		ordersArgs = append(ordersArgs, *from)
 	}
 	if to != nil {
-		db = db.Where("o.created_at < ?", *to)
+		ordersJoin += " AND o.created_at < ?"
+		ordersArgs = append(ordersArgs, *to)
 	}
 
-	const wasConfirmedOrBeyond = `EXISTS (
-		SELECT 1 FROM audit_logs al
-		WHERE al.target_type = 'Order' AND al.target_id = o.id
-			AND al.action = 'order.status_changed'
-			AND al.metadata::json->>'to' IN ('Confirmé', 'Livré', 'Expedié')
-	)`
-
 	var rows []ConfirmatriceRate
-	err := db.
-		Select(`sm.id AS member_id, u.first_name, u.last_name, u.email,
-			COUNT(*) FILTER (WHERE o.status <> 'En attente') AS total,
-			COUNT(*) FILTER (WHERE o.status <> 'En attente' AND `+wasConfirmedOrBeyond+`) AS confirmed`).
-		Group("sm.id, u.first_name, u.last_name, u.email").
+	err := initializers.DB.
+		Table("shop_members sm").
+		Joins("JOIN users u ON u.id = sm.user_id").
+		// actor_id is the User ID (see utils.LogAudit), not shop_member_id — join on user_id.
+		Joins("LEFT JOIN audit_logs al ON al.actor_id = sm.user_id AND al.target_type = 'Order' AND al.action = 'order.status_changed'").
+		Joins(ordersJoin, ordersArgs...).
+		Where("sm.shop_id = ?", shopID).
+		Select(`sm.id AS member_id, sm.role AS role, u.first_name, u.last_name, u.email,
+			COUNT(DISTINCT o.id) FILTER (WHERE o.status <> 'En attente') AS total,
+			COUNT(DISTINCT o.id) FILTER (WHERE o.status <> 'En attente' AND al.metadata::json->>'to' = 'Confirmé') AS confirmed,
+			COUNT(DISTINCT o.id) FILTER (WHERE al.metadata::json->>'to' = 'Confirmé' AND o.status = 'Livré') AS delivered`).
+		Group("sm.id, sm.role, u.first_name, u.last_name, u.email").
 		Order("confirmed DESC").
 		Scan(&rows).Error
 	if err != nil {
@@ -183,6 +188,10 @@ func ConfirmationRates(shopID uuid.UUID, from, to *time.Time) ([]ConfirmatriceRa
 		if rows[i].Total > 0 {
 			rate := float64(rows[i].Confirmed) * 100 / float64(rows[i].Total)
 			rows[i].Rate = &rate
+		}
+		if rows[i].Confirmed > 0 {
+			dr := float64(rows[i].Delivered) * 100 / float64(rows[i].Confirmed)
+			rows[i].DeliveredRate = &dr
 		}
 	}
 	return rows, nil
