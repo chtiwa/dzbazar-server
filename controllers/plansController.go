@@ -241,22 +241,33 @@ func GetShopSubscription(c *gin.Context) {
 		return
 	}
 
-	var sub models.ShopSubscription
+	var sub *models.ShopSubscription
 	if err := initializers.DB.
 		Preload("Plan").
 		Where("shop_id = ?", shopID).
-		First(&sub).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusOK, gin.H{"success": true, "data": nil})
-			return
-		}
+		First(&sub).Error; err != nil && err != gorm.ErrRecordNotFound {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch subscription", "error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": sub})
+	var pendingRequest *models.PlanSwitchRequest
+	if err := initializers.DB.
+		Preload("Plan").
+		Where("shop_id = ? AND status = 'pending'", shopID).
+		First(&pendingRequest).Error; err != nil && err != gorm.ErrRecordNotFound {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch pending request", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+		"subscription":   sub,
+		"pendingRequest": pendingRequest,
+	}})
 }
 
+// SubscribeShopToPlan used to switch a shop's plan immediately. It now only
+// files a pending PlanSwitchRequest — a super admin has to approve it
+// (see superadmin.ApprovePlanSwitchRequest) before ShopSubscription changes.
 func SubscribeShopToPlan(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
@@ -286,38 +297,28 @@ func SubscribeShopToPlan(c *gin.Context) {
 		return
 	}
 
-	var sub models.ShopSubscription
-	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
-		// Upsert — one subscription per shop
-		existing := tx.Where("shop_id = ?", shopID).First(&sub)
-		if existing.Error != nil && existing.Error != gorm.ErrRecordNotFound {
-			return existing.Error
-		}
-
-		sub.ShopID = shopID
-		sub.PlanID = planID
-		sub.StartedAt = time.Now()
-		sub.ExpiresAt = body.ExpiresAt
-
-		if existing.Error == gorm.ErrRecordNotFound {
-			return tx.Create(&sub).Error
-		}
-		return tx.Model(&sub).Updates(map[string]any{
-			"plan_id":                 planID,
-			"started_at":              sub.StartedAt,
-			"expires_at":              body.ExpiresAt,
-			"expiry_reminder_sent_at": nil,
-		}).Error
-	})
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update subscription", "error": err.Error()})
+	var existingPending models.PlanSwitchRequest
+	err = initializers.DB.Where("shop_id = ? AND status = 'pending'", shopID).First(&existingPending).Error
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "A plan switch request is already pending approval"})
+		return
+	}
+	if err != gorm.ErrRecordNotFound {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
 		return
 	}
 
-	initializers.DB.Preload("Plan").First(&sub, "shop_id = ?", shopID)
+	request := models.PlanSwitchRequest{ShopID: shopID, PlanID: planID, Status: "pending"}
+	if err := initializers.DB.Create(&request).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to request plan switch", "error": err.Error()})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Subscription updated successfully", "data": sub})
+	utils.LogAudit(c, "plan_switch_request.create", "PlanSwitchRequest", &request.ID, gin.H{"shopId": shopID, "planId": planID})
+
+	initializers.DB.Preload("Plan").First(&request, "id = ?", request.ID)
+
+	c.JSON(http.StatusCreated, gin.H{"success": true, "message": "Plan switch requested — pending super admin approval", "data": request})
 }
 
 func CancelShopSubscription(c *gin.Context) {

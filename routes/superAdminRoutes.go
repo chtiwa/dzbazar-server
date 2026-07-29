@@ -33,6 +33,10 @@ func SuperAdminRoutes(router *gin.Engine) {
 		admin.GET("/orders", superadmin.ListOrders)
 		admin.GET("/subscriptions", superadmin.ListSubscriptions)
 
+		admin.GET("/plan-requests", superadmin.ListPlanSwitchRequests)
+		admin.POST("/plan-requests/:id/approve", superadmin.ApprovePlanSwitchRequest)
+		admin.POST("/plan-requests/:id/reject", superadmin.RejectPlanSwitchRequest)
+
 		admin.GET("/plans", controllers.GetPlans)
 		admin.POST("/plans", controllers.CreatePlan)
 		admin.PATCH("/plans/:id", controllers.UpdatePlan)

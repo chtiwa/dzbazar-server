@@ -204,6 +204,16 @@ func CreatePixel(c *gin.Context) {
 		return
 	}
 
+	// ponytail: only one active pixel per shop+platform. New pixel starts active
+	// only if no other active pixel exists for this platform yet.
+	var activeCount int64
+	if err := initializers.DB.Model(&models.Pixel{}).
+		Where("shop_id = ? AND platform = ? AND is_active = ?", shopID, platform, true).
+		Count(&activeCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to check active pixels", "error": err.Error()})
+		return
+	}
+
 	pixel := models.Pixel{
 		ShopID:         shopID,
 		Platform:       platform,
@@ -211,6 +221,7 @@ func CreatePixel(c *gin.Context) {
 		PixelID:        pixelID,
 		HasAccessToken: accessToken != "",
 		AccessToken:    accessToken,
+		IsActive:       activeCount == 0,
 	}
 
 	if err := initializers.DB.Create(&pixel).Error; err != nil {
