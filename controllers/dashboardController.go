@@ -146,10 +146,11 @@ func GetOrdersDashboard(c *gin.Context) {
 	// Livré = cash actually collected (COD). Pending = still in play, not yet
 	// collected and not dead (Annulé/Abandonné).
 	var rev struct {
-		DeliveredRevenue float64
-		PendingRevenue   float64
-		DeliveredOrders  int64
-		ShippedOrders    int64
+		DeliveredRevenue    float64
+		DeliveredNetRevenue float64
+		PendingRevenue      float64
+		DeliveredOrders     int64
+		ShippedOrders       int64
 	}
 	revQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
 	if hasDateFilter {
@@ -157,6 +158,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 	if err := revQ.Select(`
 			COALESCE(SUM(CASE WHEN status = 'Livré' THEN total_price END), 0) AS delivered_revenue,
+			COALESCE(SUM(CASE WHEN status = 'Livré' THEN total_price - COALESCE(shipping_price, 0) END), 0) AS delivered_net_revenue,
 			COALESCE(SUM(CASE WHEN status NOT IN ('Livré', 'Annulé', 'Abandonné') THEN total_price END), 0) AS pending_revenue,
 			COUNT(*) FILTER (WHERE status = 'Livré') AS delivered_orders,
 			COUNT(*) FILTER (WHERE is_shipped = true) AS shipped_orders
@@ -164,9 +166,14 @@ func GetOrdersDashboard(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching revenue stats", "error": err.Error()})
 		return
 	}
+	// AOV is merchandise-only: shipping is passed through to the carrier, so
+	// including it inflates the figure by the delivery tarif and makes AOV
+	// track wilaya mix (Tamanrasset ships at 1600 DA, Alger at 350) instead of
+	// basket size. DeliveredRevenue above deliberately still includes shipping
+	// — that one is cash actually collected at the door (COD).
 	avgOrderValue := 0.0
 	if rev.DeliveredOrders > 0 {
-		avgOrderValue = rev.DeliveredRevenue / float64(rev.DeliveredOrders)
+		avgOrderValue = rev.DeliveredNetRevenue / float64(rev.DeliveredOrders)
 	}
 	// Of orders actually dispatched to a carrier (is_shipped), what fraction
 	// arrived. Denominator is shipment attempts, not all orders — orders

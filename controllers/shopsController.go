@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -31,13 +32,16 @@ type CreateShopInput struct {
 }
 
 type UpdateShopInput struct {
-	Name        *string `form:"name"`
-	Slug        *string `form:"slug"`
-	Description *string `form:"description"`
-	Phone       *string `form:"phone"`
-	Email       *string `form:"email"`
-	Address     *string `form:"address"`
-	IsActive    *bool   `form:"isActive"`
+	Name         *string `form:"name"`
+	Slug         *string `form:"slug"`
+	Description  *string `form:"description"`
+	Phone        *string `form:"phone"`
+	Email        *string `form:"email"`
+	Address      *string `form:"address"`
+	FacebookURL  *string `form:"facebookUrl"`
+	InstagramURL *string `form:"instagramUrl"`
+	TiktokURL    *string `form:"tiktokUrl"`
+	IsActive     *bool   `form:"isActive"`
 }
 
 type MyShopResponse struct {
@@ -527,6 +531,40 @@ func UpdateShop(c *gin.Context) {
 			return
 		}
 		updateData["address"] = trimmedAddress
+	}
+
+	socialFields := []struct {
+		input  *string
+		column string
+		label  string
+	}{
+		{input.FacebookURL, "facebook_url", "Facebook"},
+		{input.InstagramURL, "instagram_url", "Instagram"},
+		{input.TiktokURL, "tiktok_url", "TikTok"},
+	}
+	for _, f := range socialFields {
+		if f.input == nil {
+			continue
+		}
+		trimmed := strings.TrimSpace(*f.input)
+		if trimmed != "" {
+			if len(trimmed) > 300 {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": fmt.Sprintf("%s link is too long", f.label),
+				})
+				return
+			}
+			parsed, parseErr := url.ParseRequestURI(trimmed)
+			if parseErr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"success": false,
+					"message": fmt.Sprintf("Invalid %s link", f.label),
+				})
+				return
+			}
+		}
+		updateData[f.column] = trimmed
 	}
 
 	if input.IsActive != nil {
