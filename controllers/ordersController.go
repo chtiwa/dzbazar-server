@@ -174,13 +174,14 @@ func GetOrdersByShopID(c *gin.Context) {
 	dateTo := c.Query("dateTo")
 	flaggedOnly := c.Query("flagged") == "true"
 	productID := strings.TrimSpace(c.Query("productId"))
+	platform := c.Query("platform")
 
 	// A confirmatrice only ever sees orders assigned to her — never the
 	// shop's shared default-view cache, which isn't scoped per-member.
 	isConfirmatrice := membership.Role == "confirmation"
 
 	isDefaultView := !isConfirmatrice && page == 1 && perPage == 10 && (status == "" || status == "Tous") &&
-		search == "" && dateFrom == "" && dateTo == "" && !flaggedOnly && productID == ""
+		search == "" && dateFrom == "" && dateTo == "" && !flaggedOnly && productID == "" && platform == ""
 
 	if isDefaultView {
 		if cached, err := initializers.RClient.Get(initializers.Ctx, ordersListCacheKey(shopID)).Bytes(); err == nil {
@@ -230,6 +231,16 @@ func GetOrdersByShopID(c *gin.Context) {
 				parsedProductID,
 			)
 		}
+	}
+
+	// "organic" also covers the empty string — manually-created (admin
+	// panel) orders never set ConversionSource, and the UI already renders
+	// that the same as "organic" (see getSourceIcon).
+	switch platform {
+	case "organic":
+		baseQuery = baseQuery.Where("COALESCE(orders.conversion_source, '') = '' OR orders.conversion_source = ?", platform)
+	case "facebook", "tiktok":
+		baseQuery = baseQuery.Where("orders.conversion_source = ?", platform)
 	}
 
 	var totalRows int64
