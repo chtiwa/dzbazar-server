@@ -2328,5 +2328,16 @@ func invalidateProductCaches(productID uuid.UUID, shopID uuid.UUID) {
 				initializers.RClient.Del(ctx, key)
 			}
 		}
+
+		// Landing pages embed the product (incl. variants/combinations) at cache-write
+		// time, so any product change must also bust the landing pages built from it.
+		var landingPageIDs []uuid.UUID
+		initializers.DB.Model(&models.LandingPage{}).
+			Where("product_id = ?", productID).
+			Pluck("id", &landingPageIDs)
+		for _, id := range landingPageIDs {
+			initializers.RClient.Del(ctx, services.LandingPageCacheKeyByID(id))
+		}
+		initializers.RClient.Del(ctx, services.LandingPagesCacheKeyByShop(shopID))
 	}()
 }

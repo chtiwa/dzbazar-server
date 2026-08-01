@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -103,9 +104,14 @@ func findOsenMunicipalityID(stateCode, cityName string) (int, error) {
 		return 0, fmt.Errorf("failed to load Osen geography: %w", err)
 	}
 
+	stateCodeInt, err := strconv.Atoi(stateCode)
+	if err != nil {
+		return 0, fmt.Errorf("invalid wilaya code %q: %w", stateCode, err)
+	}
+
 	var target *initializers.OsenProvinceSeed
 	for i, p := range provinces {
-		if fmt.Sprintf("%d", p.ID) == stateCode {
+		if p.ID == stateCodeInt {
 			target = &provinces[i]
 			break
 		}

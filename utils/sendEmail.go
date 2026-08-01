@@ -4,18 +4,31 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/resendlabs/resend-go"
 )
 
+// OrderEmailItem is one line item on the order confirmation email: a product
+// + variant + quantity, priced at the unit price actually charged (which,
+// for an offer/quantity-package item, is the package's per-unit price, not
+// the plain combination price — see services.PricedOrderItem).
+type OrderEmailItem struct {
+	ProductName string
+	Variant     string
+	Quantity    uint
+	UnitPrice   float64
+	LineTotal   float64
+}
+
 func SendOrderEmail(
 	shopName string,
 	recipients []string,
-	fullName, phoneNumber, state, city, productName, variant, shippingMethod string,
-	quantity uint,
-	price, shippingPrice, totalPrice float64,
+	fullName, phoneNumber, state, city, platform, shippingMethod string,
+	items []OrderEmailItem,
+	shippingPrice, totalPrice float64,
 ) error {
 	if len(recipients) == 0 {
 		return nil
@@ -24,6 +37,22 @@ func SendOrderEmail(
 	client := resend.NewClient(os.Getenv("RESEND_API_KEY"))
 	if client == nil {
 		return fmt.Errorf("failed to initialize Resend client")
+	}
+
+	var itemsRows strings.Builder
+	for _, item := range items {
+		variant := item.Variant
+		if variant == "" {
+			variant = "Standard"
+		}
+		itemsRows.WriteString(fmt.Sprintf(`
+		<tr>
+			<td style="padding:6px;border-bottom:1px solid #eee;">%s</td>
+			<td style="padding:6px;border-bottom:1px solid #eee;">%s</td>
+			<td style="padding:6px;border-bottom:1px solid #eee;text-align:center;">%d</td>
+			<td style="padding:6px;border-bottom:1px solid #eee;text-align:right;">%.2f DA</td>
+			<td style="padding:6px;border-bottom:1px solid #eee;text-align:right;">%.2f DA</td>
+		</tr>`, item.ProductName, variant, item.Quantity, item.UnitPrice, item.LineTotal))
 	}
 
 	// HTML body
@@ -39,6 +68,8 @@ func SendOrderEmail(
 		.header { background: #007bff; color: white; text-align: center; padding: 15px; font-size: 22px; font-weight: bold; border-radius: 8px 8px 0 0; }
 		.order-details { padding: 20px; font-size: 16px; line-height: 1.5; color: #333; }
 		.order-details p { margin: 8px 0; }
+		table { width: 100%%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+		th { text-align: left; padding: 6px; border-bottom: 2px solid #333; }
 		.footer { text-align: center; font-size: 14px; color: #666; margin-top: 20px; }
 	</style>
 	</head>
@@ -50,10 +81,13 @@ func SendOrderEmail(
 		<p><strong>Téléphone:</strong> %s</p>
 		<p><strong>Wilaya:</strong> %s</p>
 		<p><strong>Commune:</strong> %s</p>
-		<p><strong>Produit:</strong> %s</p>
-		<p><strong>Variant:</strong> %s</p>
-		<p><strong>Quantité:</strong> %d</p>
-		<p><strong>Prix unitaire:</strong> %.2f DA</p>
+		<p><strong>Plateforme:</strong> %s</p>
+		<table>
+			<thead>
+			<tr><th>Produit</th><th>Variant</th><th>Qté</th><th>Prix unitaire</th><th>Total</th></tr>
+			</thead>
+			<tbody>%s</tbody>
+		</table>
 		<p><strong>Méthode de livraison:</strong> %s</p>
 		<p><strong>Frais de livraison:</strong> %.2f DA</p>
 		<p><strong>Prix total:</strong> %.2f DA</p>
@@ -65,7 +99,7 @@ func SendOrderEmail(
 	</body>
 	</html>`,
 		shopName, shopName,
-		fullName, phoneNumber, state, city, productName, variant, quantity, price, shippingMethod, shippingPrice, totalPrice,
+		fullName, phoneNumber, state, city, platform, itemsRows.String(), shippingMethod, shippingPrice, totalPrice,
 		shopName)
 
 	// Build the email request

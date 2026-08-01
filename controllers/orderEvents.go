@@ -149,6 +149,26 @@ func processOrderEvent(orderID uuid.UUID) {
 			}
 		}
 
+		emailItems := make([]utils.OrderEmailItem, 0, len(fullOrder.Items))
+		for _, item := range fullOrder.Items {
+			name := item.Product.Title
+			if name == "" {
+				name = "Produit"
+			}
+			emailItems = append(emailItems, utils.OrderEmailItem{
+				ProductName: name,
+				Variant:     item.ProductVariantCombination.CombinationString,
+				Quantity:    item.Quantity,
+				UnitPrice:   item.Price,
+				LineTotal:   item.Price * float64(item.Quantity),
+			})
+		}
+
+		platform := fullOrder.ConversionSource
+		if platform == "" {
+			platform = "Organique"
+		}
+
 		if emailErr := utils.SendOrderEmail(
 			shop.Name,
 			recipients,
@@ -156,11 +176,9 @@ func processOrderEvent(orderID uuid.UUID) {
 			fullOrder.Client.PhoneNumber,
 			fullOrder.Client.State,
 			fullOrder.Client.City,
-			mainProductName,
-			"See order components explicitly",
+			platform,
 			fullOrder.ShippingMethod,
-			1,
-			fullOrder.TotalPrice,
+			emailItems,
 			fullOrder.ShippingPrice,
 			fullOrder.TotalPrice,
 		); emailErr != nil {
