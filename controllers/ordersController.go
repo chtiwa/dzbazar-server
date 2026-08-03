@@ -1270,6 +1270,97 @@ func BanOrderClient(c *gin.Context) {
 	})
 }
 
+// UnshipOrder reverses a previously-shipped order: restores the stock that
+// was decremented at ship time, and clears shipped_at/shipped_via_id/
+// tracking_number so the order shows up as unshipped again — free to be
+// re-shipped to a different carrier via CreateOsenOrder/CreateZrOrder/
+// CreateLeopardOrder, which already refuse to double-ship an IsShipped order.
+//
+// ponytail: local reversal only — none of the Osen/ZR/Leopard integrations in
+// this codebase expose a cancel/delete-order endpoint, so the parcel record
+// still exists at the original carrier. The owner is expected to cancel it
+// there out-of-band (phone/dashboard) before or after re-shipping elsewhere.
+func UnshipOrder(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid or missing Shop ID",
+		})
+		return
+	}
+
+	orderID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid Order ID format",
+		})
+		return
+	}
+
+	errNotShipped := errors.New("order not shipped")
+
+	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
+		var order models.Order
+		if err := tx.Preload("Items").
+			Where("id = ? AND shop_id = ?", orderID, shopID).
+			First(&order).Error; err != nil {
+			return err
+		}
+
+		if !order.IsShipped {
+			return errNotShipped
+		}
+
+		if err := services.RestoreOrderItemsStock(tx, order.Items); err != nil {
+			return err
+		}
+
+		return tx.Model(&models.Order{}).
+			Where("id = ? AND shop_id = ?", order.ID, shopID).
+			Updates(map[string]any{
+				"is_shipped":      false,
+				"shipped_at":      nil,
+				"shipped_via_id":  nil,
+				"tracking_number": "",
+				"status":          "Confirmé",
+			}).Error
+	})
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "Order not found or does not belong to this shop",
+			})
+			return
+		}
+
+		if errors.Is(err, errNotShipped) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Cette commande n'a pas encore été expédiée",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to reverse shipment",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	invalidateOrdersListCache(shopID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Expédition annulée — la commande peut être ré-expédiée",
+	})
+}
+
 type AssignOrderInput struct {
 	MemberID *string `json:"memberId"`
 }

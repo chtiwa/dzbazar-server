@@ -62,7 +62,7 @@ func GetShopStock(c *gin.Context) {
 		Joins("LEFT JOIN variant_items o1 ON o1.id = c.option1_id").
 		Joins("LEFT JOIN variant_items o2 ON o2.id = c.option2_id").
 		Joins("LEFT JOIN variant_items o3 ON o3.id = c.option3_id").
-		Where("p.shop_id = ? AND c.deleted_at IS NULL", shopID)
+		Where("p.shop_id = ? AND c.deleted_at IS NULL AND c.retired = false", shopID)
 
 	if search != "" {
 		like := "%" + search + "%"

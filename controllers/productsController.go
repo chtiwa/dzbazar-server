@@ -632,7 +632,7 @@ func GetProductsByShopAdmin(c *gin.Context) {
 		Preload("Images").
 		Preload("Variants").
 		Preload("Variants.VariantItems").
-		Preload("Combinations")
+		Preload("Combinations", "retired = ?", false)
 
 	if search != "" {
 		words := strings.Fields(search)
@@ -776,7 +776,7 @@ func GetProductByIDAdmin(c *gin.Context) {
 		Preload("Images").
 		Preload("Variants").
 		Preload("Variants.VariantItems").
-		Preload("Combinations").
+		Preload("Combinations", "retired = ?", false).
 		Preload("Combinations.Option1").
 		Preload("Combinations.Option2").
 		Preload("Combinations.Option3").
@@ -1003,7 +1003,7 @@ func IndexProductBySlug(c *gin.Context) {
 		Preload("Images").
 		Preload("Variants").
 		Preload("Variants.VariantItems").
-		Preload("Combinations").
+		Preload("Combinations", "retired = ?", false).
 		Preload("Combinations.Option1").
 		Preload("Combinations.Option2").
 		Preload("Combinations.Option3").
@@ -1536,6 +1536,7 @@ func UpdateProductByShop(c *gin.Context) {
 					"option2_id":         rc.opt2ID,
 					"option3_id":         rc.opt3ID,
 					"combination_string": rc.combinationString,
+					"retired":            false,
 				}).Error; err != nil {
 					tx.Rollback()
 					c.JSON(http.StatusInternalServerError, gin.H{
@@ -1586,8 +1587,13 @@ func UpdateProductByShop(c *gin.Context) {
 					return
 				}
 			} else {
-				// Has order references — retire it instead of deleting
-				if err := tx.Model(&existing).Update("quantity", 0).Error; err != nil {
+				// Has order references — retire it instead of deleting. Retired is a
+				// separate flag from quantity=0 because quantity=0 alone still means
+				// "in stock zero, but sellable" elsewhere in the app.
+				if err := tx.Model(&existing).Updates(map[string]any{
+					"quantity": 0,
+					"retired":  true,
+				}).Error; err != nil {
 					tx.Rollback()
 					c.JSON(http.StatusInternalServerError, gin.H{
 						"success": false,
@@ -1605,7 +1611,7 @@ func UpdateProductByShop(c *gin.Context) {
 		Preload("Images").
 		Preload("Variants").
 		Preload("Variants.VariantItems").
-		Preload("Combinations").
+		Preload("Combinations", "retired = ?", false).
 		Where("id = ? AND shop_id = ?", productID, shopID).
 		First(&product).Error; err != nil {
 		tx.Rollback()

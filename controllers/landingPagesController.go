@@ -45,7 +45,7 @@ func loadLandingPageByShop(tx *gorm.DB, shopID, landingPageID uuid.UUID, landing
 		}).
 		Preload("Product.Variants").
 		Preload("Product.Variants.VariantItems").
-		Preload("Product.Combinations").
+		Preload("Product.Combinations", "retired = ?", false).
 		Preload("Product.Combinations.Option1").
 		Preload("Product.Combinations.Option2").
 		Preload("Product.Combinations.Option3").
@@ -490,7 +490,7 @@ func IndexLandingPage(c *gin.Context) {
 		}).
 		Preload("Product.Variants").
 		Preload("Product.Variants.VariantItems").
-		Preload("Product.Combinations").
+		Preload("Product.Combinations", "retired = ?", false).
 		Preload("Product.Combinations.Option1").
 		Preload("Product.Combinations.Option2").
 		Preload("Product.Combinations.Option3").

@@ -44,14 +44,16 @@ func ResolveShipping(rate models.DeliveryRate, method string) (float64, error) {
 // FetchCombinationsForShop batch-loads ProductVariantCombination rows by id,
 // scoped to shopID via a join to products, so a combination id belonging to
 // another shop (or one that doesn't exist) can never be used to price an
-// order item. Callers must check the returned map for each requested id —
-// a miss means the request referenced an unknown/foreign combination and
-// the order should be rejected, not silently skipped.
+// order item. Retired combos (deleted SKUs kept for FK integrity) are
+// excluded, so a stale client can't check out with a deleted SKU. Callers
+// must check the returned map for each requested id — a miss means the
+// request referenced an unknown/foreign/retired combination and the order
+// should be rejected, not silently skipped.
 func FetchCombinationsForShop(tx *gorm.DB, shopID uuid.UUID, comboIDs []uuid.UUID) (map[uuid.UUID]models.ProductVariantCombination, error) {
 	var combos []models.ProductVariantCombination
 	if err := tx.
 		Joins("JOIN products ON products.id = product_variant_combinations.product_id").
-		Where("product_variant_combinations.id IN ? AND products.shop_id = ?", comboIDs, shopID).
+		Where("product_variant_combinations.id IN ? AND products.shop_id = ? AND product_variant_combinations.retired = ?", comboIDs, shopID, false).
 		Find(&combos).Error; err != nil {
 		return nil, err
 	}
@@ -72,6 +74,21 @@ func DecrementOrderItemsStock(tx *gorm.DB, items []models.OrderItem) error {
 		if err := tx.Model(&models.ProductVariantCombination{}).
 			Where("id = ?", item.ProductVariantCombinationID).
 			UpdateColumn("quantity", gorm.Expr("quantity - ?", item.Quantity)).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RestoreOrderItemsStock is the inverse of DecrementOrderItemsStock — puts
+// the quantity back on each ordered variant combination. Called when a
+// shipped order is unshipped (reversed), so stock isn't double-decremented
+// if the owner re-ships it to another carrier afterward.
+func RestoreOrderItemsStock(tx *gorm.DB, items []models.OrderItem) error {
+	for _, item := range items {
+		if err := tx.Model(&models.ProductVariantCombination{}).
+			Where("id = ?", item.ProductVariantCombinationID).
+			UpdateColumn("quantity", gorm.Expr("quantity + ?", item.Quantity)).Error; err != nil {
 			return err
 		}
 	}
