@@ -11,7 +11,7 @@ func TestPricedOrderItem(t *testing.T) {
 	combo := models.ProductVariantCombination{Price: 2900}
 
 	t.Run("no offerId falls back to combo price", func(t *testing.T) {
-		unitPrice, lineTotal := PricedOrderItem(combo, 1, nil, map[uuid.UUID]models.Offer{})
+		unitPrice, lineTotal := PricedOrderItem(combo, 1, 1, nil, map[uuid.UUID]models.Offer{})
 		if unitPrice != 2900 || lineTotal != 2900 {
 			t.Errorf("got (%v, %v), want (2900, 2900)", unitPrice, lineTotal)
 		}
@@ -19,7 +19,7 @@ func TestPricedOrderItem(t *testing.T) {
 
 	t.Run("unresolvable offerId falls back to combo price", func(t *testing.T) {
 		id := uuid.New().String()
-		unitPrice, lineTotal := PricedOrderItem(combo, 1, &id, map[uuid.UUID]models.Offer{})
+		unitPrice, lineTotal := PricedOrderItem(combo, 1, 1, &id, map[uuid.UUID]models.Offer{})
 		if unitPrice != 2900 || lineTotal != 2900 {
 			t.Errorf("got (%v, %v), want (2900, 2900) — unresolved offer must never change price", unitPrice, lineTotal)
 		}
@@ -31,7 +31,7 @@ func TestPricedOrderItem(t *testing.T) {
 		offers := map[uuid.UUID]models.Offer{
 			offerID: {DiscountType: "percent", DiscountValue: 10},
 		}
-		unitPrice, lineTotal := PricedOrderItem(combo, 3, &idStr, offers)
+		unitPrice, lineTotal := PricedOrderItem(combo, 3, 3, &idStr, offers)
 		if unitPrice != 2610 || lineTotal != 7830 {
 			t.Errorf("got (%v, %v), want (2610, 7830) — 10%% off 2900, client-sent price must be ignored", unitPrice, lineTotal)
 		}
@@ -51,7 +51,7 @@ func TestPricedOrderItem(t *testing.T) {
 				},
 			},
 		}
-		unitPrice, lineTotal := PricedOrderItem(combo, 2, &idStr, offers)
+		unitPrice, lineTotal := PricedOrderItem(combo, 2, 2, &idStr, offers)
 		if unitPrice != 2650 || lineTotal != 5300 {
 			t.Errorf("got (%v, %v), want (2650, 5300) — 5300/2 per-unit for the 2-pack tier, exact total", unitPrice, lineTotal)
 		}
@@ -67,7 +67,7 @@ func TestPricedOrderItem(t *testing.T) {
 				QuantityPackages: []models.OfferQuantityPackage{{Quantity: 3, TotalPrice: 7700}},
 			},
 		}
-		unitPrice, lineTotal := PricedOrderItem(combo, 3, &idStr, offers)
+		unitPrice, lineTotal := PricedOrderItem(combo, 3, 3, &idStr, offers)
 		// 7700/3 = 2566.67 -> rounds to 2567 for display, but the charged
 		// total must stay exactly 7700, not 2567*3=7701 (the regression this
 		// test guards: reported as "8501 instead of 8500" with an 800 DA
@@ -90,9 +90,32 @@ func TestPricedOrderItem(t *testing.T) {
 				QuantityPackages: []models.OfferQuantityPackage{{Quantity: 1, TotalPrice: 2900}},
 			},
 		}
-		unitPrice, lineTotal := PricedOrderItem(combo, 5, &idStr, offers)
+		unitPrice, lineTotal := PricedOrderItem(combo, 5, 5, &idStr, offers)
 		if unitPrice != 2900 || lineTotal != 14500 {
 			t.Errorf("got (%v, %v), want (2900, 14500) — tampered quantity with no matching tier must not get a discount", unitPrice, lineTotal)
+		}
+	})
+
+	t.Run("multi-variant package split across lines still matches the full-package tier", func(t *testing.T) {
+		// e.g. a 3-pack where the customer picked 2 of one variant and 1 of
+		// another — checkout sends two OrderItems for the same offerId, each
+		// with its own partial quantity (2 and 1), but the tier is keyed on 3.
+		offerID := uuid.New()
+		idStr := offerID.String()
+		quantityUpsell := "quantity_upsell"
+		offers := map[uuid.UUID]models.Offer{
+			offerID: {
+				OfferType:        &quantityUpsell,
+				QuantityPackages: []models.OfferQuantityPackage{{Quantity: 3, TotalPrice: 7500}},
+			},
+		}
+		unitPrice, lineTotal := PricedOrderItem(combo, 2, 3, &idStr, offers)
+		if unitPrice != 2500 || lineTotal != 5000 {
+			t.Errorf("got (%v, %v), want (2500, 5000) — 7500/3 per-unit applied to this line's 2 units", unitPrice, lineTotal)
+		}
+		unitPrice2, lineTotal2 := PricedOrderItem(combo, 1, 3, &idStr, offers)
+		if unitPrice2 != 2500 || lineTotal2 != 2500 {
+			t.Errorf("got (%v, %v), want (2500, 2500) — same tier, this line's remaining 1 unit", unitPrice2, lineTotal2)
 		}
 	})
 }

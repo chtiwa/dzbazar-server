@@ -528,13 +528,28 @@ func CreateOrderByShopID(c *gin.Context) {
 			return err
 		}
 
+		// A quantity_upsell package chosen across multiple variants arrives as
+		// several OrderItems sharing one offerId, each carrying only its own
+		// slice of the package. Tier lookup needs the full package size, not
+		// any single line's quantity — sum per offerId up front.
+		packageQtyByOffer := map[string]uint{}
+		for _, item := range body.Items {
+			if item.OfferID != nil {
+				packageQtyByOffer[*item.OfferID] += item.Quantity
+			}
+		}
+
 		for i, item := range body.Items {
 			combo, ok := comboByID[comboIDs[i]]
 			if !ok {
 				return fmt.Errorf("combination not found for this shop: %s", item.ProductVariantCombinationID)
 			}
 
-			unitPrice, lineTotal := services.PricedOrderItem(combo, item.Quantity, item.OfferID, offerByID)
+			packageQty := item.Quantity
+			if item.OfferID != nil {
+				packageQty = packageQtyByOffer[*item.OfferID]
+			}
+			unitPrice, lineTotal := services.PricedOrderItem(combo, item.Quantity, packageQty, item.OfferID, offerByID)
 
 			orderItems = append(orderItems, models.OrderItem{
 				ProductID:                   combo.ProductID,

@@ -164,8 +164,15 @@ func ComputeOfferedPrice(basePrice float64, discountType string, discountValue f
 // drift from the merchant's configured total (7701 instead of 7700); the
 // line total must always be the exact configured amount, the per-unit price
 // is a rounded display value only.
-func PricedOrderItem(combo models.ProductVariantCombination, quantity uint, offerID *string, offerByID map[uuid.UUID]models.Offer) (unitPrice float64, lineTotal float64) {
-	fallback := func() (float64, float64) { return combo.Price, combo.Price * float64(quantity) }
+//
+// packageQuantity is the tier to match against — the customer's full package
+// pick, e.g. 3 for a 3-pack — which can differ from itemQuantity when a
+// multi-variant package split into several OrderItems (one per chosen
+// variant, same offerID, each with its own partial quantity). Matching tiers
+// by itemQuantity in that case would never find the 3-pack tier and silently
+// fall back to full retail price for every split line.
+func PricedOrderItem(combo models.ProductVariantCombination, itemQuantity uint, packageQuantity uint, offerID *string, offerByID map[uuid.UUID]models.Offer) (unitPrice float64, lineTotal float64) {
+	fallback := func() (float64, float64) { return combo.Price, combo.Price * float64(itemQuantity) }
 
 	if offerID == nil {
 		return fallback()
@@ -179,12 +186,16 @@ func PricedOrderItem(combo models.ProductVariantCombination, quantity uint, offe
 		return fallback()
 	}
 	if offer.OfferType != nil && *offer.OfferType == "quantity_upsell" {
-		pkg, found := PackageForQuantity(offer.QuantityPackages, int(quantity))
+		pkg, found := PackageForQuantity(offer.QuantityPackages, int(packageQuantity))
 		if !found {
 			return fallback()
 		}
-		return math.Round(pkg.TotalPrice / float64(quantity)), pkg.TotalPrice
+		unitPrice = math.Round(pkg.TotalPrice / float64(packageQuantity))
+		if itemQuantity == packageQuantity {
+			return unitPrice, pkg.TotalPrice
+		}
+		return unitPrice, unitPrice * float64(itemQuantity)
 	}
 	unitPrice = ComputeOfferedPrice(combo.Price, offer.DiscountType, offer.DiscountValue)
-	return unitPrice, unitPrice * float64(quantity)
+	return unitPrice, unitPrice * float64(itemQuantity)
 }
