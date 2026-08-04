@@ -113,6 +113,12 @@ func invalidateOrdersListCache(shopID uuid.UUID) {
 	initializers.RClient.Del(initializers.Ctx, ordersListCacheKey(shopID))
 }
 
+// orderContainsProductSQL matches orders having a live line item for the given product.
+// deleted_at guard matters: editing an order's items soft-deletes the old rows
+// (see UpdateOrderByShopID's tx.Delete on order_items), so without it an order still
+// matches a product it no longer contains.
+const orderContainsProductSQL = `EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id AND oi.deleted_at IS NULL AND oi.product_id = ?)`
+
 func GetOrdersByShopID(c *gin.Context) {
 	user, ok := c.Get("user")
 	if !ok {
@@ -226,10 +232,7 @@ func GetOrdersByShopID(c *gin.Context) {
 
 	if productID != "" {
 		if parsedProductID, err := uuid.Parse(productID); err == nil {
-			baseQuery = baseQuery.Where(
-				"EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id AND oi.product_id = ?)",
-				parsedProductID,
-			)
+			baseQuery = baseQuery.Where(orderContainsProductSQL, parsedProductID)
 		}
 	}
 
