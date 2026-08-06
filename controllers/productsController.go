@@ -120,7 +120,10 @@ func countDirectProductOrdersByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID
 }
 
 // deliveryRatesByProductIDs returns, per product, the % of shipped orders containing it that
-// currently sit at "Livré" (delivered). Nil for a product with no shipped orders yet.
+// currently sit at "Livré" (delivered). Nil for a product with no shipped orders yet. Only
+// shipments older than 3 days count (deliveryRateMaturityBuffer in dashboardController) — a
+// same-day shipment hasn't had time to arrive, so counting it here would tank the rate for no
+// carrier-related reason.
 func deliveryRatesByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]*float64, error) {
 	rates := make(map[uuid.UUID]*float64, len(productIDs))
 	if len(productIDs) == 0 {
@@ -138,8 +141,8 @@ func deliveryRatesByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]*float64, 
 		Joins("JOIN orders ON orders.id = order_items.order_id").
 		Where("order_items.product_id IN ? AND orders.deleted_at IS NULL", productIDs).
 		Select(`order_items.product_id AS product_id,
-			COUNT(DISTINCT order_items.order_id) FILTER (WHERE orders.is_shipped) AS shipped,
-			COUNT(DISTINCT order_items.order_id) FILTER (WHERE orders.status = 'Livré') AS delivered`).
+			COUNT(DISTINCT order_items.order_id) FILTER (WHERE orders.is_shipped AND orders.shipped_at <= now() - interval '3 days') AS shipped,
+			COUNT(DISTINCT order_items.order_id) FILTER (WHERE orders.status = 'Livré' AND orders.shipped_at <= now() - interval '3 days') AS delivered`).
 		Group("order_items.product_id").
 		Scan(&rows).Error
 	if err != nil {

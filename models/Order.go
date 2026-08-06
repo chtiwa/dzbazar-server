@@ -57,6 +57,10 @@ type Order struct {
 	// event. Owners can still view these under the "flagged" list filter.
 	IsHidden bool `gorm:"default:false;index:idx_orders_shop_hidden_created,priority:2" json:"isHidden"`
 
+	// Why IsHidden was set: "cussword", "banned_client", "incognito", "vpn",
+	// "datacenter", or "" for orders hidden before this column existed.
+	HiddenReason string `gorm:"not null;default:''" json:"hiddenReason"`
+
 	// IP address of the client at order time — informational only, shown to
 	// the owner reviewing a flagged order. Not used to match/ban clients:
 	// Algerian mobile carriers heavily NAT, so IP is too shared to be a

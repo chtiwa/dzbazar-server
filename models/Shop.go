@@ -23,6 +23,14 @@ type Shop struct {
 	// Round-robin cursor for confirmatrice auto-assignment (services.AutoAssignOrder).
 	ConfirmatriceCursor int64 `gorm:"not null;default:0" json:"-"`
 
+	// Per-shop fraud-signal toggles (services.FraudHiddenReason). Each defaults
+	// off — these are best-effort heuristics that shadow-ban real orders when
+	// wrong, so an owner opts in deliberately rather than inheriting a platform
+	// default.
+	BanIncognitoEnabled  bool `gorm:"not null;default:false" json:"banIncognitoEnabled"`
+	BanVpnEnabled        bool `gorm:"not null;default:false" json:"banVpnEnabled"`
+	BanDatacenterEnabled bool `gorm:"not null;default:false" json:"banDatacenterEnabled"`
+
 	Members  []ShopMember `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"members,omitempty"`
 	Products []Product    `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"products"`
 	Orders   []Order      `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"orders"`

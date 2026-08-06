@@ -42,6 +42,10 @@ type UpdateShopInput struct {
 	InstagramURL *string `form:"instagramUrl"`
 	TiktokURL    *string `form:"tiktokUrl"`
 	IsActive     *bool   `form:"isActive"`
+
+	BanIncognitoEnabled  *bool `form:"banIncognitoEnabled"`
+	BanVpnEnabled        *bool `form:"banVpnEnabled"`
+	BanDatacenterEnabled *bool `form:"banDatacenterEnabled"`
 }
 
 type MyShopResponse struct {
@@ -569,6 +573,16 @@ func UpdateShop(c *gin.Context) {
 
 	if input.IsActive != nil {
 		updateData["is_active"] = *input.IsActive
+	}
+
+	if input.BanIncognitoEnabled != nil {
+		updateData["ban_incognito_enabled"] = *input.BanIncognitoEnabled
+	}
+	if input.BanVpnEnabled != nil {
+		updateData["ban_vpn_enabled"] = *input.BanVpnEnabled
+	}
+	if input.BanDatacenterEnabled != nil {
+		updateData["ban_datacenter_enabled"] = *input.BanDatacenterEnabled
 	}
 
 	if input.Slug != nil {

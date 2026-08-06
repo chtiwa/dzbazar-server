@@ -4,6 +4,7 @@ type PaginationData struct {
 	CurrentPage int    `json:"currentPage"`
 	TotalPages  int    `json:"totalPages"`
 	BaseURL     string `json:"baseUrl"`
+	TotalRows   int64  `json:"totalRows"`
 }
 
 func GetPaginationData(page int, totalPages int, baseURL string) PaginationData {

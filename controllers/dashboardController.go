@@ -42,9 +42,18 @@ type DashboardData struct {
 	AvgOrderValue    float64      `json:"avgOrderValue"`
 	ShippedOrders    int64        `json:"shippedOrders"`
 	DeliveryRate     float64      `json:"deliveryRate"`
+	MaturedShipped   int64        `json:"maturedShipped"`
+	MaturedDelivered int64        `json:"maturedDelivered"`
+	MaturingOrders   int64        `json:"maturingOrders"`
 	ConfirmedOrders  int64        `json:"confirmedOrders"`
 	ConfirmationRate float64      `json:"confirmationRate"`
 }
+
+// deliveryRateMaturityBuffer: a shipment needs time to actually arrive before
+// counting it against the carrier. 3 days covers Alger (1-2d); slower wilayas
+// (e.g. Tamanrasset) just stay in "still in transit" a bit longer instead of
+// wrongly tanking the rate. See dashboardController deliveryRate comment.
+const deliveryRateMaturityBuffer = "3 days"
 
 func dashboardCacheKey(shopID uuid.UUID) string {
 	return fmt.Sprintf("dashboard:orders:%s", shopID)
@@ -90,10 +99,20 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 	hasProduct := productID != uuid.Nil
 
+	var deliveryCompanyID uuid.UUID
+	if v := c.Query("deliveryCompanyId"); v != "" {
+		deliveryCompanyID, err = uuid.Parse(v)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid delivery company ID"})
+			return
+		}
+	}
+	hasDeliveryCompany := deliveryCompanyID != uuid.Nil
+
 	cacheKey := dashboardCacheKey(shopID)
 
-	// Cache hit — only for unfiltered, unscoped (all-time, all-products) requests
-	if !hasDateFilter && !hasProduct {
+	// Cache hit — only for unfiltered, unscoped (all-time, all-products, all-carriers) requests
+	if !hasDateFilter && !hasProduct && !hasDeliveryCompany {
 		if cached, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Bytes(); err == nil {
 			var data DashboardData
 			if json.Unmarshal(cached, &data) == nil {
@@ -116,6 +135,9 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		dailyQ = dailyQ.Where(orderContainsProductSQL, productID)
 	}
+	if hasDeliveryCompany {
+		dailyQ = dailyQ.Where("shipped_via_id = ?", deliveryCompanyID)
+	}
 	if err := dailyQ.Select("DATE(created_at)::text AS label, COUNT(*) AS count").
 		Group("DATE(created_at)").Order("DATE(created_at) ASC").Scan(&daily).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching daily stats", "error": err.Error()})
@@ -131,6 +153,9 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 	if hasProduct {
 		weeklyQ = weeklyQ.Where(orderContainsProductSQL, productID)
+	}
+	if hasDeliveryCompany {
+		weeklyQ = weeklyQ.Where("shipped_via_id = ?", deliveryCompanyID)
 	}
 	if err := weeklyQ.Select("TO_CHAR(DATE_TRUNC('week', created_at), 'IYYY-IW') AS label, COUNT(*) AS count").
 		Group("DATE_TRUNC('week', created_at)").Order("DATE_TRUNC('week', created_at) ASC").Scan(&weekly).Error; err != nil {
@@ -148,6 +173,9 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		monthlyQ = monthlyQ.Where(orderContainsProductSQL, productID)
 	}
+	if hasDeliveryCompany {
+		monthlyQ = monthlyQ.Where("shipped_via_id = ?", deliveryCompanyID)
+	}
 	if err := monthlyQ.Select("TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS label, COUNT(*) AS count").
 		Group("DATE_TRUNC('month', created_at)").Order("DATE_TRUNC('month', created_at) ASC").Scan(&monthly).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching monthly stats", "error": err.Error()})
@@ -162,6 +190,9 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		totalQ = totalQ.Where(orderContainsProductSQL, productID)
 	}
+	if hasDeliveryCompany {
+		totalQ = totalQ.Where("shipped_via_id = ?", deliveryCompanyID)
+	}
 	if err := totalQ.Count(&totalOrders).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error counting total orders", "error": err.Error()})
 		return
@@ -175,6 +206,8 @@ func GetOrdersDashboard(c *gin.Context) {
 		PendingRevenue      float64
 		DeliveredOrders     int64
 		ShippedOrders       int64
+		MaturedShipped      int64
+		MaturedDelivered    int64
 		ConfirmedOrders     int64
 	}
 	revQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
@@ -183,6 +216,9 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 	if hasProduct {
 		revQ = revQ.Where(orderContainsProductSQL, productID)
+	}
+	if hasDeliveryCompany {
+		revQ = revQ.Where("shipped_via_id = ?", deliveryCompanyID)
 	}
 
 	// Money is order-level shop-wide (COD cash at the door, shipping included), but
@@ -218,8 +254,10 @@ func GetOrdersDashboard(c *gin.Context) {
 			COALESCE(SUM(CASE WHEN status NOT IN ('Livré', 'Annulé', 'Abandonné') THEN %s END), 0) AS pending_revenue,
 			COUNT(*) FILTER (WHERE status = 'Livré') AS delivered_orders,
 			COUNT(*) FILTER (WHERE is_shipped = true) AS shipped_orders,
+			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s') AS matured_shipped,
+			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s' AND status = 'Livré') AS matured_delivered,
 			COUNT(*) FILTER (WHERE %s) AS confirmed_orders
-		`, deliveredExpr, netExpr, deliveredExpr, wasEverConfirmed)
+		`, deliveredExpr, netExpr, deliveredExpr, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, wasEverConfirmed)
 
 	if err := revQ.Select(revSelect).Scan(&rev).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching revenue stats", "error": err.Error()})
@@ -246,10 +284,19 @@ func GetOrdersDashboard(c *gin.Context) {
 	// problem. is_shipped is written in the same query as status on every
 	// ship path (manual PATCH, Osen/ZR/Leopard ship, sync jobs), unlike
 	// audit_logs which those carrier flows bypass entirely.
+	//
+	// Denominator is further restricted to shipments old enough to have
+	// plausibly resolved (deliveryRateMaturityBuffer) — a same-day shipment
+	// can't be Livré yet, so counting it against the rate before it's had
+	// time to arrive makes any "today"/"last 7 days" view look artificially
+	// bad. Orders that are still in transit *past* the buffer stay counted
+	// (against the rate) rather than excluded — a stuck/failing carrier
+	// should show up, not silently vanish from the denominator.
 	deliveryRate := 0.0
-	if rev.ShippedOrders > 0 {
-		deliveryRate = float64(rev.DeliveredOrders) * 100.0 / float64(rev.ShippedOrders)
+	if rev.MaturedShipped > 0 {
+		deliveryRate = float64(rev.MaturedDelivered) * 100.0 / float64(rev.MaturedShipped)
 	}
+	maturingOrders := rev.ShippedOrders - rev.MaturedShipped
 
 	statusStats := []StatusStat{}
 	statusQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
@@ -258,6 +305,9 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 	if hasProduct {
 		statusQ = statusQ.Where(orderContainsProductSQL, productID)
+	}
+	if hasDeliveryCompany {
+		statusQ = statusQ.Where("shipped_via_id = ?", deliveryCompanyID)
 	}
 	if err := statusQ.Select("status, COUNT(*) AS count").Group("status").Scan(&statusStats).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching status stats", "error": err.Error()})
@@ -279,6 +329,9 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		wilayaQ = wilayaQ.Where(orderContainsProductSQL, productID)
 	}
+	if hasDeliveryCompany {
+		wilayaQ = wilayaQ.Where("orders.shipped_via_id = ?", deliveryCompanyID)
+	}
 	if err := wilayaQ.Select("c.state AS wilaya, COUNT(*) AS count").
 		Group("c.state").Order("count DESC").Scan(&wilayaStats).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching wilaya stats", "error": err.Error()})
@@ -298,12 +351,15 @@ func GetOrdersDashboard(c *gin.Context) {
 		AvgOrderValue:    avgOrderValue,
 		ShippedOrders:    rev.ShippedOrders,
 		DeliveryRate:     deliveryRate,
+		MaturedShipped:   rev.MaturedShipped,
+		MaturedDelivered: rev.MaturedDelivered,
+		MaturingOrders:   maturingOrders,
 		ConfirmedOrders:  rev.ConfirmedOrders,
 		ConfirmationRate: confirmationRate,
 	}
 
-	// Store in cache — failure is non-fatal; skip for date-filtered or product-scoped requests
-	if !hasDateFilter && !hasProduct {
+	// Store in cache — failure is non-fatal; skip for date-filtered or product/carrier-scoped requests
+	if !hasDateFilter && !hasProduct && !hasDeliveryCompany {
 		if b, err := json.Marshal(data); err == nil {
 			initializers.RClient.Set(initializers.Ctx, cacheKey, b, dashboardCacheTTL)
 		}

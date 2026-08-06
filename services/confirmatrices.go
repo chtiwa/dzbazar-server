@@ -190,6 +190,12 @@ func ConfirmationRates(shopID uuid.UUID, from, to *time.Time) ([]ConfirmatriceRa
 			rows[i].Rate = &rate
 		}
 		if rows[i].Confirmed > 0 {
+			// ponytail: same recency bias as dashboardController's deliveryRate
+			// (a just-confirmed/shipped order can't be Livré yet), but here
+			// Confirmed — not Shipped — is the denominator, and it's also the
+			// displayed "confirmed" column and the Rate denominator. Gating it
+			// on shipped_at would desync the on-screen counts from the rate.
+			// Upgrade only if merchants report this number looking off.
 			dr := float64(rows[i].Delivered) * 100 / float64(rows[i].Confirmed)
 			rows[i].DeliveredRate = &dr
 		}

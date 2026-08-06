@@ -51,6 +51,12 @@ type CreateOrderInput struct {
 	// non-empty value here means the request is spam.
 	Email string `json:"email"`
 
+	// Client-submitted best-effort private-browsing guess (see
+	// client/src/utils/incognito.ts). Untrusted — a determined fraudster just
+	// omits it — but catches casual repeat-order abuse when the shop's
+	// ban_incognito_enabled toggle is on. Never blocks checkout on its own.
+	Incognito bool `json:"incognito"`
+
 	// Nested client object matches your new JSON payload
 	Client OrderClientInput `json:"client" binding:"required"`
 
@@ -181,13 +187,15 @@ func GetOrdersByShopID(c *gin.Context) {
 	flaggedOnly := c.Query("flagged") == "true"
 	productID := strings.TrimSpace(c.Query("productId"))
 	platform := c.Query("platform")
+	deliveryCompanyID := strings.TrimSpace(c.Query("deliveryCompanyId"))
 
 	// A confirmatrice only ever sees orders assigned to her — never the
 	// shop's shared default-view cache, which isn't scoped per-member.
 	isConfirmatrice := membership.Role == "confirmation"
 
 	isDefaultView := !isConfirmatrice && page == 1 && perPage == 10 && (status == "" || status == "Tous") &&
-		search == "" && dateFrom == "" && dateTo == "" && !flaggedOnly && productID == "" && platform == ""
+		search == "" && dateFrom == "" && dateTo == "" && !flaggedOnly && productID == "" && platform == "" &&
+		deliveryCompanyID == ""
 
 	if isDefaultView {
 		if cached, err := initializers.RClient.Get(initializers.Ctx, ordersListCacheKey(shopID)).Bytes(); err == nil {
@@ -246,6 +254,12 @@ func GetOrdersByShopID(c *gin.Context) {
 		baseQuery = baseQuery.Where("orders.conversion_source = ?", platform)
 	}
 
+	if deliveryCompanyID != "" {
+		if parsedDeliveryCompanyID, err := uuid.Parse(deliveryCompanyID); err == nil {
+			baseQuery = baseQuery.Where("orders.shipped_via_id = ?", parsedDeliveryCompanyID)
+		}
+	}
+
 	var totalRows int64
 	if err := baseQuery.Count(&totalRows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -290,6 +304,7 @@ func GetOrdersByShopID(c *gin.Context) {
 	}
 
 	pagination := utils.GetPaginationData(page, totalPages, "/orders")
+	pagination.TotalRows = totalRows
 
 	body, err := json.Marshal(gin.H{
 		"success":    true,
@@ -447,6 +462,28 @@ func CreateOrderByShopID(c *gin.Context) {
 	var order models.Order
 	clientUserAgent := c.Request.UserAgent()
 	clientIP := c.ClientIP()
+
+	// Fraud-signal evaluation (incognito/vpn/datacenter shadow-ban, see
+	// services.FraudHiddenReason). Staff-placed orders are exempt — same
+	// reasoning as the rate limits above, and this is a network call, so it
+	// must run before the transaction opens, never inside it.
+	fraudHiddenReason := ""
+	if !isStaffOrder {
+		var shopFraudSettings models.Shop
+		hasSettings := initializers.DB.
+			Select("ban_incognito_enabled", "ban_vpn_enabled", "ban_datacenter_enabled").
+			First(&shopFraudSettings, "id = ?", parsedShopID).Error == nil
+
+		if hasSettings && (shopFraudSettings.BanIncognitoEnabled || shopFraudSettings.BanVpnEnabled || shopFraudSettings.BanDatacenterEnabled) {
+			var priv utils.IPPrivacy
+			if shopFraudSettings.BanVpnEnabled || shopFraudSettings.BanDatacenterEnabled {
+				// Fail open: a lookup error leaves priv zero-valued, so
+				// FraudHiddenReason can never flag on it.
+				priv, _ = services.ClassifyIP(clientIP)
+			}
+			fraudHiddenReason = services.FraudHiddenReason(shopFraudSettings, body.Incognito, priv)
+		}
+	}
 
 	// 1. ACID Transaction block to securely update tables together
 	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
@@ -613,6 +650,11 @@ func CreateOrderByShopID(c *gin.Context) {
 			}
 		}
 
+		hiddenReason := fraudHiddenReason
+		if containsCussword {
+			hiddenReason = services.HiddenReasonCussword
+		}
+
 		// Attribution only — an unparseable or missing landing page id just means this
 		// order isn't attributed to one, never a reason to fail checkout.
 		var landingPageID *uuid.UUID
@@ -644,7 +686,8 @@ func CreateOrderByShopID(c *gin.Context) {
 			ConversionSource: body.ConversionSource,
 			PageURL:          body.PageURL,
 			LandingPageID:    landingPageID,
-			IsHidden:         containsCussword,
+			IsHidden:         containsCussword || fraudHiddenReason != "",
+			HiddenReason:     hiddenReason,
 			ClientIP:         clientIP,
 			ClientUserAgent:  clientUserAgent,
 			Items:            orderItems,
@@ -655,9 +698,14 @@ func CreateOrderByShopID(c *gin.Context) {
 		}
 
 		// Best-effort round-robin assignment to an eligible confirmatrice — never
-		// fails checkout (mirrors DecideExperimentIfReady below).
-		if assignErr := services.AutoAssignOrder(tx, parsedShopID, &order); assignErr != nil {
-			fmt.Println("AutoAssignOrder: failed to auto-assign order:", assignErr)
+		// fails checkout (mirrors DecideExperimentIfReady below). Skipped for
+		// shadow-hidden orders: a confirmatrice would never see it in her queue
+		// anyway (flagged view is owner-only), so assigning it just burns a
+		// round-robin turn she never gets credit for.
+		if !order.IsHidden {
+			if assignErr := services.AutoAssignOrder(tx, parsedShopID, &order); assignErr != nil {
+				fmt.Println("AutoAssignOrder: failed to auto-assign order:", assignErr)
+			}
 		}
 
 		// A completed order means this phone number is no longer "abandoned" —
@@ -1268,7 +1316,8 @@ func BanOrderClient(c *gin.Context) {
 			}
 		}
 
-		return tx.Model(&models.Order{}).Where("id = ?", order.ID).Update("is_hidden", true).Error
+		return tx.Model(&models.Order{}).Where("id = ?", order.ID).
+			Updates(map[string]any{"is_hidden": true, "hidden_reason": services.HiddenReasonBannedClient}).Error
 	})
 
 	if err != nil {
