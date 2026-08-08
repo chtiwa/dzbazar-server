@@ -47,6 +47,14 @@ type DashboardData struct {
 	MaturingOrders   int64        `json:"maturingOrders"`
 	ConfirmedOrders  int64        `json:"confirmedOrders"`
 	ConfirmationRate float64      `json:"confirmationRate"`
+	// Resolved = matured shipment that reached a terminal state (Livré/Annulé).
+	// StuckInTransit = matured (past buffer) but still sitting in a non-terminal
+	// status — a failing/slow carrier, distinct from MaturingOrders (too recent
+	// to judge yet). ResolvedDeliveryRate only divides by resolved outcomes, so
+	// it doesn't get dragged down by shipments still in flight.
+	MaturedResolved      int64   `json:"maturedResolved"`
+	StuckInTransit       int64   `json:"stuckInTransit"`
+	ResolvedDeliveryRate float64 `json:"resolvedDeliveryRate"`
 }
 
 // deliveryRateMaturityBuffer: a shipment needs time to actually arrive before
@@ -208,6 +216,7 @@ func GetOrdersDashboard(c *gin.Context) {
 		ShippedOrders       int64
 		MaturedShipped      int64
 		MaturedDelivered    int64
+		MaturedResolved     int64
 		ConfirmedOrders     int64
 	}
 	revQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
@@ -256,8 +265,9 @@ func GetOrdersDashboard(c *gin.Context) {
 			COUNT(*) FILTER (WHERE is_shipped = true) AS shipped_orders,
 			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s') AS matured_shipped,
 			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s' AND status = 'Livré') AS matured_delivered,
+			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s' AND status IN ('Livré', 'Annulé')) AS matured_resolved,
 			COUNT(*) FILTER (WHERE %s) AS confirmed_orders
-		`, deliveredExpr, netExpr, deliveredExpr, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, wasEverConfirmed)
+		`, deliveredExpr, netExpr, deliveredExpr, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, wasEverConfirmed)
 
 	if err := revQ.Select(revSelect).Scan(&rev).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching revenue stats", "error": err.Error()})
@@ -297,6 +307,15 @@ func GetOrdersDashboard(c *gin.Context) {
 		deliveryRate = float64(rev.MaturedDelivered) * 100.0 / float64(rev.MaturedShipped)
 	}
 	maturingOrders := rev.ShippedOrders - rev.MaturedShipped
+
+	// Same numerator, denominator narrowed to matured shipments that actually
+	// reached a terminal state — excludes shipments stuck in transit past the
+	// buffer instead of counting them as failures.
+	resolvedDeliveryRate := 0.0
+	if rev.MaturedResolved > 0 {
+		resolvedDeliveryRate = float64(rev.MaturedDelivered) * 100.0 / float64(rev.MaturedResolved)
+	}
+	stuckInTransit := rev.MaturedShipped - rev.MaturedResolved
 
 	statusStats := []StatusStat{}
 	statusQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
@@ -339,23 +358,26 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 
 	data := DashboardData{
-		Daily:            daily,
-		Weekly:           weekly,
-		Monthly:          monthly,
-		StatusStats:      statusStats,
-		TotalOrders:      totalOrders,
-		WilayaStats:      wilayaStats,
-		DeliveredRevenue: rev.DeliveredRevenue,
-		PendingRevenue:   rev.PendingRevenue,
-		DeliveredOrders:  rev.DeliveredOrders,
-		AvgOrderValue:    avgOrderValue,
-		ShippedOrders:    rev.ShippedOrders,
-		DeliveryRate:     deliveryRate,
-		MaturedShipped:   rev.MaturedShipped,
-		MaturedDelivered: rev.MaturedDelivered,
-		MaturingOrders:   maturingOrders,
-		ConfirmedOrders:  rev.ConfirmedOrders,
-		ConfirmationRate: confirmationRate,
+		Daily:                daily,
+		Weekly:               weekly,
+		Monthly:              monthly,
+		StatusStats:          statusStats,
+		TotalOrders:          totalOrders,
+		WilayaStats:          wilayaStats,
+		DeliveredRevenue:     rev.DeliveredRevenue,
+		PendingRevenue:       rev.PendingRevenue,
+		DeliveredOrders:      rev.DeliveredOrders,
+		AvgOrderValue:        avgOrderValue,
+		ShippedOrders:        rev.ShippedOrders,
+		DeliveryRate:         deliveryRate,
+		MaturedShipped:       rev.MaturedShipped,
+		MaturedDelivered:     rev.MaturedDelivered,
+		MaturingOrders:       maturingOrders,
+		ConfirmedOrders:      rev.ConfirmedOrders,
+		ConfirmationRate:     confirmationRate,
+		MaturedResolved:      rev.MaturedResolved,
+		StuckInTransit:       stuckInTransit,
+		ResolvedDeliveryRate: resolvedDeliveryRate,
 	}
 
 	// Store in cache — failure is non-fatal; skip for date-filtered or product/carrier-scoped requests

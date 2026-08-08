@@ -195,7 +195,9 @@ func processOrderEvent(orderID uuid.UUID) {
 		Event:  "order_created",
 		ShopID: fullOrder.ShopID.String(),
 		Data: map[string]any{
+			"orderId":     fullOrder.ID.String(),
 			"productName": mainProductName,
+			"clientName":  fullOrder.Client.FullName,
 			"totalPrice":  fullOrder.TotalPrice,
 			"itemsCount":  len(fullOrder.Items),
 		},
