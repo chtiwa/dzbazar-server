@@ -14,5 +14,5 @@ type Pixel struct {
 	HasAccessToken bool   `gorm:"default:false" json:"hasAccessToken"`
 	AccessToken    string `json:"accessToken,omitempty"`
 
-	IsActive bool `gorm:"default:true" json:"isActive"`
+	IsActive bool `json:"isActive"`
 }

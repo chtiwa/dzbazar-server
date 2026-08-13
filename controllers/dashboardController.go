@@ -389,3 +389,100 @@ func GetOrdersDashboard(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "cached": false, "data": data})
 }
+
+// GetPagePerformance returns views/orders/conversionRate for a single product or landing page,
+// optionally scoped to a date range — same views/orders/conversionRate math as the all-time
+// figures on the Products and LandingPages list endpoints (see productsController.go), but for
+// one entity so it can be date-filtered without touching those cached list responses.
+func GetPagePerformance(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+	pageType := c.Query("type")
+	if pageType != "product" && pageType != "landing_page" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "type must be 'product' or 'landing_page'"})
+		return
+	}
+
+	entityID, err := uuid.Parse(c.Query("entityId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid entity ID"})
+		return
+	}
+
+	fromStr := c.Query("from")
+	toStr := c.Query("to")
+	var fromTime, toTime time.Time
+	hasDateFilter := fromStr != "" && toStr != ""
+	if hasDateFilter {
+		fromTime, err = time.Parse("2006-01-02", fromStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid from date"})
+			return
+		}
+		toTime, err = time.Parse("2006-01-02", toStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid to date"})
+			return
+		}
+		toTime = toTime.Add(24 * time.Hour) // make end date inclusive
+	}
+
+	viewsQ := initializers.DB.Table("page_visits").
+		Joins(entityShopJoin(pageType)).
+		Where("page_visits.page_type = ? AND page_visits.entity_id = ? AND entity.shop_id = ?", pageType, entityID, shopID)
+	if hasDateFilter {
+		viewsQ = viewsQ.Where("page_visits.day >= ? AND page_visits.day < ?", fromTime, toTime)
+	}
+	var views int64
+	if err := viewsQ.Select("COUNT(DISTINCT page_visits.visitor_id)").Row().Scan(&views); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to count views", "error": err.Error()})
+		return
+	}
+
+	var orders int64
+	if pageType == "product" {
+		ordersQ := initializers.DB.Table("order_items").
+			Joins("JOIN orders ON orders.id = order_items.order_id").
+			Joins("JOIN products ON products.id = order_items.product_id").
+			Where("order_items.product_id = ? AND products.shop_id = ? AND orders.deleted_at IS NULL AND orders.landing_page_id IS NULL", entityID, shopID)
+		if hasDateFilter {
+			ordersQ = ordersQ.Where("orders.created_at >= ? AND orders.created_at < ?", fromTime, toTime)
+		}
+		if err := ordersQ.Select("COUNT(DISTINCT order_items.order_id)").Row().Scan(&orders); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to count orders", "error": err.Error()})
+			return
+		}
+	} else {
+		ordersQ := initializers.DB.Table("orders").
+			Joins("JOIN landing_pages ON landing_pages.id = orders.landing_page_id").
+			Where("orders.landing_page_id = ? AND landing_pages.shop_id = ? AND orders.deleted_at IS NULL", entityID, shopID)
+		if hasDateFilter {
+			ordersQ = ordersQ.Where("orders.created_at >= ? AND orders.created_at < ?", fromTime, toTime)
+		}
+		if err := ordersQ.Select("COUNT(*)").Row().Scan(&orders); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to count orders", "error": err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"views":          views,
+			"orders":         orders,
+			"conversionRate": conversionRate(orders, views),
+		},
+	})
+}
+
+// entityShopJoin scopes page_visits to the requesting shop via the underlying product/landing_page
+// row, since page_visits itself has no shop_id column.
+func entityShopJoin(pageType string) string {
+	if pageType == "product" {
+		return "JOIN products entity ON entity.id = page_visits.entity_id"
+	}
+	return "JOIN landing_pages entity ON entity.id = page_visits.entity_id"
+}

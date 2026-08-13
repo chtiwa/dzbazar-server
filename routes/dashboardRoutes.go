@@ -11,5 +11,6 @@ func DashboardRoutes(router *gin.Engine) {
 	dashboard.Use(middleware.RequireAuthentication)
 	{
 		dashboard.GET("/orders", middleware.RequireShopAccess(), middleware.RequireShopPermission("dashboard.view"), controllers.GetOrdersDashboard)
+		dashboard.GET("/page-performance", middleware.RequireShopAccess(), middleware.RequireShopPermission("dashboard.view"), controllers.GetPagePerformance)
 	}
 }
