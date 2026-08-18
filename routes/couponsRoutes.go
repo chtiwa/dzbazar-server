@@ -12,7 +12,7 @@ func CouponsRoutes(router *gin.Engine) {
 	adminCoupons := router.Group("/v1/shops/:shopId/coupons")
 	{
 		adminCoupons.GET("", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), controllers.GetCouponsByShop)
-		adminCoupons.POST("", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("coupons.create"), controllers.CreateCoupon)
+		adminCoupons.POST("", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("coupons.create"), middleware.RequireFeatureEnabled("coupons_enabled"), controllers.CreateCoupon)
 		adminCoupons.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("coupons.edit"), controllers.UpdateCoupon)
 		adminCoupons.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("coupons.delete"), controllers.DeleteCoupon)
 	}

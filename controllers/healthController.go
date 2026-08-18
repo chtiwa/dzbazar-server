@@ -23,11 +23,11 @@ func Health(c *gin.Context) {
 	redisErr := initializers.RClient.Ping(ctx).Err()
 
 	if dbErr != nil {
-		respondError(c, http.StatusServiceUnavailable, "database unreachable", dbErr)
+		RespondError(c, http.StatusServiceUnavailable, "database unreachable", dbErr)
 		return
 	}
 	if redisErr != nil {
-		respondError(c, http.StatusServiceUnavailable, "redis unreachable", redisErr)
+		RespondError(c, http.StatusServiceUnavailable, "redis unreachable", redisErr)
 		return
 	}
 

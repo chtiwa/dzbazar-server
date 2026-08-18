@@ -2,48 +2,28 @@ package initializers
 
 import (
 	"embed"
-	"encoding/json"
-	"fmt"
 	"log"
-	"sync"
 )
 
-//go:embed data/static_wilayas.json data/osen_municipalities.json data/zr_territories.json
+// static_wilayas.json is no longer read at runtime (see services.GetWilayas,
+// which now reads the wilayas DB table seeded by
+// migrate/migrations/00019_wilayas_table.sql) — root CLAUDE.md forbids
+// hardcoding the wilaya list. The file stays in the repo as the historical
+// seed source but is intentionally left out of this embed. Osen/ZR carrier
+// municipality/territory reference data is unrelated (per-carrier lookup
+// tables, not the general wilaya list) and still loads from JSON below.
+//
+//go:embed data/osen_municipalities.json data/zr_territories.json
 
 var staticFiles embed.FS
 
-type WilayaSeed struct {
-	ID           int     `json:"id"`
-	Name         string  `json:"name"`
-	IsActive     bool    `json:"isActive"`
-	HasStopdesk  bool    `json:"hasStopdesk"`
-	StopdeskRate float64 `json:"stopdeskRate"`
-	HasDoorstep  bool    `json:"hasDoorstep"`
-	DoorstepRate float64 `json:"doorstepRate"`
-}
-
-var loadWilayasOnce = sync.OnceValues(func() ([]WilayaSeed, error) {
-	data, err := staticFiles.ReadFile("data/static_wilayas.json")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read static wilayas json: %w", err)
-	}
-
-	var wilayas []WilayaSeed
-	if err := json.Unmarshal(data, &wilayas); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal static wilayas json: %w", err)
-	}
-
-	return wilayas, nil
-})
-
-func GetStaticWilayas() ([]WilayaSeed, error) {
-	return loadWilayasOnce()
-}
-
+// InitStaticData validates the still-JSON-backed carrier reference data at
+// boot so a malformed file fails fast instead of surfacing later as a
+// confusing 500. Wilaya data now lives in Postgres and is warmed by
+// services.GetWilayas() after migrations run (see main.go init()) — it
+// can't be checked here because the wilayas table doesn't exist yet at this
+// point in startup.
 func InitStaticData() {
-	if _, err := GetStaticWilayas(); err != nil {
-		log.Fatalf("failed to initialize static wilayas: %v", err)
-	}
 	if _, err := GetOsenMunicipalities(); err != nil {
 		log.Fatalf("failed to initialize osen municipalities: %v", err)
 	}

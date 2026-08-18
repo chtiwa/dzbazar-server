@@ -65,6 +65,21 @@ func FetchCombinationsForShop(tx *gorm.DB, shopID uuid.UUID, comboIDs []uuid.UUI
 	return comboByID, nil
 }
 
+// GetOrderDetail loads a single order for the super-admin order-detail view:
+// items with product + purchased variant, the client, and who it shipped
+// via. Read-only, cross-tenant (super-admin scope isn't shop-scoped like the
+// tenant admin API), so callers don't need to pass a shopID.
+func GetOrderDetail(db *gorm.DB, orderID uuid.UUID) (models.Order, error) {
+	var order models.Order
+	err := db.
+		Preload("Client").
+		Preload("Items.Product").
+		Preload("Items.ProductVariantCombination").
+		Preload("ShippedVia").
+		First(&order, "id = ?", orderID).Error
+	return order, err
+}
+
 // DecrementOrderItemsStock reduces the stock quantity of each ordered variant
 // combination by the quantity ordered. Called once, when an order transitions
 // to "shipped" for the first time. Returns the first write error encountered

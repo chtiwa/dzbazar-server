@@ -418,8 +418,11 @@ func CreateOrderByShopID(c *gin.Context) {
 
 	if banClientID != "" {
 		var banned models.FlaggedClient
+		// resolved_at IS NULL: a flag a super admin/support agent dismissed
+		// as a false positive (super-admin fraud review page) must stop
+		// blocking this client's orders — see FlaggedClient.ResolvedAt.
 		isBanned := initializers.DB.
-			Where("shop_id = ? AND platform = ? AND client_id = ?", parsedShopID, banPlatform, banClientID).
+			Where("shop_id = ? AND platform = ? AND client_id = ? AND resolved_at IS NULL", parsedShopID, banPlatform, banClientID).
 			First(&banned).Error == nil
 
 		if isBanned {
@@ -737,7 +740,7 @@ func CreateOrderByShopID(c *gin.Context) {
 	enqueueOrderEvent(order.ID)
 
 	InvalidateDashboardCache(parsedShopID)
-	invalidateProductCaches(uuid.Nil, parsedShopID)
+	InvalidateProductCaches(uuid.Nil, parsedShopID)
 	invalidateOrdersListCache(parsedShopID)
 	initializers.RClient.Del(initializers.Ctx, services.LandingPagesCacheKeyByShop(parsedShopID))
 
@@ -1221,7 +1224,7 @@ func DeleteOrderByShopID(c *gin.Context) {
 	}
 
 	InvalidateDashboardCache(shopID)
-	invalidateProductCaches(uuid.Nil, shopID)
+	InvalidateProductCaches(uuid.Nil, shopID)
 	invalidateOrdersListCache(shopID)
 	initializers.RClient.Del(initializers.Ctx, services.LandingPagesCacheKeyByShop(shopID))
 

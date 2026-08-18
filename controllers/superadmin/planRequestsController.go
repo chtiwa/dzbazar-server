@@ -25,14 +25,19 @@ func ListPlanSwitchRequests(c *gin.Context) {
 		db = db.Where("status = ?", status)
 	}
 
+	order := resolveSort(c, map[string]string{
+		"status":     "status",
+		"created_at": "created_at",
+	}, "created_at DESC")
+
 	var totalRows int64
 	db.Count(&totalRows)
 
 	var requests []models.PlanSwitchRequest
-	if err := db.Order("created_at DESC").
+	if err := db.Order(order).
 		Offset((page - 1) * perPage).Limit(perPage).
 		Find(&requests).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch plan switch requests", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch plan switch requests", err)
 		return
 	}
 
@@ -97,7 +102,7 @@ func ApprovePlanSwitchRequest(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Plan switch request not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 	if request.Status != "pending" {
@@ -138,7 +143,7 @@ func ApprovePlanSwitchRequest(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to approve request", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to approve request", err)
 		return
 	}
 
@@ -169,7 +174,7 @@ func RejectPlanSwitchRequest(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Plan switch request not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 	if request.Status != "pending" {
@@ -183,7 +188,7 @@ func RejectPlanSwitchRequest(c *gin.Context) {
 		"reviewed_by": actorUser.ID,
 		"reviewed_at": now,
 	}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to reject request", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to reject request", err)
 		return
 	}
 

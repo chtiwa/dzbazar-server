@@ -3,14 +3,45 @@ package superadmin
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// SuperAdminPixel is the pixel projection exposed to super-admin. AccessToken
+// never appears here — omitempty on the model alone isn't a safe guard for a
+// populated secret, so this is an explicit field-by-field copy instead.
+type SuperAdminPixel struct {
+	ID             uuid.UUID `json:"id"`
+	Platform       string    `json:"platform"`
+	Title          string    `json:"title"`
+	PixelID        string    `json:"pixelId"`
+	HasAccessToken bool      `json:"hasAccessToken"`
+	IsActive       bool      `json:"isActive"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+func toSuperAdminPixels(pixels []models.Pixel) []SuperAdminPixel {
+	out := make([]SuperAdminPixel, 0, len(pixels))
+	for _, p := range pixels {
+		out = append(out, SuperAdminPixel{
+			ID:             p.ID,
+			Platform:       p.Platform,
+			Title:          p.Title,
+			PixelID:        p.PixelID,
+			HasAccessToken: p.HasAccessToken,
+			IsActive:       p.IsActive,
+			CreatedAt:      p.CreatedAt,
+		})
+	}
+	return out
+}
 
 func ListShops(c *gin.Context) {
 	search := strings.TrimSpace(c.Query("search"))
@@ -29,14 +60,20 @@ func ListShops(c *gin.Context) {
 		db = db.Where("is_active = false")
 	}
 
+	order := resolveSort(c, map[string]string{
+		"name":       "name",
+		"status":     "is_active",
+		"created_at": "created_at",
+	}, "created_at DESC")
+
 	var totalRows int64
 	db.Count(&totalRows)
 
 	var shops []models.Shop
-	if err := db.Order("created_at DESC").
+	if err := db.Order(order).
 		Offset((page - 1) * perPage).Limit(perPage).
 		Find(&shops).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch shops", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch shops", err)
 		return
 	}
 
@@ -65,7 +102,7 @@ func GetShop(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Shop not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -76,10 +113,14 @@ func GetShop(c *gin.Context) {
 	initializers.DB.Model(&models.Product{}).Where("shop_id = ?", shopID).Count(&productCount)
 	initializers.DB.Model(&models.Order{}).Where("shop_id = ?", shopID).Count(&orderCount)
 
+	var pixels []models.Pixel
+	initializers.DB.Where("shop_id = ?", shopID).Order("created_at DESC").Find(&pixels)
+
 	resp := gin.H{
 		"shop":         shop,
 		"productCount": productCount,
 		"orderCount":   orderCount,
+		"pixels":       toSuperAdminPixels(pixels),
 	}
 	if subErr == nil {
 		resp["subscription"] = subscription
@@ -91,7 +132,8 @@ func GetShop(c *gin.Context) {
 }
 
 type UpdateShopStatusInput struct {
-	IsActive bool `json:"isActive"`
+	IsActive bool    `json:"isActive"`
+	Reason   *string `json:"reason"`
 }
 
 // UpdateShopStatus suspends or reactivates a shop's storefront platform-wide.
@@ -104,7 +146,7 @@ func UpdateShopStatus(c *gin.Context) {
 
 	var body UpdateShopStatusInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 
@@ -114,12 +156,12 @@ func UpdateShopStatus(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Shop not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
-	if err := initializers.DB.Model(&shop).Update("is_active", body.IsActive).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update shop status", "error": err.Error()})
+	if err := services.UpdateShopStatus(&shop, body.IsActive, body.Reason); err != nil {
+		RespondError(c, http.StatusInternalServerError, "Failed to update shop status", err)
 		return
 	}
 
@@ -127,9 +169,12 @@ func UpdateShopStatus(c *gin.Context) {
 	if body.IsActive {
 		action = "shop.activate"
 	}
-	utils.LogAudit(c, action, "Shop", &shop.ID, gin.H{"name": shop.Name, "slug": shop.Slug})
+	utils.LogAudit(c, action, "Shop", &shop.ID, gin.H{
+		"name":   shop.Name,
+		"slug":   shop.Slug,
+		"reason": shop.SuspendReason,
+	})
 
-	shop.IsActive = body.IsActive
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Shop status updated", "data": shop})
 }
 
@@ -148,18 +193,75 @@ func DeleteShopByAdmin(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Shop not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
 	snapshot := gin.H{"name": shop.Name, "slug": shop.Slug, "ownerId": shop.OwnerID}
 
 	if err := initializers.DB.Delete(&shop).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to delete shop", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to delete shop", err)
 		return
 	}
 
 	utils.LogAudit(c, "shop.delete", "Shop", &shop.ID, snapshot)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Shop deleted permanently"})
+}
+
+type UpdateShopPixelStatusInput struct {
+	IsActive bool `json:"isActive"`
+}
+
+// UpdateShopPixelStatus lets a super admin disable a misconfigured pixel
+// platform-wide (bad PixelID, leaked token, etc.) without touching its
+// config — same bar as the offers/coupons/landing-pages force-disable
+// actions in superAdminRoutes.go, since it changes what a merchant's live
+// tracking setup actually does.
+func UpdateShopPixelStatus(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	pixelID, err := uuid.Parse(c.Param("pixelId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid pixel ID"})
+		return
+	}
+
+	var body UpdateShopPixelStatusInput
+	if err := c.ShouldBindJSON(&body); err != nil {
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
+		return
+	}
+
+	var pixel models.Pixel
+	if err := initializers.DB.Where("id = ? AND shop_id = ?", pixelID, shopID).First(&pixel).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Pixel not found"})
+			return
+		}
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
+		return
+	}
+
+	if err := initializers.DB.Model(&pixel).Update("is_active", body.IsActive).Error; err != nil {
+		RespondError(c, http.StatusInternalServerError, "Failed to update pixel status", err)
+		return
+	}
+	pixel.IsActive = body.IsActive
+
+	action := "shop.pixel.disable"
+	if body.IsActive {
+		action = "shop.pixel.enable"
+	}
+	utils.LogAudit(c, action, "Pixel", &pixel.ID, gin.H{
+		"shopId":   shopID,
+		"platform": pixel.Platform,
+		"title":    pixel.Title,
+	})
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Pixel status updated", "data": toSuperAdminPixels([]models.Pixel{pixel})[0]})
 }

@@ -30,7 +30,7 @@ func StartImpersonation(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Shop not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 

@@ -31,12 +31,13 @@ Go REST API using **Gin** (HTTP router) + **GORM** (ORM) + **PostgreSQL**. Entry
 
 ### Startup sequence (`main.go` → `init()`)
 1. Load `.env` via `godotenv`
-2. Load static wilaya data into memory (`initializers.InitStaticData`)
+2. Load static carrier reference data into memory (`initializers.InitStaticData` — Osen/ZR municipality/territory JSON only; wilayas moved to Postgres, see below)
 3. Connect to PostgreSQL (`initializers.DB`)
 4. Initialize Backblaze B2 S3-compatible client (`initializers.S3Client`)
 5. Connect to Redis (`initializers.RedisClient`)
 6. Run versioned SQL migrations (`migrate/migrate.go`, via `goose`) from `migrate/migrations/`, embedded into the binary. `00001_baseline.sql` is a `pg_dump --schema-only` snapshot of the schema as GORM `AutoMigrate` had left it — new schema changes are new numbered `.sql` files from here on, not AutoMigrate or ad-hoc `Exec` calls
-7. Register all routes and start the server on the port from `$PORT` (default `:8080`)
+7. Warm the wilaya cache from the DB (`services.GetWilayas`) — must run after step 6, since the `wilayas` table is created/seeded by migration `00019_wilayas_table.sql`
+8. Register all routes and start the server on the port from `$PORT` (default `:8080`)
 
 ### Request lifecycle
 - All shop-scoped routes follow the pattern `/api/v1/shops/:shopId/<resource>`
@@ -52,7 +53,7 @@ A `User` can belong to multiple `Shop`s via `ShopMember` (with a `role`: `owner`
 - `Order` → `OrderItem` → `ProductVariantCombination` (FK is `OnDelete:RESTRICT` — never delete a combination that has orders)
 - `Order` → `Client` (upserted by phone number per shop on order creation)
 - `Shop` → `DeliveryCompany` (per-shop credentials) → `AvailableDeliveryCompany` (global admin-managed list with name, URL, image)
-- `Shop` → `DeliveryRate` (one row per wilaya, seeded at shop creation from static wilaya config)
+- `Shop` → `DeliveryRate` (one row per wilaya, seeded at shop creation from the `wilayas` table — `services.GetWilayas`, in-memory cached, invalidated on super-admin edits via `services.InvalidateWilayaCache`)
 - `Shop` → `Pixel` (Facebook/TikTok conversion tracking pixels)
 
 ### Product variant update constraint

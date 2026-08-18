@@ -15,26 +15,42 @@ import (
 func ListSupportTickets(c *gin.Context) {
 	status := strings.TrimSpace(c.Query("status"))
 	priority := strings.TrimSpace(c.Query("priority"))
+	search := strings.TrimSpace(c.Query("search"))
 	page, perPage := parsePageParams(c)
 
 	db := initializers.DB.Model(&models.SupportTicket{}).
 		Preload("Shop").Preload("Requester").Preload("AssignedTo")
 
 	if status != "" {
-		db = db.Where("status = ?", status)
+		db = db.Where("support_tickets.status = ?", status)
 	}
 	if priority != "" {
-		db = db.Where("priority = ?", priority)
+		db = db.Where("support_tickets.priority = ?", priority)
 	}
+	// Left join since shop_id is nullable — a ticket can outlive/precede a shop link.
+	// Every column below is table-qualified (not just the joined ones) because an
+	// unqualified "created_at" would be ambiguous once shops is joined in — both
+	// tables carry it via BaseModel.
+	if search != "" {
+		like := "%" + strings.ToLower(search) + "%"
+		db = db.Joins("LEFT JOIN shops ON shops.id = support_tickets.shop_id").
+			Where("LOWER(support_tickets.subject) LIKE ? OR LOWER(shops.name) LIKE ?", like, like)
+	}
+
+	order := resolveSort(c, map[string]string{
+		"status":     "support_tickets.status",
+		"priority":   "support_tickets.priority",
+		"created_at": "support_tickets.created_at",
+	}, "support_tickets.created_at DESC")
 
 	var totalRows int64
 	db.Count(&totalRows)
 
 	var tickets []models.SupportTicket
-	if err := db.Order("created_at DESC").
+	if err := db.Order(order).
 		Offset((page - 1) * perPage).Limit(perPage).
 		Find(&tickets).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch tickets", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch tickets", err)
 		return
 	}
 
@@ -69,7 +85,7 @@ func GetSupportTicket(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Ticket not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -97,7 +113,7 @@ type CreateSupportTicketInput struct {
 func CreateSupportTicket(c *gin.Context) {
 	var body CreateSupportTicketInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 
@@ -135,7 +151,7 @@ func CreateSupportTicket(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to create ticket", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to create ticket", err)
 		return
 	}
 
@@ -158,7 +174,7 @@ func UpdateSupportTicket(c *gin.Context) {
 
 	var body UpdateSupportTicketInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 
@@ -168,7 +184,7 @@ func UpdateSupportTicket(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Ticket not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -198,7 +214,7 @@ func UpdateSupportTicket(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Model(&ticket).Updates(updates).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update ticket", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to update ticket", err)
 		return
 	}
 
@@ -220,7 +236,7 @@ func AddTicketMessage(c *gin.Context) {
 
 	var body AddTicketMessageInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 
@@ -237,7 +253,7 @@ func AddTicketMessage(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Ticket not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -249,7 +265,7 @@ func AddTicketMessage(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Create(&message).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to add message", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to add message", err)
 		return
 	}
 

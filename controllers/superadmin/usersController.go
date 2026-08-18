@@ -1,11 +1,13 @@
 package superadmin
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -21,6 +23,8 @@ func sanitize(user *models.User) {
 func ListUsers(c *gin.Context) {
 	search := strings.TrimSpace(c.Query("search"))
 	statusFilter := c.Query("status") // "active" | "suspended" | ""
+	shopFilter := strings.TrimSpace(c.Query("shopId"))
+	platformRoleFilter := c.Query("platformRole") // "none" | "support" | "super_admin" | ""
 	page, perPage := parsePageParams(c)
 
 	db := initializers.DB.Model(&models.User{}).Preload("Memberships").Preload("Memberships.Shop")
@@ -34,15 +38,37 @@ func ListUsers(c *gin.Context) {
 	} else if statusFilter == "suspended" {
 		db = db.Where("is_suspended = true")
 	}
+	if shopFilter != "" {
+		if _, err := uuid.Parse(shopFilter); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+			return
+		}
+		// Membership is preloaded separately above; this is a plain filter on
+		// which users to select, not a join, so it can't duplicate rows.
+		db = db.Where("id IN (SELECT user_id FROM shop_members WHERE shop_id = ?)", shopFilter)
+	}
+	switch platformRoleFilter {
+	case "none":
+		db = db.Where("platform_role = ''")
+	case "support", "super_admin":
+		db = db.Where("platform_role = ?", platformRoleFilter)
+	}
+
+	order := resolveSort(c, map[string]string{
+		"email":        "email",
+		"status":       "is_suspended",
+		"platformRole": "platform_role",
+		"created_at":   "created_at",
+	}, "created_at DESC")
 
 	var totalRows int64
 	db.Count(&totalRows)
 
 	var users []models.User
-	if err := db.Order("created_at DESC").
+	if err := db.Order(order).
 		Offset((page - 1) * perPage).Limit(perPage).
 		Find(&users).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch users", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch users", err)
 		return
 	}
 
@@ -73,7 +99,7 @@ func GetUser(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "User not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -94,7 +120,7 @@ func UpdateUserStatus(c *gin.Context) {
 
 	var body UpdateUserStatusInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 
@@ -104,7 +130,7 @@ func UpdateUserStatus(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "User not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -114,7 +140,7 @@ func UpdateUserStatus(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Model(&user).Update("is_suspended", body.IsSuspended).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update user status", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to update user status", err)
 		return
 	}
 
@@ -127,6 +153,61 @@ func UpdateUserStatus(c *gin.Context) {
 	user.IsSuspended = body.IsSuspended
 	sanitize(&user)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User status updated", "data": user})
+}
+
+type SetPlatformRoleInput struct {
+	// PlatformRole is validated against models.User.PlatformRole's documented
+	// values by services.SetPlatformRole — "" | "support" | "super_admin".
+	PlatformRole string `json:"platformRole"`
+}
+
+// SetPlatformRole grants or revokes a user's platform-wide role — the field
+// that gates access to the entire super-admin panel (see
+// middleware.RequirePlatformRole). super_admin-only, audit-logged with the
+// old → new role.
+func SetPlatformRole(c *gin.Context) {
+	userID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid user ID"})
+		return
+	}
+
+	var body SetPlatformRoleInput
+	if err := c.ShouldBindJSON(&body); err != nil {
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
+		return
+	}
+
+	actorIf, _ := c.Get("user")
+	actingUser, ok := actorIf.(models.User)
+	if !ok {
+		RespondError(c, http.StatusInternalServerError, "Internal server error: invalid user format", nil)
+		return
+	}
+
+	target, previousRole, err := services.SetPlatformRole(actingUser, userID, body.PlatformRole)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrInvalidPlatformRole):
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid platform role"})
+		case errors.Is(err, services.ErrSelfDemotion):
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "You cannot remove your own super admin role"})
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "User not found"})
+		default:
+			RespondError(c, http.StatusInternalServerError, "Failed to update platform role", err)
+		}
+		return
+	}
+
+	utils.LogAudit(c, "user.platform_role_change", "User", &target.ID, gin.H{
+		"email":        target.Email,
+		"previousRole": previousRole,
+		"newRole":      target.PlatformRole,
+	})
+
+	sanitize(&target)
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Platform role updated", "data": target})
 }
 
 // DeleteUserByAdmin permanently deletes a user. Blocked at the DB level if the
@@ -145,7 +226,7 @@ func DeleteUserByAdmin(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "User not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -155,11 +236,7 @@ func DeleteUserByAdmin(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Delete(&user).Error; err != nil {
-		c.JSON(http.StatusConflict, gin.H{
-			"success": false,
-			"message": "Failed to delete user — they may still own a shop",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusConflict, "Failed to delete user — they may still own a shop", err)
 		return
 	}
 

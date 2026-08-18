@@ -6,12 +6,16 @@ import (
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/gin-gonic/gin"
 )
 
 // GetKPIs returns platform-wide counters for the Super Admin dashboard.
 // revenueThisMonth is an estimate (sum of active subscriptions' plan price),
 // not a real collected-payments figure — there is no payment gateway wired up yet.
+// Traffic figures (uniqueVisitors/pageViews) are windowed to the last
+// services.PlatformTrafficWindowDays days; everything else here is an
+// all-time total (ordersToday excepted).
 func GetKPIs(c *gin.Context) {
 	var totalShops, activeShops, totalUsers, activeSubscriptions, ordersToday, openTickets int64
 	var estimatedMonthlyRevenue float64
@@ -38,6 +42,12 @@ func GetKPIs(c *gin.Context) {
 		Select("COALESCE(SUM(plans.price), 0)").
 		Scan(&estimatedMonthlyRevenue)
 
+	uniqueVisitors, pageViews, err := services.PlatformTrafficKPIs(initializers.DB)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch traffic stats", "error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
@@ -48,6 +58,9 @@ func GetKPIs(c *gin.Context) {
 			"ordersToday":             ordersToday,
 			"openTickets":             openTickets,
 			"estimatedMonthlyRevenue": estimatedMonthlyRevenue,
+			"uniqueVisitors":          uniqueVisitors,
+			"pageViews":               pageViews,
+			"trafficWindowDays":       services.PlatformTrafficWindowDays,
 		},
 	})
 }

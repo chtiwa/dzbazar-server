@@ -14,7 +14,7 @@ import (
 func ListSettings(c *gin.Context) {
 	var settings []models.GlobalSetting
 	if err := initializers.DB.Order("key ASC").Find(&settings).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch settings", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch settings", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": settings})
@@ -37,7 +37,7 @@ func UpsertSetting(c *gin.Context) {
 
 	var body UpsertSettingInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 	if body.ValueType == "" {
@@ -48,14 +48,14 @@ func UpsertSetting(c *gin.Context) {
 	err := initializers.DB.Where("key = ?", key).First(&setting).Error
 
 	if err != nil && err != gorm.ErrRecordNotFound {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
 	if err == gorm.ErrRecordNotFound {
 		setting = models.GlobalSetting{Key: key, Value: body.Value, ValueType: body.ValueType, Description: body.Description}
 		if err := initializers.DB.Create(&setting).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to create setting", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to create setting", err)
 			return
 		}
 	} else {
@@ -64,7 +64,7 @@ func UpsertSetting(c *gin.Context) {
 			"value_type":  body.ValueType,
 			"description": body.Description,
 		}).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update setting", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to update setting", err)
 			return
 		}
 		setting.Value = body.Value
@@ -74,4 +74,33 @@ func UpsertSetting(c *gin.Context) {
 
 	utils.LogAudit(c, "setting.update", "GlobalSetting", &setting.ID, gin.H{"key": key, "value": body.Value})
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Setting saved", "data": setting})
+}
+
+// DeleteSetting removes a global_settings row outright — no soft delete, per
+// panel convention. There's no cache or gate reading this table (unlike
+// feature flags), so removing a key just makes it absent until re-created.
+func DeleteSetting(c *gin.Context) {
+	key := strings.TrimSpace(c.Param("key"))
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Setting key is required"})
+		return
+	}
+
+	var setting models.GlobalSetting
+	if err := initializers.DB.Where("key = ?", key).First(&setting).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Setting not found"})
+			return
+		}
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
+		return
+	}
+
+	if err := initializers.DB.Delete(&setting).Error; err != nil {
+		RespondError(c, http.StatusInternalServerError, "Failed to delete setting", err)
+		return
+	}
+
+	utils.LogAudit(c, "setting.delete", "GlobalSetting", &setting.ID, gin.H{"key": key})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Setting deleted"})
 }

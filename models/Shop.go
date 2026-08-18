@@ -5,20 +5,23 @@ import "github.com/google/uuid"
 type Shop struct {
 	BaseModel
 
-	Name         string         `gorm:"not null" json:"name"`
-	Slug         string         `gorm:"uniqueIndex;not null" json:"slug"`
-	Description  string         `json:"description"`
-	Phone        string         `json:"phone"`
-	Email        string         `json:"email"`
-	Address      string         `json:"address"`
-	FacebookURL  string         `json:"facebookUrl"`
-	InstagramURL string         `json:"instagramUrl"`
-	TiktokURL    string         `json:"tiktokUrl"`
-	OwnerID      uuid.UUID      `gorm:"type:uuid;not null;index" json:"ownerId"`
-	Owner        User           `gorm:"foreignKey:OwnerID;references:ID" json:"owner"`
-	IsActive     bool           `gorm:"default:true" json:"isActive"`
-	IsVerified   bool           `gorm:"default:false" json:"isVerified"`
-	LogoImage    *ShopLogoImage `gorm:"foreignKey:ShopID;references:ID" json:"logoImage"`
+	Name         string    `gorm:"not null" json:"name"`
+	Slug         string    `gorm:"uniqueIndex;not null" json:"slug"`
+	Description  string    `json:"description"`
+	Phone        string    `json:"phone"`
+	Email        string    `json:"email"`
+	Address      string    `json:"address"`
+	FacebookURL  string    `json:"facebookUrl"`
+	InstagramURL string    `json:"instagramUrl"`
+	TiktokURL    string    `json:"tiktokUrl"`
+	OwnerID      uuid.UUID `gorm:"type:uuid;not null;index" json:"ownerId"`
+	Owner        User      `gorm:"foreignKey:OwnerID;references:ID" json:"owner"`
+	IsActive     bool      `gorm:"default:true" json:"isActive"`
+	// Operator-entered reason for the most recent suspension, shown to
+	// merchant support. Cleared on reactivate.
+	SuspendReason *string        `json:"suspendReason"`
+	IsVerified    bool           `gorm:"default:false" json:"isVerified"`
+	LogoImage     *ShopLogoImage `gorm:"foreignKey:ShopID;references:ID" json:"logoImage"`
 
 	// Round-robin cursor for confirmatrice auto-assignment (services.AutoAssignOrder).
 	ConfirmatriceCursor int64 `gorm:"not null;default:0" json:"-"`

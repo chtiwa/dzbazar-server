@@ -243,7 +243,7 @@ func CreateShop(c *gin.Context) {
 		return
 	}
 
-	wilayas, err := initializers.GetStaticWilayas()
+	wilayas, err := services.GetWilayas()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

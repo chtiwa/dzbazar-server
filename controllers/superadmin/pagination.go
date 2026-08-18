@@ -2,6 +2,7 @@ package superadmin
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,6 +25,23 @@ func parsePageParams(c *gin.Context) (page int, perPage int) {
 	}
 
 	return page, perPage
+}
+
+// resolveSort reads the sortBy/sortDir query params and validates sortBy
+// against an allow-list of "public name" -> "GORM column" pairs, so the raw
+// query param is never interpolated into SQL. Falls back to defaultOrder
+// (a full "column DIR" clause) when sortBy is absent or unknown.
+func resolveSort(c *gin.Context, allowed map[string]string, defaultOrder string) string {
+	column, ok := allowed[strings.TrimSpace(c.Query("sortBy"))]
+	if !ok {
+		return defaultOrder
+	}
+
+	dir := "ASC"
+	if strings.EqualFold(c.Query("sortDir"), "desc") {
+		dir = "DESC"
+	}
+	return column + " " + dir
 }
 
 func paginationMeta(page, perPage int, totalRows int64) gin.H {

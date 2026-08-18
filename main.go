@@ -17,6 +17,7 @@ import (
 	"github.com/chtiwa/dzbazar-server/migrate"
 	"github.com/chtiwa/dzbazar-server/realtime"
 	"github.com/chtiwa/dzbazar-server/routes"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -27,6 +28,14 @@ func init() {
 	initializers.InitB2()
 	initializers.InitRedis()
 	migrate.Migrate()
+
+	// Wilayas now live in Postgres (see services/wilayas.go), seeded by
+	// migrate/migrations/00019_wilayas_table.sql — so warming the cache must
+	// happen after migrate.Migrate() above, once the table is guaranteed to
+	// exist, not alongside the other InitStaticData() checks earlier.
+	if _, err := services.GetWilayas(); err != nil {
+		log.Fatalf("failed to initialize wilayas: %v", err)
+	}
 }
 
 func envOr(key, fallback string) string {
@@ -52,6 +61,7 @@ func main() {
 	routes.LandingPagesRoutes(router)
 	routes.LandingPageExperimentsRoutes(router)
 	routes.CouponsRoutes(router)
+	routes.FeatureFlagsRoutes(router)
 	routes.ShopsRoutes(router)
 	routes.PixelsRoutes(router)
 	routes.VisitsRoutes(router)

@@ -856,6 +856,7 @@ func GetActiveProductsBySlug(c *gin.Context) {
 	db := initializers.DB.Model(&models.Product{}).
 		Where("products.shop_id = ?", shop.ID).
 		Where("products.active = ?", true).
+		Where("products.hidden_by_platform_at IS NULL").
 		Preload("Images")
 
 	if hasMinPrice {
@@ -939,6 +940,7 @@ func GetProductsBySearchBySlug(c *gin.Context) {
 	query := initializers.DB.Model(&models.Product{}).
 		Where("shop_id = ?", shopID).
 		Where("active = ?", true).
+		Where("hidden_by_platform_at IS NULL").
 		Order("updated_at DESC")
 
 	// 3. THE SEARCH LOGIC (Fixes the Phantom Brand bug)
@@ -1002,7 +1004,7 @@ func IndexProductBySlug(c *gin.Context) {
 
 	var product models.Product
 	err = initializers.DB.
-		Where("id = ? AND shop_id = ? AND active = ?", productID, shop.ID, true).
+		Where("id = ? AND shop_id = ? AND active = ? AND hidden_by_platform_at IS NULL", productID, shop.ID, true).
 		Preload("Images").
 		Preload("Variants").
 		Preload("Variants.VariantItems").
@@ -1635,7 +1637,7 @@ func UpdateProductByShop(c *gin.Context) {
 		return
 	}
 
-	invalidateProductCaches(productID, shopID)
+	InvalidateProductCaches(productID, shopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -1885,7 +1887,7 @@ func UpdateProductImagesByShop(c *gin.Context) {
 		return
 	}
 
-	invalidateProductCaches(productID, shopID)
+	InvalidateProductCaches(productID, shopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -1976,7 +1978,7 @@ func DeleteProductByShop(c *gin.Context) {
 		return
 	}
 
-	invalidateProductCaches(productID, shopID)
+	InvalidateProductCaches(productID, shopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -2311,7 +2313,7 @@ func UpdateProductVariantsByShop(c *gin.Context) {
 		return
 	}
 
-	invalidateProductCaches(productID, shopID)
+	InvalidateProductCaches(productID, shopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -2320,7 +2322,10 @@ func UpdateProductVariantsByShop(c *gin.Context) {
 	})
 }
 
-func invalidateProductCaches(productID uuid.UUID, shopID uuid.UUID) {
+// InvalidateProductCaches is exported so the super-admin force-hide/unhide
+// action (controllers/superadmin/productsController.go) can bust the same
+// product + landing-page caches a merchant-initiated product edit does.
+func InvalidateProductCaches(productID uuid.UUID, shopID uuid.UUID) {
 	go func() {
 		ctx := context.Background()
 

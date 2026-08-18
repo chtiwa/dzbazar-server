@@ -503,6 +503,20 @@ func IndexLandingPage(c *gin.Context) {
 		return
 	}
 
+	// A super-admin force-hidden product (see Product.HiddenByPlatformAt)
+	// must disappear from every customer-facing view, not just the direct
+	// product-listing/search/detail endpoints — a landing page embeds its
+	// product regardless of that flag, so it needs its own check here.
+	// Reported the same as a missing landing page: the moderation state
+	// itself shouldn't leak to the public.
+	if landingPage.Product.HiddenByPlatformAt != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Landing page not found",
+		})
+		return
+	}
+
 	if jsonData, err := json.Marshal(landingPage); err == nil {
 		_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
 	}

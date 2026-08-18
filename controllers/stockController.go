@@ -187,7 +187,7 @@ func UpdateStockQuantity(c *gin.Context) {
 		return
 	}
 
-	invalidateProductCaches(combination.ProductID, shopID)
+	InvalidateProductCaches(combination.ProductID, shopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

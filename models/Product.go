@@ -1,17 +1,29 @@
 package models
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Product struct {
 	BaseModel
-	ShopID      uuid.UUID      `gorm:"not null" json:"shopId"`
-	Title       string         `gorm:"not null" json:"title"`
-	Description string         `gorm:"not null" json:"description"`
-	Price       float64        `gorm:"not null" json:"price"`
-	OldPrice    *float64       `gorm:"default:0" json:"oldPrice"`
-	Active      bool           `gorm:"default:true" json:"active"`
-	Images      []ProductImage `gorm:"foreignKey:ProductID;references:ID;constraint:OnDelete:CASCADE" json:"images"`
-	Variants    []Variant      `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"variants"` // can be null when the product doesn't have any variants
+	ShopID      uuid.UUID `gorm:"not null" json:"shopId"`
+	Title       string    `gorm:"not null" json:"title"`
+	Description string    `gorm:"not null" json:"description"`
+	Price       float64   `gorm:"not null" json:"price"`
+	OldPrice    *float64  `gorm:"default:0" json:"oldPrice"`
+	Active      bool      `gorm:"default:true" json:"active"`
+	// HiddenByPlatformAt is platform-owned moderation, not a merchant field:
+	// non-nil means a super admin force-hid this single listing (e.g. fraud)
+	// without suspending the whole shop. Distinct from
+	// ProductVariantCombination.Retired (migration 00012), which is a
+	// merchant-owned SKU-retirement concept at the combination level, not the
+	// product level. Every customer-facing product query must exclude rows
+	// where this is set — see productsController.go's storefront handlers.
+	HiddenByPlatformAt *time.Time     `json:"hiddenByPlatformAt"`
+	Images             []ProductImage `gorm:"foreignKey:ProductID;references:ID;constraint:OnDelete:CASCADE" json:"images"`
+	Variants           []Variant      `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"variants"` // can be null when the product doesn't have any variants
 
 	Combinations []ProductVariantCombination `gorm:"foreignKey:ProductID;constraint:OnDelete:CASCADE" json:"combinations"`
 
