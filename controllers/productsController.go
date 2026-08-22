@@ -322,6 +322,11 @@ func CreateProductByShop(c *gin.Context) {
 		}
 	}
 
+	if len(combinationsInput) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "product must have at least one variant combination"})
+		return
+	}
+
 	tx := initializers.DB.Begin()
 	if tx.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to start transaction"})
@@ -1368,6 +1373,14 @@ func UpdateProductByShop(c *gin.Context) {
 			})
 			return
 		}
+	}
+
+	if body.Combinations != nil && len(body.Combinations) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "product must have at least one variant combination",
+		})
+		return
 	}
 
 	if body.Variants != nil || body.Combinations != nil {
