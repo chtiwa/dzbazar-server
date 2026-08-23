@@ -142,6 +142,7 @@ func GetClientsBySearch(c *gin.Context) {
 			return db.Order("created_at DESC")
 		}).
 		Order("created_at DESC").
+		Limit(10).
 		Find(&clients).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
