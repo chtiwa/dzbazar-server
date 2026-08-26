@@ -242,21 +242,26 @@ func GetShopSubscription(c *gin.Context) {
 	}
 
 	var sub *models.ShopSubscription
-	if err := initializers.DB.
-		Preload("Plan").
-		Where("shop_id = ?", shopID).
-		First(&sub).Error; err != nil && err != gorm.ErrRecordNotFound {
+	err = initializers.DB.Preload("Plan").Where("shop_id = ?", shopID).First(&sub).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch subscription", "error": err.Error()})
 		return
 	}
+	// GORM allocates a zero-value struct through a **T dest even on
+	// ErrRecordNotFound — reset explicitly or "no subscription" serializes
+	// as a non-null subscription with an empty plan name instead of null.
+	if err == gorm.ErrRecordNotFound {
+		sub = nil
+	}
 
 	var pendingRequest *models.PlanSwitchRequest
-	if err := initializers.DB.
-		Preload("Plan").
-		Where("shop_id = ? AND status = 'pending'", shopID).
-		First(&pendingRequest).Error; err != nil && err != gorm.ErrRecordNotFound {
+	err = initializers.DB.Preload("Plan").Where("shop_id = ? AND status = 'pending'", shopID).First(&pendingRequest).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch pending request", "error": err.Error()})
 		return
+	}
+	if err == gorm.ErrRecordNotFound {
+		pendingRequest = nil
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{

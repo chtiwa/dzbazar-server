@@ -39,3 +39,32 @@ func RateLimitByIP(bucket string, max int64, window time.Duration) gin.HandlerFu
 		c.Next()
 	}
 }
+
+// RateLimitByShop is RateLimitByIP keyed on :shopId instead of client IP —
+// for authenticated per-shop actions where the IP isn't the right bucket
+// (shared office NAT, mobile carrier IP rotation).
+func RateLimitByShop(bucket string, max int64, window time.Duration) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		key := fmt.Sprintf("ratelimit:%s:shop:%s", bucket, c.Param("shopId"))
+
+		count, err := initializers.RClient.Incr(initializers.Ctx, key).Result()
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		if count == 1 {
+			initializers.RClient.Expire(initializers.Ctx, key, window)
+		}
+
+		if count > max {
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				"success": false,
+				"message": "Too many plan switch requests, please try again later",
+			})
+			return
+		}
+
+		c.Next()
+	}
+}
