@@ -19,6 +19,16 @@ type Plan struct {
 	MaxLandingPages int `gorm:"not null;default:-1" json:"maxLandingPages"`
 	MaxUsers        int `gorm:"not null;default:-1" json:"maxUsers"` // shop members
 
+	// AI-generated product descriptions, counted per subscription period (see
+	// services.CheckAiDescriptionLimit) against ai_description_usages rows.
+	MaxAiDescriptionsPerMonth int `gorm:"not null;default:30" json:"maxAiDescriptionsPerMonth"`
+
+	// AI-generated landing-page images, same reset rule as above (see
+	// services.CheckLandingPageImageGenLimit). Kept separate and much
+	// tighter than MaxAiDescriptionsPerMonth — image generation costs far
+	// more per call than a text completion.
+	MaxAiImagesPerMonth int `gorm:"not null;default:5" json:"maxAiImagesPerMonth"`
+
 	// ---- Pixels ----
 	MaxFacebookPixels int `gorm:"not null;default:1" json:"maxFacebookPixels"`
 	MaxTikTokPixels   int `gorm:"not null;default:1" json:"maxTikTokPixels"`

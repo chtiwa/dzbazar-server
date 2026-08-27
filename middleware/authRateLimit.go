@@ -60,7 +60,7 @@ func RateLimitByShop(bucket string, max int64, window time.Duration) gin.Handler
 		if count > max {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"success": false,
-				"message": "Too many plan switch requests, please try again later",
+				"message": "Too many requests, please try again later",
 			})
 			return
 		}

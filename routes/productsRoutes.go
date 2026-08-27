@@ -17,6 +17,7 @@ func ProductsRoutes(router *gin.Engine) {
 		adminProducts.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("products.edit"), controllers.UpdateProductByShop)
 		adminProducts.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("products.delete"), controllers.DeleteProductByShop)
 		adminProducts.PATCH("/:id/images", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("products.edit"), controllers.UpdateProductImagesByShop)
+		adminProducts.POST("/ai-description", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), middleware.RateLimitByShop("ai-description", 20, time.Minute), controllers.GenerateProductDescription)
 	}
 
 	storeProducts := router.Group("/v1/store/:slug/products")

@@ -563,6 +563,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 
 	title := strings.TrimSpace(c.PostForm("title"))
 	activeValue := strings.TrimSpace(c.PostForm("active"))
+	productIDValue := strings.TrimSpace(c.PostForm("productId"))
 
 	var updates = map[string]interface{}{}
 
@@ -573,6 +574,32 @@ func UpdateLandingPageByShop(c *gin.Context) {
 	if activeValue != "" {
 		active := activeValue == "true"
 		updates["active"] = active
+	}
+
+	if productIDValue != "" {
+		productID, err := uuid.Parse(productIDValue)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Invalid product ID",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		var product models.Product
+		if err := initializers.DB.
+			Where("id = ? AND shop_id = ?", productID, shopID).
+			First(&product).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "Product not found",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		updates["product_id"] = productID
 	}
 
 	var currentImages []models.LandingPageImage

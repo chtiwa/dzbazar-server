@@ -7,6 +7,7 @@ import (
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -30,6 +31,8 @@ type CreatePlanInput struct {
 	MaxUsers        *int `json:"maxUsers"`
 	MaxFacebookPixels *int `json:"maxFacebookPixels"`
 	MaxTikTokPixels   *int `json:"maxTikTokPixels"`
+	MaxAiDescriptionsPerMonth *int `json:"maxAiDescriptionsPerMonth"`
+	MaxAiImagesPerMonth       *int `json:"maxAiImagesPerMonth"`
 
 	// Feature flags
 	HasConfirmationOrders *bool `json:"hasConfirmationOrders"`
@@ -50,6 +53,8 @@ type UpdatePlanInput struct {
 	MaxUsers        *int `json:"maxUsers"`
 	MaxFacebookPixels *int `json:"maxFacebookPixels"`
 	MaxTikTokPixels   *int `json:"maxTikTokPixels"`
+	MaxAiDescriptionsPerMonth *int `json:"maxAiDescriptionsPerMonth"`
+	MaxAiImagesPerMonth       *int `json:"maxAiImagesPerMonth"`
 
 	HasConfirmationOrders *bool `json:"hasConfirmationOrders"`
 	HasAbandonedOrders    *bool `json:"hasAbandonedOrders"`
@@ -99,6 +104,8 @@ func CreatePlan(c *gin.Context) {
 		MaxUsers:          derefInt(body.MaxUsers, -1),
 		MaxFacebookPixels: derefInt(body.MaxFacebookPixels, 1),
 		MaxTikTokPixels:   derefInt(body.MaxTikTokPixels, 1),
+		MaxAiDescriptionsPerMonth: derefInt(body.MaxAiDescriptionsPerMonth, 30),
+		MaxAiImagesPerMonth:       derefInt(body.MaxAiImagesPerMonth, 5),
 
 		HasConfirmationOrders: derefBool(body.HasConfirmationOrders, true),
 		HasAbandonedOrders:    derefBool(body.HasAbandonedOrders, false),
@@ -169,6 +176,12 @@ func UpdatePlan(c *gin.Context) {
 	}
 	if body.MaxTikTokPixels != nil {
 		updates["max_tik_tok_pixels"] = *body.MaxTikTokPixels
+	}
+	if body.MaxAiDescriptionsPerMonth != nil {
+		updates["max_ai_descriptions_per_month"] = *body.MaxAiDescriptionsPerMonth
+	}
+	if body.MaxAiImagesPerMonth != nil {
+		updates["max_ai_images_per_month"] = *body.MaxAiImagesPerMonth
 	}
 	if body.HasConfirmationOrders != nil {
 		updates["has_confirmation_orders"] = *body.HasConfirmationOrders
@@ -264,9 +277,16 @@ func GetShopSubscription(c *gin.Context) {
 		pendingRequest = nil
 	}
 
+	aiUsage, err := services.GetAiUsageSummary(shopID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch AI usage", "error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
 		"subscription":   sub,
 		"pendingRequest": pendingRequest,
+		"aiUsage":        aiUsage,
 	}})
 }
 

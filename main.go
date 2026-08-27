@@ -76,6 +76,7 @@ func main() {
 	routes.OffersRoutes(router)
 	routes.AbandonedLeadsRoutes(router)
 	routes.ConfirmatricesRoutes(router)
+	routes.HelpChatRoutes(router)
 	routes.SuperAdminRoutes(router)
 	routes.WebSocketRoutes(router)
 

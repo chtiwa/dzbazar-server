@@ -14,10 +14,12 @@ import (
 var ErrPlanLimitReached = errors.New("plan limit reached")
 
 // unsubscribedPlan caps a shop with no ShopSubscription row (pre-billing shops,
-// or a cancelled subscription) at the Basic tier's limits (see cmd/seedplans).
+// or a cancelled subscription) at the Basic tier's limits.
 var unsubscribedPlan = models.Plan{
 	MaxShops: 1, MaxProducts: 30, MaxOrders: 500, MaxLandingPages: 3,
 	MaxUsers: 2, MaxFacebookPixels: 1, MaxTikTokPixels: 1,
+	MaxAiDescriptionsPerMonth: 0,
+	MaxAiImagesPerMonth:       0,
 }
 
 func shopSubscription(shopID uuid.UUID) (models.ShopSubscription, error) {
@@ -74,6 +76,91 @@ func CheckLandingPageLimit(shopID uuid.UUID) error {
 	}
 	return countCap(initializers.DB.Model(&models.LandingPage{}).
 		Where("shop_id = ? AND deleted_at IS NULL", shopID), sub.Plan.MaxLandingPages)
+}
+
+func periodScopedCount(shopID uuid.UUID, sub models.ShopSubscription, model any) (int64, error) {
+	query := initializers.DB.Model(model).Where("shop_id = ?", shopID)
+	if !sub.StartedAt.IsZero() {
+		query = query.Where("created_at >= ?", sub.StartedAt)
+	}
+	var count int64
+	err := query.Count(&count).Error
+	return count, err
+}
+
+// CheckAiDescriptionLimit counts AI description generations since the
+// current subscription period started, same reset rule as CheckOrderLimit —
+// the cap resets on renewal/upgrade rather than blocking forever.
+func CheckAiDescriptionLimit(shopID uuid.UUID) error {
+	sub, err := shopSubscription(shopID)
+	if err != nil {
+		return err
+	}
+	count, err := periodScopedCount(shopID, sub, &models.AiDescriptionUsage{})
+	if err != nil {
+		return err
+	}
+	return checkCap(sub.Plan.MaxAiDescriptionsPerMonth, count)
+}
+
+// CheckLandingPageImageGenLimit counts AI image generations since the
+// current subscription period started, same reset rule as CheckOrderLimit.
+func CheckLandingPageImageGenLimit(shopID uuid.UUID) error {
+	sub, err := shopSubscription(shopID)
+	if err != nil {
+		return err
+	}
+	count, err := periodScopedCount(shopID, sub, &models.LandingPageImageGenUsage{})
+	if err != nil {
+		return err
+	}
+	return checkCap(sub.Plan.MaxAiImagesPerMonth, count)
+}
+
+// CheckLandingPageImageGenBudget requires at least `need` image-gen slots to
+// still be free this period — used before a multi-image batch (e.g. the
+// 5-image section set) so it fails fast instead of burning quota partway
+// through and leaving a half-finished set.
+func CheckLandingPageImageGenBudget(shopID uuid.UUID, need int) error {
+	sub, err := shopSubscription(shopID)
+	if err != nil {
+		return err
+	}
+	if sub.Plan.MaxAiImagesPerMonth == -1 {
+		return nil
+	}
+	count, err := periodScopedCount(shopID, sub, &models.LandingPageImageGenUsage{})
+	if err != nil {
+		return err
+	}
+	if count+int64(need) > int64(sub.Plan.MaxAiImagesPerMonth) {
+		return ErrPlanLimitReached
+	}
+	return nil
+}
+
+// AiUsageSummary is the merchant-facing "X of Y used this period" figures
+// shown in Settings/Plans, reusing the exact same counting rule the
+// Check*Limit functions enforce against.
+type AiUsageSummary struct {
+	DescriptionsUsed int64 `json:"descriptionsUsed"`
+	ImagesUsed       int64 `json:"imagesUsed"`
+}
+
+func GetAiUsageSummary(shopID uuid.UUID) (AiUsageSummary, error) {
+	sub, err := shopSubscription(shopID)
+	if err != nil {
+		return AiUsageSummary{}, err
+	}
+	descriptionsUsed, err := periodScopedCount(shopID, sub, &models.AiDescriptionUsage{})
+	if err != nil {
+		return AiUsageSummary{}, err
+	}
+	imagesUsed, err := periodScopedCount(shopID, sub, &models.LandingPageImageGenUsage{})
+	if err != nil {
+		return AiUsageSummary{}, err
+	}
+	return AiUsageSummary{DescriptionsUsed: descriptionsUsed, ImagesUsed: imagesUsed}, nil
 }
 
 func CheckUserLimit(shopID uuid.UUID) error {

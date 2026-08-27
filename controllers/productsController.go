@@ -261,6 +261,69 @@ type VariantItemSimple struct {
 	// Price and Quantity removed from here!
 }
 
+func GenerateProductDescription(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid shop ID"})
+		return
+	}
+
+	var body struct {
+		Description string `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || strings.TrimSpace(body.Description) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "description is required"})
+		return
+	}
+	description := strings.TrimSpace(body.Description)
+
+	if err := services.RejectNonDescriptionPrompt(description); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"success": false,
+			"message": "This doesn't look like a product description request. Please rephrase it as a short product description.",
+			"code":    "PROMPT_OUT_OF_SCOPE",
+		})
+		return
+	}
+
+	if err := services.CheckAiDescriptionLimit(shopID); err != nil {
+		if errors.Is(err, services.ErrPlanLimitReached) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"message": "AI description limit reached for your plan. Upgrade to generate more.",
+				"code":    "PLAN_LIMIT_REACHED",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
+		return
+	}
+
+	html, usage, err := services.GenerateProductDescriptionHTML(description)
+	if err != nil {
+		if errors.Is(err, services.ErrAIUnconfigured) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": "AI description generation is not configured"})
+			return
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": "Failed to generate description", "error": err.Error()})
+		return
+	}
+
+	var userID *uuid.UUID
+	if u, ok := c.Get("user"); ok {
+		if userData, ok := u.(models.User); ok {
+			userID = &userData.ID
+		}
+	}
+	if err := services.RecordAiDescriptionUsage(shopID, userID, usage); err != nil {
+		// Non-fatal: the merchant already got their generation, losing the
+		// usage row only means one uncounted call, not a failed request.
+		fmt.Printf("failed to record AI description usage for shop %s: %v\n", shopID, err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "description": html})
+}
+
 func CreateProductByShop(c *gin.Context) {
 	shopIDParam := c.Param("shopId")
 	shopID, err := uuid.Parse(shopIDParam)

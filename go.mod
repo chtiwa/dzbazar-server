@@ -3,6 +3,7 @@ module github.com/chtiwa/dzbazar-server
 go 1.25.7
 
 require (
+	github.com/HugoSmits86/nativewebp v1.3.0
 	github.com/aws/aws-sdk-go-v2 v1.36.5
 	github.com/aws/aws-sdk-go-v2/config v1.29.17
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.70
@@ -74,6 +75,7 @@ require (
 	github.com/xuri/nfp v0.0.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect
+	golang.org/x/image v0.25.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect

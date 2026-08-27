@@ -19,6 +19,8 @@ func LandingPagesRoutes(router *gin.Engine) {
 
 			adminLandingPages.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("landing_pages.edit"), controllers.UpdateLandingPageByShop)
 			adminLandingPages.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("landing_pages.delete"), controllers.DeleteLandingPageByShop)
+			adminLandingPages.POST("/generate-image", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), middleware.RateLimitByShop("landing-page-image", 10, time.Minute), controllers.GenerateLandingPageImage)
+			adminLandingPages.POST("/generate-image-set", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), middleware.RateLimitByShop("landing-page-image-set", 3, time.Minute), controllers.GenerateLandingPageImageSet)
 		}
 	}
 

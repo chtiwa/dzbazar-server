@@ -116,11 +116,41 @@ func GetShop(c *gin.Context) {
 	var pixels []models.Pixel
 	initializers.DB.Where("shop_id = ?", shopID).Order("created_at DESC").Find(&pixels)
 
+	// AI description usage since the current subscription period started —
+	// same window services.CheckAiDescriptionLimit enforces, so an operator
+	// sees the number the merchant's quota is actually measured against.
+	newAiUsageQuery := func() *gorm.DB {
+		q := initializers.DB.Model(&models.AiDescriptionUsage{}).Where("shop_id = ?", shopID)
+		if subErr == nil && !subscription.StartedAt.IsZero() {
+			q = q.Where("created_at >= ?", subscription.StartedAt)
+		}
+		return q
+	}
+	var aiCallsThisMonth, aiTokensThisMonth int64
+	newAiUsageQuery().Count(&aiCallsThisMonth)
+	newAiUsageQuery().Select("COALESCE(SUM(total_tokens), 0)").Scan(&aiTokensThisMonth)
+
+	// Same window/reasoning as above, for services.CheckLandingPageImageGenLimit —
+	// image generation costs far more per call than a text completion, so it's
+	// worth an operator seeing this count separately.
+	newAiImageUsageQuery := func() *gorm.DB {
+		q := initializers.DB.Model(&models.LandingPageImageGenUsage{}).Where("shop_id = ?", shopID)
+		if subErr == nil && !subscription.StartedAt.IsZero() {
+			q = q.Where("created_at >= ?", subscription.StartedAt)
+		}
+		return q
+	}
+	var aiImagesThisMonth int64
+	newAiImageUsageQuery().Count(&aiImagesThisMonth)
+
 	resp := gin.H{
-		"shop":         shop,
-		"productCount": productCount,
-		"orderCount":   orderCount,
-		"pixels":       toSuperAdminPixels(pixels),
+		"shop":              shop,
+		"productCount":      productCount,
+		"orderCount":        orderCount,
+		"pixels":            toSuperAdminPixels(pixels),
+		"aiCallsThisMonth":  aiCallsThisMonth,
+		"aiTokensThisMonth": aiTokensThisMonth,
+		"aiImagesThisMonth": aiImagesThisMonth,
 	}
 	if subErr == nil {
 		resp["subscription"] = subscription
