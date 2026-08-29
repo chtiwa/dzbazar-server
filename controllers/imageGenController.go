@@ -1,76 +1,58 @@
 package controllers
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/chtiwa/dzbazar-server/services"
+	"github.com/chtiwa/dzbazar-server/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
-// GenerateLandingPageImage turns a text prompt into a PNG image the admin
-// frontend attaches to a landing page like any other uploaded file — this
-// endpoint only returns image bytes, it does not touch storage itself.
-func GenerateLandingPageImage(c *gin.Context) {
-	shopID, err := uuid.Parse(c.Param("shopId"))
+// uploadGeneratedImage stores one AI-generated image in B2 so it survives
+// past the response — the source for the "AI Generated" gallery, which lists
+// every generation whether or not the merchant ends up using it on a page.
+// Best-effort: a failed upload just means that image is missing from the
+// gallery, never a failed generation response.
+func uploadGeneratedImage(shopID uuid.UUID, contentType string, data []byte) string {
+	bucketName := os.Getenv("B2_BUCKET_NAME")
+	b2Region := os.Getenv("B2_REGION")
+	b2PublicBaseURL := strings.TrimSpace(os.Getenv("B2_PUBLIC_BASE_URL"))
+
+	key := fmt.Sprintf("uploads/landing-pages/ai-generated/%s/%d.webp", shopID.String(), time.Now().UnixNano())
+	_, err := initializers.S3Client.PutObject(context.Background(), &s3.PutObjectInput{
+		Bucket:      aws.String(bucketName),
+		Key:         aws.String(key),
+		Body:        bytes.NewReader(data),
+		ACL:         types.ObjectCannedACLPublicRead,
+		ContentType: aws.String(contentType),
+	})
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid shop ID"})
-		return
+		fmt.Printf("failed to upload AI-generated image for shop %s: %v\n", shopID, err)
+		return ""
 	}
 
-	var body struct {
-		Prompt string `json:"prompt"`
+	if b2PublicBaseURL != "" {
+		return fmt.Sprintf("%s/%s", strings.TrimRight(b2PublicBaseURL, "/"), key)
 	}
-	if err := c.ShouldBindJSON(&body); err != nil || strings.TrimSpace(body.Prompt) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "prompt is required"})
-		return
-	}
-
-	if err := services.CheckLandingPageImageGenLimit(shopID); err != nil {
-		if errors.Is(err, services.ErrPlanLimitReached) {
-			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"message": "AI image generation limit reached for your plan. Upgrade to generate more.",
-				"code":    "PLAN_LIMIT_REACHED",
-			})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
-		return
-	}
-
-	png, err := services.GenerateLandingPageImage(strings.TrimSpace(body.Prompt))
-	if err != nil {
-		if errors.Is(err, services.ErrAIUnconfigured) {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": "Image generation is not configured"})
-			return
-		}
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": "Failed to generate image", "error": err.Error()})
-		return
-	}
-
-	var userID *uuid.UUID
-	if u, ok := c.Get("user"); ok {
-		if userData, ok := u.(models.User); ok {
-			userID = &userData.ID
-		}
-	}
-	usage := models.LandingPageImageGenUsage{ShopID: shopID, UserID: userID}
-	if err := initializers.DB.Create(&usage).Error; err != nil {
-		// Non-fatal: the merchant already got their image, losing the usage
-		// row only means one uncounted call, not a failed request.
-		fmt.Printf("failed to record AI image gen usage for shop %s: %v\n", shopID, err)
-	}
-
-	c.Data(http.StatusOK, "image/png", png)
+	return fmt.Sprintf("https://%s.s3.%s.backblazeb2.com/%s", bucketName, b2Region, key)
 }
 
 const maxLandingPageSectionRefs = 5
@@ -92,8 +74,16 @@ func GenerateLandingPageImageSet(c *gin.Context) {
 	category := strings.TrimSpace(c.PostForm("category"))
 	benefit := strings.TrimSpace(c.PostForm("primaryBenefit"))
 	painPoint := strings.TrimSpace(c.PostForm("painPoint"))
-	if productName == "" || category == "" || benefit == "" || painPoint == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "productName, category, primaryBenefit and painPoint are required"})
+	audience := strings.TrimSpace(c.PostForm("audience"))
+	offerDetails := strings.TrimSpace(c.PostForm("offerDetails"))
+	if productName == "" || category == "" || benefit == "" || painPoint == "" || audience == "" || offerDetails == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "productName, category, primaryBenefit, painPoint, audience and offerDetails are required"})
+		return
+	}
+
+	imageCount, err := strconv.Atoi(c.PostForm("imageCount"))
+	if err != nil || imageCount < services.MinLandingPageImageCount || imageCount > services.MaxLandingPageImageCount {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": fmt.Sprintf("imageCount must be between %d and %d", services.MinLandingPageImageCount, services.MaxLandingPageImageCount)})
 		return
 	}
 
@@ -133,8 +123,7 @@ func GenerateLandingPageImageSet(c *gin.Context) {
 		refs[i] = services.ReferenceImage{Bytes: data, MimeType: contentType}
 	}
 
-	const sectionCount = 5
-	if err := services.CheckLandingPageImageGenBudget(shopID, sectionCount); err != nil {
+	if err := services.CheckLandingPageImageGenBudget(shopID, imageCount); err != nil {
 		if errors.Is(err, services.ErrPlanLimitReached) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"success": false,
@@ -147,7 +136,7 @@ func GenerateLandingPageImageSet(c *gin.Context) {
 		return
 	}
 
-	images, err := services.GenerateLandingPageImageSet(refs, productName, category, benefit, painPoint)
+	images, err := services.GenerateLandingPageImageSet(refs, productName, category, benefit, painPoint, audience, offerDetails, imageCount)
 	if err != nil {
 		if errors.Is(err, services.ErrAIUnconfigured) {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": "Image generation is not configured"})
@@ -157,7 +146,15 @@ func GenerateLandingPageImageSet(c *gin.Context) {
 		return
 	}
 
+	var userID *uuid.UUID
+	if u, ok := c.Get("user"); ok {
+		if userData, ok := u.(models.User); ok {
+			userID = &userData.ID
+		}
+	}
+
 	webpImages := make([]string, len(images))
+	usageRows := make([]models.LandingPageImageGenUsage, len(images))
 	for i, img := range images {
 		webp, err := services.ToWebP(img)
 		if err != nil {
@@ -165,21 +162,70 @@ func GenerateLandingPageImageSet(c *gin.Context) {
 			return
 		}
 		webpImages[i] = "data:image/webp;base64," + base64.StdEncoding.EncodeToString(webp)
+		url := uploadGeneratedImage(shopID, "image/webp", webp)
+		usageRows[i] = models.LandingPageImageGenUsage{ShopID: shopID, UserID: userID, URL: url}
 	}
 
-	var userID *uuid.UUID
-	if u, ok := c.Get("user"); ok {
-		if userData, ok := u.(models.User); ok {
-			userID = &userData.ID
-		}
-	}
-	usageRows := make([]models.LandingPageImageGenUsage, sectionCount)
-	for i := range usageRows {
-		usageRows[i] = models.LandingPageImageGenUsage{ShopID: shopID, UserID: userID}
-	}
 	if err := initializers.DB.Create(&usageRows).Error; err != nil {
 		fmt.Printf("failed to record AI image gen usage for shop %s: %v\n", shopID, err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Landing page image set generated successfully", "data": webpImages})
+}
+
+// ListGeneratedImages returns every AI-generated landing-page image for the
+// shop, newest first — whether or not the merchant went on to add it to a
+// landing page. Rows without a URL (upload to B2 failed at generation time)
+// are excluded since there is nothing to show.
+func ListGeneratedImages(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid shop ID"})
+		return
+	}
+
+	page := 1
+	if pageString := c.Query("page"); pageString != "" {
+		if parsed, err := strconv.Atoi(pageString); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	const perPage = 24
+
+	baseQuery := initializers.DB.Model(&models.LandingPageImageGenUsage{}).
+		Where("shop_id = ? AND url <> ''", shopID)
+
+	var totalRows int64
+	if err := baseQuery.Count(&totalRows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to count generated images", "error": err.Error()})
+		return
+	}
+
+	totalPages := int(math.Ceil(float64(totalRows) / float64(perPage)))
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+
+	var rows []models.LandingPageImageGenUsage
+	if err := baseQuery.
+		Order("created_at DESC").
+		Limit(perPage).
+		Offset((page - 1) * perPage).
+		Find(&rows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to retrieve generated images", "error": err.Error()})
+		return
+	}
+
+	pagination := utils.GetPaginationData(page, totalPages, fmt.Sprintf("/shops/%s/landing-pages/generated-images", shopID))
+	pagination.TotalRows = totalRows
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"message":    "Generated images retrieved successfully",
+		"data":       rows,
+		"pagination": pagination,
+	})
 }
