@@ -134,12 +134,15 @@ func CreateUserByShop(c *gin.Context) {
 		return
 	}
 
+	// firstName/lastName/phoneNumber/password are only used for the "create a
+	// brand-new user" branch below; attaching an existing user (matched by
+	// email) needs nothing but the email itself, so they can't be `required`.
 	var body struct {
-		FirstName   string `json:"firstName" binding:"required"`
-		LastName    string `json:"lastName" binding:"required"`
-		PhoneNumber string `json:"phoneNumber" binding:"required"`
+		FirstName   string `json:"firstName" binding:"omitempty"`
+		LastName    string `json:"lastName" binding:"omitempty"`
+		PhoneNumber string `json:"phoneNumber" binding:"omitempty"`
 		Email       string `json:"email" binding:"required,email"`
-		Password    string `json:"password" binding:"required,min=6"`
+		Password    string `json:"password" binding:"omitempty,min=6"`
 		Role        string `json:"role" binding:"omitempty"`
 	}
 
@@ -224,6 +227,15 @@ func CreateUserByShop(c *gin.Context) {
 			return
 		}
 	} else {
+		if body.FirstName == "" || body.LastName == "" || body.PhoneNumber == "" || len(body.Password) < 6 {
+			tx.Rollback()
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "firstName, lastName, phoneNumber and a password (min 6 chars) are required to create a new user",
+			})
+			return
+		}
+
 		hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
 		if err != nil {
 			tx.Rollback()

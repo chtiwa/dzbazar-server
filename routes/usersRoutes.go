@@ -33,7 +33,7 @@ func UsersRoutes(router *gin.Engine) {
 		manageable.Use(middleware.RequireShopAccess())
 		{
 			manageable.GET("", middleware.RequireShopPermission("users.view"), controllers.GetUsersByShop)
-			manageable.POST("", middleware.RequireShopPermission("users.create"), controllers.CreateUserByShop)
+			manageable.POST("", middleware.RateLimitByShop("create-user", 20, time.Hour), middleware.RequireShopPermission("users.create"), controllers.CreateUserByShop)
 			manageable.PATCH("/:id", middleware.RequireShopPermission("users.edit"), controllers.UpdateUserByShop)
 			manageable.DELETE("/:id", middleware.RequireShopPermission("users.delete"), controllers.DeleteUserByShop)
 
