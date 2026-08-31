@@ -77,8 +77,16 @@ func validateOsenToken(token string) (bool, string) {
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("osen: validate-token returned status %d: %s", resp.StatusCode, string(body))
+		return false, "Osen Express est indisponible, réessayez plus tard."
+	}
+
 	var result osenValidateTokenResp
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
+		log.Printf("osen: validate-token decode failed: %v, body: %s", err, string(body))
 		return false, "Réponse invalide de Osen Express."
 	}
 	if !result.Valid {

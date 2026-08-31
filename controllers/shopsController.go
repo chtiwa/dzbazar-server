@@ -402,6 +402,18 @@ func CreateShop(c *gin.Context) {
 			}
 		}
 
+		var trialPlan models.Plan
+		if err := tx.Where("name = ?", "Trial").First(&trialPlan).Error; err != nil {
+			return err
+		}
+		start := time.Now()
+		expires := start.AddDate(0, 0, 2)
+		if err := tx.Create(&models.ShopSubscription{
+			ShopID: shop.ID, PlanID: trialPlan.ID, StartedAt: start, ExpiresAt: &expires,
+		}).Error; err != nil {
+			return err
+		}
+
 		return nil
 	})
 

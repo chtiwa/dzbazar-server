@@ -228,6 +228,7 @@ func VerifyUser(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "User already verified",
+			"role":    user.Role,
 			"user":    user,
 		})
 		return
@@ -274,6 +275,7 @@ func VerifyUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "User verified successfully",
+		"role":    user.Role,
 		"user":    user,
 	})
 }

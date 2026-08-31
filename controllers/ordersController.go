@@ -1234,6 +1234,117 @@ func DeleteOrderByShopID(c *gin.Context) {
 	})
 }
 
+type BulkUpdateOrderStatusInput struct {
+	OrderIDs []string `json:"orderIds" binding:"required,min=1"`
+	Status   string   `json:"status" binding:"required"`
+}
+
+// BulkUpdateOrderStatusByShopID sets the same status on a batch of orders —
+// same single-field semantics as StatusSelect's per-order PATCH, just looped
+// in one transaction so each order still gets its own from/to audit entry
+// (bulk assignment isn't audit-logged, but status changes are, and the "from"
+// differs per order so it can't be a single UPDATE like BulkAssignOrders).
+func BulkUpdateOrderStatusByShopID(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid or missing Shop ID"})
+		return
+	}
+
+	var body BulkUpdateOrderStatusInput
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error while binding JSON request context", "error": err.Error()})
+		return
+	}
+
+	orderIDs := make([]uuid.UUID, 0, len(body.OrderIDs))
+	for _, idStr := range body.OrderIDs {
+		parsed, parseErr := uuid.Parse(idStr)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid order ID: " + idStr})
+			return
+		}
+		orderIDs = append(orderIDs, parsed)
+	}
+
+	var orders []models.Order
+	if err := initializers.DB.
+		Where("id IN ? AND shop_id = ?", orderIDs, shopID).
+		Find(&orders).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to load orders", "error": err.Error()})
+		return
+	}
+
+	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
+		return tx.Model(&models.Order{}).
+			Where("id IN ? AND shop_id = ?", orderIDs, shopID).
+			Update("status", body.Status).Error
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update order statuses", "error": err.Error()})
+		return
+	}
+
+	for _, order := range orders {
+		if order.Status != body.Status {
+			orderID := order.ID
+			utils.LogAudit(c, "order.status_changed", "Order", &orderID, map[string]string{
+				"from": order.Status,
+				"to":   body.Status,
+			})
+		}
+	}
+
+	InvalidateDashboardCache(shopID)
+	invalidateOrdersListCache(shopID)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Order statuses updated", "updated": len(orders)})
+}
+
+type BulkDeleteOrdersInput struct {
+	OrderIDs []string `json:"orderIds" binding:"required,min=1"`
+}
+
+// BulkDeleteOrdersByShopID soft-deletes a batch of orders in one request —
+// same DeleteOrderByShopID semantics (scoped to shop, GORM soft delete), just
+// for many orders at once instead of a loop of individual calls.
+func BulkDeleteOrdersByShopID(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid or missing Shop ID"})
+		return
+	}
+
+	var body BulkDeleteOrdersInput
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error while binding JSON request context", "error": err.Error()})
+		return
+	}
+
+	orderIDs := make([]uuid.UUID, 0, len(body.OrderIDs))
+	for _, idStr := range body.OrderIDs {
+		parsed, parseErr := uuid.Parse(idStr)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid order ID: " + idStr})
+			return
+		}
+		orderIDs = append(orderIDs, parsed)
+	}
+
+	result := initializers.DB.Where("id IN ? AND shop_id = ?", orderIDs, shopID).Delete(&models.Order{})
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to delete orders", "error": result.Error.Error()})
+		return
+	}
+
+	InvalidateDashboardCache(shopID)
+	InvalidateProductCaches(uuid.Nil, shopID)
+	invalidateOrdersListCache(shopID)
+	initializers.RClient.Del(initializers.Ctx, services.LandingPagesCacheKeyByShop(shopID))
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Orders deleted successfully", "deleted": result.RowsAffected})
+}
+
 // BanOrderClient permanently bans the fbp/ttp behind one order from ever
 // placing a visible order again: every future order from that same browser
 // id is auto-hidden and skips the pixel event, exactly like a cussword-flagged

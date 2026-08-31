@@ -27,4 +27,13 @@ func PlansRoutes(router *gin.Engine) {
 		sub.POST("", middleware.RequireShopAccess(), middleware.RequireShopPermission("subscription.edit"), middleware.RateLimitByShop("plan-switch", 3, time.Hour), controllers.SubscribeShopToPlan)
 		sub.DELETE("", middleware.RequireShopAccess(), middleware.RequireShopPermission("subscription.edit"), controllers.CancelShopSubscription)
 	}
+
+	// Per-shop invoices — manual Redot payment proof, reviewed by super admin.
+	invoices := router.Group("/v1/shops/:shopId/invoices")
+	invoices.Use(middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("subscription.edit"))
+	{
+		invoices.GET("", controllers.ListMyInvoices)
+		invoices.POST("", middleware.RateLimitByShop("invoice-create", 3, time.Hour), controllers.CreateInvoice)
+		invoices.POST("/:id/proof", controllers.UploadInvoiceProof)
+	}
 }

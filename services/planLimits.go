@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
@@ -22,13 +23,24 @@ var unsubscribedPlan = models.Plan{
 	MaxAiImagesPerMonth:       0,
 }
 
+// expiredPlan locks a shop out entirely once its trial or paid period has
+// lapsed (ExpiresAt in the past) — every cap is 0 until they renew via an
+// approved invoice, which resets StartedAt/ExpiresAt.
+var expiredPlan = models.Plan{}
+
 func shopSubscription(shopID uuid.UUID) (models.ShopSubscription, error) {
 	var sub models.ShopSubscription
 	err := initializers.DB.Preload("Plan").Where("shop_id = ?", shopID).First(&sub).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return models.ShopSubscription{Plan: unsubscribedPlan}, nil
 	}
-	return sub, err
+	if err != nil {
+		return sub, err
+	}
+	if sub.ExpiresAt != nil && sub.ExpiresAt.Before(time.Now()) {
+		sub.Plan = expiredPlan
+	}
+	return sub, nil
 }
 
 func checkCap(max int, count int64) error {

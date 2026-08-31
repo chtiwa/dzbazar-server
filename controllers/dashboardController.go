@@ -260,12 +260,12 @@ func GetOrdersDashboard(c *gin.Context) {
 	revSelect := fmt.Sprintf(`
 			COALESCE(SUM(CASE WHEN status = 'Livré' THEN %s END), 0) AS delivered_revenue,
 			COALESCE(SUM(CASE WHEN status = 'Livré' THEN %s END), 0) AS delivered_net_revenue,
-			COALESCE(SUM(CASE WHEN status NOT IN ('Livré', 'Annulé', 'Abandonné') THEN %s END), 0) AS pending_revenue,
+			COALESCE(SUM(CASE WHEN status NOT IN ('Livré', 'Annulé', 'Retour', 'Abandonné') THEN %s END), 0) AS pending_revenue,
 			COUNT(*) FILTER (WHERE status = 'Livré') AS delivered_orders,
 			COUNT(*) FILTER (WHERE is_shipped = true) AS shipped_orders,
 			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s') AS matured_shipped,
 			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s' AND status = 'Livré') AS matured_delivered,
-			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s' AND status IN ('Livré', 'Annulé')) AS matured_resolved,
+			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s' AND status IN ('Livré', 'Retour')) AS matured_resolved,
 			COUNT(*) FILTER (WHERE %s) AS confirmed_orders
 		`, deliveredExpr, netExpr, deliveredExpr, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, wasEverConfirmed)
 

@@ -85,7 +85,7 @@ func mapZrStatusToLocal(zrStatus string) string {
 	case "delivered":
 		return "Livré"
 	case "cancelled", "canceled", "returned":
-		return "Annulé"
+		return "Retour"
 	default:
 		return ""
 	}

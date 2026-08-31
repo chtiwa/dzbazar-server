@@ -83,7 +83,7 @@ func mapOsenStatusToLocal(osenStatus string) string {
 	case "DELIVERED":
 		return "Livré"
 	case "CANCELLED":
-		return "Annulé"
+		return "Retour"
 	default:
 		return ""
 	}
