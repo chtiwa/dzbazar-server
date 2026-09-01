@@ -115,7 +115,12 @@ func periodScopedCount(shopID uuid.UUID, sub models.ShopSubscription, model any)
 // the provider regardless of which landing-page section it fills.
 const (
 	CreditCostDescription = 5
-	CreditCostImage       = 10
+	CreditCostImagePro    = 10
+	CreditCostImageFlash  = 5
+	// CreditCostImage is the historical/legacy rate used for usage-report
+	// weighting below, kept flat since usage rows don't record which model
+	// generated them.
+	CreditCostImage = CreditCostImagePro
 )
 
 // creditsUsed is the weighted spend for the shop's current subscription
