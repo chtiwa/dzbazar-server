@@ -286,11 +286,11 @@ func GenerateProductDescription(c *gin.Context) {
 		return
 	}
 
-	if err := services.CheckAiDescriptionLimit(shopID); err != nil {
+	if err := services.CheckCreditBudget(shopID, services.CreditCostDescription); err != nil {
 		if errors.Is(err, services.ErrPlanLimitReached) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"success": false,
-				"message": "AI description limit reached for your plan. Upgrade to generate more.",
+				"message": "Not enough AI credits. Upgrade your plan for more.",
 				"code":    "PLAN_LIMIT_REACHED",
 			})
 			return

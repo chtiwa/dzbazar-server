@@ -177,11 +177,11 @@ func GenerateLandingPageImageSet(c *gin.Context) {
 		return
 	}
 
-	if err := services.CheckLandingPageImageGenBudget(shopID, imageCount); err != nil {
+	if err := services.CheckCreditBudget(shopID, imageCount*services.CreditCostImage); err != nil {
 		if errors.Is(err, services.ErrPlanLimitReached) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"success": false,
-				"message": "AI image generation limit reached for your plan. Upgrade to generate more.",
+				"message": "Not enough AI credits. Upgrade your plan for more.",
 				"code":    "PLAN_LIMIT_REACHED",
 			})
 			return
@@ -396,11 +396,11 @@ func RegenerateLandingPageImageSet(c *gin.Context) {
 		return
 	}
 
-	if err := services.CheckLandingPageImageGenBudget(shopID, campaign.ImageCount); err != nil {
+	if err := services.CheckCreditBudget(shopID, campaign.ImageCount*services.CreditCostImage); err != nil {
 		if errors.Is(err, services.ErrPlanLimitReached) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"success": false,
-				"message": "AI image generation limit reached for your plan. Upgrade to generate more.",
+				"message": "Not enough AI credits. Upgrade your plan for more.",
 				"code":    "PLAN_LIMIT_REACHED",
 			})
 			return
