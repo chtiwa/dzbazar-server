@@ -117,7 +117,7 @@ func GetShop(c *gin.Context) {
 	initializers.DB.Where("shop_id = ?", shopID).Order("created_at DESC").Find(&pixels)
 
 	// AI description usage since the current subscription period started —
-	// same window services.CheckAiDescriptionLimit enforces, so an operator
+	// same window services.CheckCreditBudget enforces, so an operator
 	// sees the number the merchant's quota is actually measured against.
 	newAiUsageQuery := func() *gorm.DB {
 		q := initializers.DB.Model(&models.AiDescriptionUsage{}).Where("shop_id = ?", shopID)
@@ -130,9 +130,9 @@ func GetShop(c *gin.Context) {
 	newAiUsageQuery().Count(&aiCallsThisMonth)
 	newAiUsageQuery().Select("COALESCE(SUM(total_tokens), 0)").Scan(&aiTokensThisMonth)
 
-	// Same window/reasoning as above, for services.CheckLandingPageImageGenLimit —
-	// image generation costs far more per call than a text completion, so it's
-	// worth an operator seeing this count separately.
+	// Same window/reasoning as above, for services.CheckCreditBudget's image
+	// path — image generation costs far more per call than a text completion,
+	// so it's worth an operator seeing this count separately.
 	newAiImageUsageQuery := func() *gorm.DB {
 		q := initializers.DB.Model(&models.LandingPageImageGenUsage{}).Where("shop_id = ?", shopID)
 		if subErr == nil && !subscription.StartedAt.IsZero() {
@@ -143,6 +143,10 @@ func GetShop(c *gin.Context) {
 	var aiImagesThisMonth int64
 	newAiImageUsageQuery().Count(&aiImagesThisMonth)
 
+	// The merchant-facing figure, so an operator sees the same number the
+	// shop's quota is measured against — not just the raw call counts above.
+	creditsUsed := aiCallsThisMonth*services.CreditCostDescription + aiImagesThisMonth*services.CreditCostImage
+
 	resp := gin.H{
 		"shop":              shop,
 		"productCount":      productCount,
@@ -151,6 +155,7 @@ func GetShop(c *gin.Context) {
 		"aiCallsThisMonth":  aiCallsThisMonth,
 		"aiTokensThisMonth": aiTokensThisMonth,
 		"aiImagesThisMonth": aiImagesThisMonth,
+		"creditsUsed":       creditsUsed,
 	}
 	if subErr == nil {
 		resp["subscription"] = subscription

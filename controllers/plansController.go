@@ -24,15 +24,14 @@ type CreatePlanInput struct {
 	IsActive *bool   `json:"isActive"`
 
 	// Caps (omit or send 0 to use default: -1 = unlimited, except MaxShops default 1)
-	MaxShops        *int `json:"maxShops"`
-	MaxProducts     *int `json:"maxProducts"`
-	MaxOrders       *int `json:"maxOrders"`
-	MaxLandingPages *int `json:"maxLandingPages"`
-	MaxUsers        *int `json:"maxUsers"`
+	MaxShops          *int `json:"maxShops"`
+	MaxProducts       *int `json:"maxProducts"`
+	MaxOrders         *int `json:"maxOrders"`
+	MaxLandingPages   *int `json:"maxLandingPages"`
+	MaxUsers          *int `json:"maxUsers"`
 	MaxFacebookPixels *int `json:"maxFacebookPixels"`
 	MaxTikTokPixels   *int `json:"maxTikTokPixels"`
-	MaxAiDescriptionsPerMonth *int `json:"maxAiDescriptionsPerMonth"`
-	MaxAiImagesPerMonth       *int `json:"maxAiImagesPerMonth"`
+	CreditsPerMonth   *int `json:"creditsPerMonth"`
 
 	// Feature flags
 	HasConfirmationOrders *bool `json:"hasConfirmationOrders"`
@@ -46,15 +45,14 @@ type UpdatePlanInput struct {
 	Price    *float64 `json:"price"`
 	IsActive *bool    `json:"isActive"`
 
-	MaxShops        *int `json:"maxShops"`
-	MaxProducts     *int `json:"maxProducts"`
-	MaxOrders       *int `json:"maxOrders"`
-	MaxLandingPages *int `json:"maxLandingPages"`
-	MaxUsers        *int `json:"maxUsers"`
+	MaxShops          *int `json:"maxShops"`
+	MaxProducts       *int `json:"maxProducts"`
+	MaxOrders         *int `json:"maxOrders"`
+	MaxLandingPages   *int `json:"maxLandingPages"`
+	MaxUsers          *int `json:"maxUsers"`
 	MaxFacebookPixels *int `json:"maxFacebookPixels"`
 	MaxTikTokPixels   *int `json:"maxTikTokPixels"`
-	MaxAiDescriptionsPerMonth *int `json:"maxAiDescriptionsPerMonth"`
-	MaxAiImagesPerMonth       *int `json:"maxAiImagesPerMonth"`
+	CreditsPerMonth   *int `json:"creditsPerMonth"`
 
 	HasConfirmationOrders *bool `json:"hasConfirmationOrders"`
 	HasAbandonedOrders    *bool `json:"hasAbandonedOrders"`
@@ -104,8 +102,7 @@ func CreatePlan(c *gin.Context) {
 		MaxUsers:          derefInt(body.MaxUsers, -1),
 		MaxFacebookPixels: derefInt(body.MaxFacebookPixels, 1),
 		MaxTikTokPixels:   derefInt(body.MaxTikTokPixels, 1),
-		MaxAiDescriptionsPerMonth: derefInt(body.MaxAiDescriptionsPerMonth, 30),
-		MaxAiImagesPerMonth:       derefInt(body.MaxAiImagesPerMonth, 5),
+		CreditsPerMonth:   derefInt(body.CreditsPerMonth, 0),
 
 		HasConfirmationOrders: derefBool(body.HasConfirmationOrders, true),
 		HasAbandonedOrders:    derefBool(body.HasAbandonedOrders, false),
@@ -177,11 +174,8 @@ func UpdatePlan(c *gin.Context) {
 	if body.MaxTikTokPixels != nil {
 		updates["max_tik_tok_pixels"] = *body.MaxTikTokPixels
 	}
-	if body.MaxAiDescriptionsPerMonth != nil {
-		updates["max_ai_descriptions_per_month"] = *body.MaxAiDescriptionsPerMonth
-	}
-	if body.MaxAiImagesPerMonth != nil {
-		updates["max_ai_images_per_month"] = *body.MaxAiImagesPerMonth
+	if body.CreditsPerMonth != nil {
+		updates["credits_per_month"] = *body.CreditsPerMonth
 	}
 	if body.HasConfirmationOrders != nil {
 		updates["has_confirmation_orders"] = *body.HasConfirmationOrders
@@ -277,16 +271,16 @@ func GetShopSubscription(c *gin.Context) {
 		pendingRequest = nil
 	}
 
-	aiUsage, err := services.GetAiUsageSummary(shopID)
+	credits, err := services.GetCreditsSummary(shopID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch AI usage", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch AI credits", "error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
 		"subscription":   sub,
 		"pendingRequest": pendingRequest,
-		"aiUsage":        aiUsage,
+		"credits":        credits,
 	}})
 }
 
