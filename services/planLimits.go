@@ -42,6 +42,17 @@ func shopSubscription(shopID uuid.UUID) (models.ShopSubscription, error) {
 	return sub, nil
 }
 
+// IsFreeTier reports whether the shop is on a zero-price plan — Trial, no
+// subscription at all, or a lapsed one. Free tiers get metered help chat;
+// paid tiers are unlimited.
+func IsFreeTier(shopID uuid.UUID) (bool, error) {
+	sub, err := shopSubscription(shopID)
+	if err != nil {
+		return false, err
+	}
+	return sub.Plan.Price == 0, nil
+}
+
 func checkCap(max int, count int64) error {
 	if max == -1 || count < int64(max) {
 		return nil
