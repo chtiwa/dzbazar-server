@@ -19,8 +19,7 @@ var ErrPlanLimitReached = errors.New("plan limit reached")
 var unsubscribedPlan = models.Plan{
 	MaxShops: 1, MaxProducts: 30, MaxOrders: 500, MaxLandingPages: 3,
 	MaxUsers: 2, MaxFacebookPixels: 1, MaxTikTokPixels: 1,
-	MaxAiDescriptionsPerMonth: 0,
-	MaxAiImagesPerMonth:       0,
+	CreditsPerMonth: 0,
 }
 
 // expiredPlan locks a shop out entirely once its trial or paid period has
@@ -100,79 +99,71 @@ func periodScopedCount(shopID uuid.UUID, sub models.ShopSubscription, model any)
 	return count, err
 }
 
-// CheckAiDescriptionLimit counts AI description generations since the
-// current subscription period started, same reset rule as CheckOrderLimit —
-// the cap resets on renewal/upgrade rather than blocking forever.
-func CheckAiDescriptionLimit(shopID uuid.UUID) error {
-	sub, err := shopSubscription(shopID)
+// Credit costs per AI action. One flat rate each: descriptions take a single
+// prompt with no length tiers, and every generated image costs the same at
+// the provider regardless of which landing-page section it fills.
+const (
+	CreditCostDescription = 5
+	CreditCostImage       = 10
+)
+
+// creditsUsed is the weighted spend for the shop's current subscription
+// period: the same COUNT(*)-since-StartedAt windows the old per-feature caps
+// used, multiplied by each action's credit cost and summed. Computed on the
+// fly rather than stored, so renewal/upgrade (which rewrites StartedAt) is
+// the only reset needed — same rule as CheckOrderLimit.
+func creditsUsed(shopID uuid.UUID, sub models.ShopSubscription) (int64, error) {
+	descriptions, err := periodScopedCount(shopID, sub, &models.AiDescriptionUsage{})
 	if err != nil {
-		return err
+		return 0, err
 	}
-	count, err := periodScopedCount(shopID, sub, &models.AiDescriptionUsage{})
+	images, err := periodScopedCount(shopID, sub, &models.LandingPageImageGenUsage{})
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return checkCap(sub.Plan.MaxAiDescriptionsPerMonth, count)
+	return descriptions*CreditCostDescription + images*CreditCostImage, nil
 }
 
-// CheckLandingPageImageGenLimit counts AI image generations since the
-// current subscription period started, same reset rule as CheckOrderLimit.
-func CheckLandingPageImageGenLimit(shopID uuid.UUID) error {
+// CheckCreditBudget requires `need` credits to still be available this
+// period. Every AI caller pre-flights its full cost (5 for a description,
+// 10 x N for an image batch) so a multi-image set fails fast instead of
+// burning quota partway through and leaving a half-finished set.
+func CheckCreditBudget(shopID uuid.UUID, need int) error {
 	sub, err := shopSubscription(shopID)
 	if err != nil {
 		return err
 	}
-	count, err := periodScopedCount(shopID, sub, &models.LandingPageImageGenUsage{})
-	if err != nil {
-		return err
-	}
-	return checkCap(sub.Plan.MaxAiImagesPerMonth, count)
-}
-
-// CheckLandingPageImageGenBudget requires at least `need` image-gen slots to
-// still be free this period — used before a multi-image batch (e.g. the
-// 5-image section set) so it fails fast instead of burning quota partway
-// through and leaving a half-finished set.
-func CheckLandingPageImageGenBudget(shopID uuid.UUID, need int) error {
-	sub, err := shopSubscription(shopID)
-	if err != nil {
-		return err
-	}
-	if sub.Plan.MaxAiImagesPerMonth == -1 {
+	if sub.Plan.CreditsPerMonth == -1 {
 		return nil
 	}
-	count, err := periodScopedCount(shopID, sub, &models.LandingPageImageGenUsage{})
+	used, err := creditsUsed(shopID, sub)
 	if err != nil {
 		return err
 	}
-	if count+int64(need) > int64(sub.Plan.MaxAiImagesPerMonth) {
+	if used+int64(need) > int64(sub.Plan.CreditsPerMonth) {
 		return ErrPlanLimitReached
 	}
 	return nil
 }
 
-// AiUsageSummary is the merchant-facing "X of Y used this period" figures
-// shown in Settings/Plans, reusing the exact same counting rule the
-// Check*Limit functions enforce against.
-type AiUsageSummary struct {
-	DescriptionsUsed int64 `json:"descriptionsUsed"`
-	ImagesUsed       int64 `json:"imagesUsed"`
+// CreditsSummary is the merchant-facing "X of Y credits used" figure shown in
+// the navbar, Settings and the pricing page, reusing the exact same
+// accounting CheckCreditBudget enforces against.
+type CreditsSummary struct {
+	Used  int64 `json:"used"`
+	Total int   `json:"total"` // -1 = unlimited
 }
 
-func GetAiUsageSummary(shopID uuid.UUID) (AiUsageSummary, error) {
+func GetCreditsSummary(shopID uuid.UUID) (CreditsSummary, error) {
 	sub, err := shopSubscription(shopID)
 	if err != nil {
-		return AiUsageSummary{}, err
+		return CreditsSummary{}, err
 	}
-	descriptionsUsed, err := periodScopedCount(shopID, sub, &models.AiDescriptionUsage{})
+	used, err := creditsUsed(shopID, sub)
 	if err != nil {
-		return AiUsageSummary{}, err
+		return CreditsSummary{}, err
 	}
-	imagesUsed, err := periodScopedCount(shopID, sub, &models.LandingPageImageGenUsage{})
-	if err != nil {
-		return AiUsageSummary{}, err
-	}
-	return AiUsageSummary{DescriptionsUsed: descriptionsUsed, ImagesUsed: imagesUsed}, nil
+	return CreditsSummary{Used: used, Total: sub.Plan.CreditsPerMonth}, nil
 }
 
 func CheckUserLimit(shopID uuid.UUID) error {
