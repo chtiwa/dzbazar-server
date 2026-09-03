@@ -9,6 +9,7 @@ import (
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/realtime"
 	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -86,6 +87,20 @@ func CreateAbandonedLead(c *gin.Context) {
 	if err := initializers.DB.Create(&lead).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to save lead"})
 		return
+	}
+
+	select {
+	case realtime.Broadcast <- realtime.Message{
+		Event:  "abandoned_lead_created",
+		ShopID: lead.ShopID.String(),
+		Data: map[string]any{
+			"leadId":      lead.ID.String(),
+			"clientName":  lead.FullName,
+			"productName": lead.ProductTitle,
+		},
+	}:
+	case <-time.After(5 * time.Second):
+		fmt.Println("ws broadcast dropped: hub backpressure")
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Lead recorded"})
