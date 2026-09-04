@@ -47,6 +47,11 @@ type DashboardData struct {
 	MaturingOrders   int64        `json:"maturingOrders"`
 	ConfirmedOrders  int64        `json:"confirmedOrders"`
 	ConfirmationRate float64      `json:"confirmationRate"`
+	// Resolved = left "En attente" limbo (same definition as confirmatrices.go).
+	// Narrows the denominator to orders that were actually worked, so it isn't
+	// dragged down by orders nobody has called yet.
+	ResolvedOrders          int64   `json:"resolvedOrders"`
+	ResolvedConfirmationRate float64 `json:"resolvedConfirmationRate"`
 	// Resolved = matured shipment that reached a terminal state (Livré/Annulé).
 	// StuckInTransit = matured (past buffer) but still sitting in a non-terminal
 	// status — a failing/slow carrier, distinct from MaturingOrders (too recent
@@ -218,6 +223,7 @@ func GetOrdersDashboard(c *gin.Context) {
 		MaturedDelivered    int64
 		MaturedResolved     int64
 		ConfirmedOrders     int64
+		ResolvedOrders      int64
 	}
 	revQ := db.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
 	if hasDateFilter {
@@ -251,10 +257,16 @@ func GetOrdersDashboard(c *gin.Context) {
 	// "was ever confirmed" per the order.status_changed audit trail — same
 	// definition as confirmationRatesByProductIDs in productsController.go, not
 	// the current order.status (which would miss orders that moved past Confirmé).
-	const wasEverConfirmed = `EXISTS (
-			SELECT 1 FROM audit_logs al
-			WHERE al.target_type = 'Order' AND al.target_id = orders.id
-				AND al.action = 'order.status_changed' AND al.metadata::json->>'to' = 'Confirmé'
+	// status IN (...) catches carrier-shipped orders: Osen/ZR/Leopard write
+	// status = 'Expedié' directly (bypass LogAudit) when shipping, and a
+	// shipped/delivered/returned order was necessarily confirmed first even
+	// with no audit row. EXISTS alone missed all of those.
+	const wasEverConfirmed = `(
+			orders.status IN ('Confirmé', 'Expedié', 'Livré', 'Retour') OR EXISTS (
+				SELECT 1 FROM audit_logs al
+				WHERE al.target_type = 'Order' AND al.target_id = orders.id
+					AND al.action = 'order.status_changed' AND al.metadata::json->>'to' = 'Confirmé'
+			)
 		)`
 
 	revSelect := fmt.Sprintf(`
@@ -266,7 +278,8 @@ func GetOrdersDashboard(c *gin.Context) {
 			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s') AS matured_shipped,
 			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s' AND status = 'Livré') AS matured_delivered,
 			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s' AND status IN ('Livré', 'Retour')) AS matured_resolved,
-			COUNT(*) FILTER (WHERE %s) AS confirmed_orders
+			COUNT(*) FILTER (WHERE %s) AS confirmed_orders,
+			COUNT(*) FILTER (WHERE status <> 'En attente') AS resolved_orders
 		`, deliveredExpr, netExpr, deliveredExpr, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, wasEverConfirmed)
 
 	if err := revQ.Select(revSelect).Scan(&rev).Error; err != nil {
@@ -277,6 +290,10 @@ func GetOrdersDashboard(c *gin.Context) {
 	confirmationRate := 0.0
 	if totalOrders > 0 {
 		confirmationRate = float64(rev.ConfirmedOrders) * 100.0 / float64(totalOrders)
+	}
+	resolvedConfirmationRate := 0.0
+	if rev.ResolvedOrders > 0 {
+		resolvedConfirmationRate = float64(rev.ConfirmedOrders) * 100.0 / float64(rev.ResolvedOrders)
 	}
 	// AOV is merchandise-only: shipping is passed through to the carrier, so
 	// including it inflates the figure by the delivery tarif and makes AOV
@@ -375,6 +392,8 @@ func GetOrdersDashboard(c *gin.Context) {
 		MaturingOrders:       maturingOrders,
 		ConfirmedOrders:      rev.ConfirmedOrders,
 		ConfirmationRate:     confirmationRate,
+		ResolvedOrders:           rev.ResolvedOrders,
+		ResolvedConfirmationRate: resolvedConfirmationRate,
 		MaturedResolved:      rev.MaturedResolved,
 		StuckInTransit:       stuckInTransit,
 		ResolvedDeliveryRate: resolvedDeliveryRate,

@@ -705,8 +705,6 @@ func UpdateShop(c *gin.Context) {
 		} else {
 			uploadedLogoURL = fmt.Sprintf("https://%s.s3.%s.backblazeb2.com/%s", bucketName, b2Region, key)
 		}
-
-		updateData["logo_url"] = uploadedLogoURL
 	}
 
 	err = initializers.DB.Transaction(func(tx *gorm.DB) error {

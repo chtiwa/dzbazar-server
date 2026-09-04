@@ -226,10 +226,14 @@ func confirmationRatesByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]*float
 		Confirmed   int64
 	}
 
-	const wasEverConfirmed = `EXISTS (
-			SELECT 1 FROM audit_logs al
-			WHERE al.target_type = 'Order' AND al.target_id = order_items.order_id
-				AND al.action = 'order.status_changed' AND al.metadata::json->>'to' = 'Confirmé'
+	// status IN (...) catches carrier-shipped orders (Osen/ZR/Leopard write
+	// status = 'Expedié' directly, bypassing LogAudit) — see dashboardController.go.
+	const wasEverConfirmed = `(
+			orders.status IN ('Confirmé', 'Expedié', 'Livré', 'Retour') OR EXISTS (
+				SELECT 1 FROM audit_logs al
+				WHERE al.target_type = 'Order' AND al.target_id = order_items.order_id
+					AND al.action = 'order.status_changed' AND al.metadata::json->>'to' = 'Confirmé'
+			)
 		)`
 
 	err := initializers.DB.
