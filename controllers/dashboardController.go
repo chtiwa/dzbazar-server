@@ -52,12 +52,15 @@ type DashboardData struct {
 	// dragged down by orders nobody has called yet.
 	ResolvedOrders          int64   `json:"resolvedOrders"`
 	ResolvedConfirmationRate float64 `json:"resolvedConfirmationRate"`
-	// Resolved = matured shipment that reached a terminal state (Livré/Annulé).
-	// StuckInTransit = matured (past buffer) but still sitting in a non-terminal
-	// status — a failing/slow carrier, distinct from MaturingOrders (too recent
-	// to judge yet). ResolvedDeliveryRate only divides by resolved outcomes, so
-	// it doesn't get dragged down by shipments still in flight.
-	MaturedResolved      int64   `json:"maturedResolved"`
+	// ResolvedShipped/ResolvedDelivered = shipments that reached a terminal
+	// state (Livré/Retour), no maturity wait — an order is resolved the
+	// instant it lands there, unlike deliveryRate which needs time to judge
+	// carriers still in flight. StuckInTransit still uses the maturity
+	// buffer: matured (past buffer) but still sitting in a non-terminal
+	// status — a failing/slow carrier, distinct from MaturingOrders (too
+	// recent to judge yet).
+	ResolvedShipped      int64   `json:"resolvedShipped"`
+	ResolvedDelivered    int64   `json:"resolvedDeliveredOrders"`
 	StuckInTransit       int64   `json:"stuckInTransit"`
 	ResolvedDeliveryRate float64 `json:"resolvedDeliveryRate"`
 }
@@ -222,6 +225,8 @@ func GetOrdersDashboard(c *gin.Context) {
 		MaturedShipped      int64
 		MaturedDelivered    int64
 		MaturedResolved     int64
+		ResolvedShipped     int64
+		ResolvedDelivered   int64
 		ConfirmedOrders     int64
 		ResolvedOrders      int64
 	}
@@ -278,9 +283,11 @@ func GetOrdersDashboard(c *gin.Context) {
 			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s') AS matured_shipped,
 			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s' AND status = 'Livré') AS matured_delivered,
 			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s' AND status IN ('Livré', 'Retour')) AS matured_resolved,
+			COUNT(*) FILTER (WHERE is_shipped = true AND status IN ('Livré', 'Retour')) AS resolved_shipped,
+			COUNT(*) FILTER (WHERE is_shipped = true AND status = 'Livré') AS resolved_delivered,
 			COUNT(*) FILTER (WHERE %s) AS confirmed_orders,
 			COUNT(*) FILTER (WHERE status <> 'En attente') AS resolved_orders
-		`, deliveredExpr, netExpr, deliveredExpr, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, wasEverConfirmed)
+		`, deliveredExpr, netExpr, deliveredExpr, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, wasEverConfirmed)
 
 	if err := revQ.Select(revSelect).Scan(&rev).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching revenue stats", "error": err.Error()})
@@ -325,12 +332,13 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 	maturingOrders := rev.ShippedOrders - rev.MaturedShipped
 
-	// Same numerator, denominator narrowed to matured shipments that actually
-	// reached a terminal state — excludes shipments stuck in transit past the
-	// buffer instead of counting them as failures.
+	// Unlike deliveryRate, no maturity gate here: Livré/Retour is already a
+	// terminal outcome the moment it happens, no reason to wait 3 days to
+	// count an order that's already resolved. The buffer only matters for
+	// judging shipments still in flight (stuckInTransit below).
 	resolvedDeliveryRate := 0.0
-	if rev.MaturedResolved > 0 {
-		resolvedDeliveryRate = float64(rev.MaturedDelivered) * 100.0 / float64(rev.MaturedResolved)
+	if rev.ResolvedShipped > 0 {
+		resolvedDeliveryRate = float64(rev.ResolvedDelivered) * 100.0 / float64(rev.ResolvedShipped)
 	}
 	stuckInTransit := rev.MaturedShipped - rev.MaturedResolved
 
@@ -394,7 +402,8 @@ func GetOrdersDashboard(c *gin.Context) {
 		ConfirmationRate:     confirmationRate,
 		ResolvedOrders:           rev.ResolvedOrders,
 		ResolvedConfirmationRate: resolvedConfirmationRate,
-		MaturedResolved:      rev.MaturedResolved,
+		ResolvedShipped:      rev.ResolvedShipped,
+		ResolvedDelivered:    rev.ResolvedDelivered,
 		StuckInTransit:       stuckInTransit,
 		ResolvedDeliveryRate: resolvedDeliveryRate,
 	}
