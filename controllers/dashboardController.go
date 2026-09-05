@@ -287,7 +287,7 @@ func GetOrdersDashboard(c *gin.Context) {
 			COUNT(*) FILTER (WHERE is_shipped = true AND status = 'Livré') AS resolved_delivered,
 			COUNT(*) FILTER (WHERE %s) AS confirmed_orders,
 			COUNT(*) FILTER (WHERE status <> 'En attente') AS resolved_orders
-		`, deliveredExpr, netExpr, deliveredExpr, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, wasEverConfirmed)
+		`, deliveredExpr, netExpr, deliveredExpr, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, wasEverConfirmed)
 
 	if err := revQ.Select(revSelect).Scan(&rev).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching revenue stats", "error": err.Error()})

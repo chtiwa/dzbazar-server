@@ -18,6 +18,7 @@ func LandingPageExperimentsRoutes(router *gin.Engine) {
 			adminExperiments.GET("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess("owner"), controllers.GetExperimentByShop)
 			adminExperiments.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("landing_pages.edit"), controllers.UpdateExperimentByShop)
 			adminExperiments.POST("/:id/landing-pages", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("landing_pages.edit"), controllers.AddLandingPageToExperimentByShop)
+			adminExperiments.DELETE("/:id/landing-pages/:landingPageId", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("landing_pages.edit"), controllers.RemoveLandingPageFromExperimentByShop)
 			adminExperiments.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("landing_pages.delete"), controllers.DeleteExperimentByShop)
 		}
 	}

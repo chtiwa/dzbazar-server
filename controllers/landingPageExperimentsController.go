@@ -341,6 +341,87 @@ func AddLandingPageToExperimentByShop(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Landing page added to the test successfully", "data": response})
 }
 
+// RemoveLandingPageFromExperimentByShop detaches one set from a running
+// experiment, releasing it back to a standalone landing page (mirrors the
+// per-set release DeleteExperimentByShop does for all sets at once). Blocked
+// below 2 remaining sets — the same minimum CreateExperimentByShop enforces
+// at creation, since a single-set "test" can't produce a comparison.
+func RemoveLandingPageFromExperimentByShop(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID", "error": err.Error()})
+		return
+	}
+	experimentID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid experiment ID", "error": err.Error()})
+		return
+	}
+	landingPageID, err := uuid.Parse(c.Param("landingPageId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid landing page ID", "error": err.Error()})
+		return
+	}
+
+	var experiment models.LandingPageExperiment
+	if err := initializers.DB.Where("id = ? AND shop_id = ?", experimentID, shopID).First(&experiment).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Experiment not found", "error": err.Error()})
+		return
+	}
+	if experiment.Status != models.ExperimentStatusRunning {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Sets can only be removed from a running test"})
+		return
+	}
+
+	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
+		var setCount int64
+		if err := tx.Model(&models.LandingPage{}).Where("experiment_id = ?", experimentID).Count(&setCount).Error; err != nil {
+			return err
+		}
+		if setCount <= 2 {
+			return errTooFewSets
+		}
+
+		res := tx.Model(&models.LandingPage{}).
+			Where("id = ? AND shop_id = ? AND experiment_id = ?", landingPageID, shopID, experimentID).
+			Updates(map[string]interface{}{"experiment_id": nil, "experiment_position": 0})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, errTooFewSets):
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "A test needs at least 2 sets — stop or delete it instead of removing this one"})
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Set not found in this test"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to remove the set", "error": err.Error()})
+		}
+		return
+	}
+
+	var updated models.LandingPageExperiment
+	if err := loadExperimentWithSets(initializers.DB, shopID, experimentID, &updated); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to reload experiment", "error": err.Error()})
+		return
+	}
+
+	response, err := buildExperimentResponse(updated)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to compute experiment standings", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Set removed from the test successfully", "data": response})
+}
+
+var errTooFewSets = errors.New("experiment would have too few sets")
+
 type updateExperimentBody struct {
 	Name              *string `json:"name"`
 	TargetConversions *int    `json:"targetConversions"`
