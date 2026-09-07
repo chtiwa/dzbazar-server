@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
@@ -19,6 +20,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+const andersonOrdersCacheTTL = 2 * time.Minute
 
 // Anderson delivery (ECOTRACK platform). Auth is a bare api_token query param
 // on every call — no bearer header, no request body on the single-order
@@ -155,6 +158,63 @@ func shipOrderToAnderson(c *gin.Context, order *models.Order, integration *model
 	invalidateOrdersListCache(order.ShopID)
 
 	return andersonResp, nil
+}
+
+// GetAndersonOrders proxies Ecotrack's paginated orders-with-status list.
+func GetAndersonOrders(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	integration, err := findAndersonIntegration(shopID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Anderson n'est pas connecté à cette boutique"})
+		return
+	}
+
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	cacheKey := fmt.Sprintf("anderson:orders:%s:%d", shopID, page)
+	if cached, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result(); err == nil {
+		var cachedResp map[string]any
+		if json.Unmarshal([]byte(cached), &cachedResp) == nil {
+			c.JSON(http.StatusOK, gin.H{"success": true, "data": cachedResp})
+			return
+		}
+	}
+
+	reqURL := fmt.Sprintf("%s/api/v1/get/orders?api_token=%s&page=%d",
+		andersonBaseURL, url.QueryEscape(integration.Token), page)
+
+	httpClient := &http.Client{Timeout: 15 * time.Second}
+	resp, err := httpClient.Get(reqURL)
+	if err != nil {
+		log.Printf("anderson: GetAndersonOrders request failed: %v", err)
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": "Impossible de joindre Anderson"})
+		return
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": "Erreur Anderson", "status": resp.StatusCode})
+		return
+	}
+
+	var andersonResp map[string]any
+	json.Unmarshal(body, &andersonResp)
+
+	if encoded, err := json.Marshal(andersonResp); err == nil {
+		initializers.RClient.Set(initializers.Ctx, cacheKey, encoded, andersonOrdersCacheTTL)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": andersonResp})
 }
 
 type createAndersonOrderInput struct {
