@@ -15,6 +15,7 @@ import (
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/chtiwa/dzbazar-server/services"
+	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -67,7 +68,7 @@ type procolisAddColisReq struct {
 // local order. On success it stores the tracking code, marks the order as
 // shipped, and decrements stock for each ordered variant. The order must have
 // Client and Items.Product preloaded.
-func shipOrderToLeopard(order *models.Order, integration *models.DeliveryCompany) (map[string]any, error) {
+func shipOrderToLeopard(c *gin.Context, order *models.Order, integration *models.DeliveryCompany) (map[string]any, error) {
 	commune := order.Client.City
 	if order.ShippingMethod != "Domicile" {
 		commune = order.Client.StopdeskPoint
@@ -123,6 +124,18 @@ func shipOrderToLeopard(order *models.Order, integration *models.DeliveryCompany
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Printf("leopard: order %s rejected, status %d: %s", order.ID, resp.StatusCode, string(respBody))
 		return nil, &osenShipError{http.StatusBadRequest, "Leopard Express a refusé la commande"}
+	}
+
+	// A merchant can ship straight from "En attente" without ever marking the
+	// order Confirmé first — that's a legitimate flow, but it would silently
+	// exclude the order from the confirmation-rate metric (which counts orders
+	// ever audit-logged into "Confirmé"). Backfill that transition here so
+	// shipping always implies confirmed.
+	if order.Status != "Confirmé" {
+		utils.LogAudit(c, "order.status_changed", "Order", &order.ID, map[string]string{
+			"from": order.Status,
+			"to":   "Confirmé",
+		})
 	}
 
 	// The parcel already exists at Leopard at this point — if this write fails
@@ -204,7 +217,7 @@ func CreateLeopardOrder(c *gin.Context) {
 		return
 	}
 
-	result, err := shipOrderToLeopard(&order, integration)
+	result, err := shipOrderToLeopard(c, &order, integration)
 	if err != nil {
 		var shipErr *osenShipError
 		if errors.As(err, &shipErr) {

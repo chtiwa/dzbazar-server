@@ -110,40 +110,58 @@ func periodScopedCount(shopID uuid.UUID, sub models.ShopSubscription, model any)
 	return count, err
 }
 
-// Credit costs per AI action. One flat rate each: descriptions take a single
-// prompt with no length tiers, and every generated image costs the same at
-// the provider regardless of which landing-page section it fills.
-const (
-	CreditCostDescription = 5
-	CreditCostImagePro    = 10
-	CreditCostImageFlash  = 5
-	// CreditCostImage is the historical/legacy rate used for usage-report
-	// weighting below, kept flat since usage rows don't record which model
-	// generated them.
-	CreditCostImage = CreditCostImagePro
-)
+// Credit cost per AI action. Descriptions take a single prompt with no
+// length tiers, so one flat rate; image generation cost varies by the model
+// the merchant picked (see AIImageModelCredits).
+const CreditCostDescription = 5
+
+// creditCostForModel bills an unrecognized/empty model (e.g. usage rows from
+// before per-model billing existed) at the priciest known tier — fails
+// closed rather than under-billing.
+func creditCostForModel(model string) int {
+	if cost, ok := AIImageModelCredits[AIImageModel(model)]; ok {
+		return cost
+	}
+	max := 0
+	for _, cost := range AIImageModelCredits {
+		if cost > max {
+			max = cost
+		}
+	}
+	return max
+}
 
 // creditsUsed is the weighted spend for the shop's current subscription
-// period: the same COUNT(*)-since-StartedAt windows the old per-feature caps
-// used, multiplied by each action's credit cost and summed. Computed on the
-// fly rather than stored, so renewal/upgrade (which rewrites StartedAt) is
-// the only reset needed — same rule as CheckOrderLimit.
+// period: the same COUNT(*)-since-StartedAt window the old per-feature caps
+// used for descriptions, plus each image row billed at its own model's cost.
+// Computed on the fly rather than stored, so renewal/upgrade (which rewrites
+// StartedAt) is the only reset needed — same rule as CheckOrderLimit.
 func creditsUsed(shopID uuid.UUID, sub models.ShopSubscription) (int64, error) {
 	descriptions, err := periodScopedCount(shopID, sub, &models.AiDescriptionUsage{})
 	if err != nil {
 		return 0, err
 	}
-	images, err := periodScopedCount(shopID, sub, &models.LandingPageImageGenUsage{})
-	if err != nil {
+
+	query := initializers.DB.Model(&models.AiImageToolUsage{}).Where("shop_id = ?", shopID)
+	if !sub.StartedAt.IsZero() {
+		query = query.Where("created_at >= ?", sub.StartedAt)
+	}
+	var imageModels []string
+	if err := query.Pluck("model", &imageModels).Error; err != nil {
 		return 0, err
 	}
-	return descriptions*CreditCostDescription + images*CreditCostImage, nil
+	var imagesCost int64
+	for _, m := range imageModels {
+		imagesCost += int64(creditCostForModel(m))
+	}
+
+	return descriptions*CreditCostDescription + imagesCost, nil
 }
 
 // CheckCreditBudget requires `need` credits to still be available this
 // period. Every AI caller pre-flights its full cost (5 for a description,
-// 10 x N for an image batch) so a multi-image set fails fast instead of
-// burning quota partway through and leaving a half-finished set.
+// 10 for a generated image) so a call fails fast instead of burning quota
+// partway through.
 func CheckCreditBudget(shopID uuid.UUID, need int) error {
 	sub, err := shopSubscription(shopID)
 	if err != nil {

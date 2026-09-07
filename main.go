@@ -59,11 +59,13 @@ func main() {
 	routes.ProductsRoutes(router)
 	routes.StockRoutes(router)
 	routes.LandingPagesRoutes(router)
+	routes.AIImageToolRoutes(router)
 	routes.LandingPageExperimentsRoutes(router)
 	routes.CouponsRoutes(router)
 	routes.FeatureFlagsRoutes(router)
 	routes.ShopsRoutes(router)
 	routes.PixelsRoutes(router)
+	routes.GoogleSheetsRoutes(router)
 	routes.VisitsRoutes(router)
 	routes.DashboardRoutes(router)
 	routes.DeliveryRatesRoutes(router)
@@ -73,6 +75,7 @@ func main() {
 	routes.OsenRoutes(router)
 	routes.LeopardRoutes(router)
 	routes.ZrRoutes(router)
+	routes.AndersonRoutes(router)
 	routes.OffersRoutes(router)
 	routes.AbandonedLeadsRoutes(router)
 	routes.ConfirmatricesRoutes(router)
@@ -84,11 +87,13 @@ func main() {
 	// pool — must start before any order can be created.
 	controllers.StartOrderEventWorkers(4)
 	go controllers.StartMetaPurchaseRetrySweep()
+	go controllers.StartSheetsExportRetrySweep()
 
 	go realtime.StartHub()
 	go realtime.StartSubscriber()
 	go controllers.StartOsenStatusSync()
 	go controllers.StartZrStatusSync()
+	go controllers.StartAndersonStatusSync()
 	go controllers.StartSubscriptionExpiryReminders()
 
 	srv := &http.Server{

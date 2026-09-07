@@ -16,6 +16,7 @@ import (
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/chtiwa/dzbazar-server/services"
+	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -215,7 +216,7 @@ func extractZrErrorMessage(body []byte) string {
 // success it stores ZR's tracking number, marks the order as shipped, and
 // decrements stock for each ordered variant. The order must have Client and
 // Items.Product/Items.ProductVariantCombination preloaded.
-func shipOrderToZr(order *models.Order, integration *models.DeliveryCompany) (map[string]any, error) {
+func shipOrderToZr(c *gin.Context, order *models.Order, integration *models.DeliveryCompany) (map[string]any, error) {
 	deliveryType := "home"
 	if order.ShippingMethod != "Domicile" {
 		deliveryType = "pickup-point"
@@ -305,6 +306,18 @@ func shipOrderToZr(order *models.Order, integration *models.DeliveryCompany) (ma
 	var zrParcel map[string]any
 	json.Unmarshal(respBody, &zrParcel)
 
+	// A merchant can ship straight from "En attente" without ever marking the
+	// order Confirmé first — that's a legitimate flow, but it would silently
+	// exclude the order from the confirmation-rate metric (which counts orders
+	// ever audit-logged into "Confirmé"). Backfill that transition here so
+	// shipping always implies confirmed.
+	if order.Status != "Confirmé" {
+		utils.LogAudit(c, "order.status_changed", "Order", &order.ID, map[string]string{
+			"from": order.Status,
+			"to":   "Confirmé",
+		})
+	}
+
 	updates := map[string]any{
 		"is_shipped":     true,
 		"status":         "Expedié",
@@ -393,7 +406,7 @@ func CreateZrOrder(c *gin.Context) {
 		return
 	}
 
-	zrOrder, err := shipOrderToZr(&order, integration)
+	zrOrder, err := shipOrderToZr(c, &order, integration)
 	if err != nil {
 		var shipErr *osenShipError
 		if errors.As(err, &shipErr) {
@@ -465,7 +478,7 @@ func BulkCreateZrOrders(c *gin.Context) {
 			continue
 		}
 
-		zrOrder, err := shipOrderToZr(&order, integration)
+		zrOrder, err := shipOrderToZr(c, &order, integration)
 		if err != nil {
 			results = append(results, bulkZrShipResult{OrderID: idStr, Success: false, Message: err.Error()})
 			continue

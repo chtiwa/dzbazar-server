@@ -16,6 +16,7 @@ import (
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/chtiwa/dzbazar-server/services"
+	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -301,7 +302,7 @@ func (e *osenShipError) Error() string { return e.msg }
 // On success it stores Osen's tracking number, marks the order as shipped, and
 // decrements stock for each ordered variant. The order must have Client and
 // Items.Product preloaded.
-func shipOrderToOsen(order *models.Order, integration *models.DeliveryCompany) (map[string]any, error) {
+func shipOrderToOsen(c *gin.Context, order *models.Order, integration *models.DeliveryCompany) (map[string]any, error) {
 	// For Stopdesk orders the commune is stored in StopdeskPoint (the bureau
 	// name); City is left empty by the storefront checkout in that case.
 	cityName := order.Client.City
@@ -380,6 +381,18 @@ func shipOrderToOsen(order *models.Order, integration *models.DeliveryCompany) (
 		if _, err := httpClient.Do(validateReq); err != nil {
 			log.Printf("osen: order %s created but validate call failed: %v", osenOrderID, err)
 		}
+	}
+
+	// A merchant can ship straight from "En attente" without ever marking the
+	// order Confirmé first — that's a legitimate flow, but it would silently
+	// exclude the order from the confirmation-rate metric (which counts orders
+	// ever audit-logged into "Confirmé"). Backfill that transition here so
+	// shipping always implies confirmed.
+	if order.Status != "Confirmé" {
+		utils.LogAudit(c, "order.status_changed", "Order", &order.ID, map[string]string{
+			"from": order.Status,
+			"to":   "Confirmé",
+		})
 	}
 
 	updates := map[string]any{
@@ -462,7 +475,7 @@ func CreateOsenOrder(c *gin.Context) {
 		return
 	}
 
-	osenOrder, err := shipOrderToOsen(&order, integration)
+	osenOrder, err := shipOrderToOsen(c, &order, integration)
 	if err != nil {
 		var shipErr *osenShipError
 		if errors.As(err, &shipErr) {
@@ -534,7 +547,7 @@ func BulkCreateOsenOrders(c *gin.Context) {
 			continue
 		}
 
-		osenOrder, err := shipOrderToOsen(&order, integration)
+		osenOrder, err := shipOrderToOsen(c, &order, integration)
 		if err != nil {
 			results = append(results, bulkOsenShipResult{OrderID: idStr, Success: false, Message: err.Error()})
 			continue

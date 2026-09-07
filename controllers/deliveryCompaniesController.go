@@ -348,6 +348,16 @@ func ConnectDeliveryCompany(c *gin.Context) {
 			return
 		}
 	}
+	if strings.Contains(strings.ToLower(strings.TrimSpace(available.Name)), "anderson") {
+		valid, errMsg := validateAndersonToken(body.Token)
+		if !valid {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": fmt.Sprintf("Token Anderson invalide: %s", errMsg),
+			})
+			return
+		}
+	}
 
 	var existing models.DeliveryCompany
 	err = initializers.DB.

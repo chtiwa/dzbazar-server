@@ -130,11 +130,11 @@ func GetShop(c *gin.Context) {
 	newAiUsageQuery().Count(&aiCallsThisMonth)
 	newAiUsageQuery().Select("COALESCE(SUM(total_tokens), 0)").Scan(&aiTokensThisMonth)
 
-	// Same window/reasoning as above, for services.CheckCreditBudget's image
-	// path — image generation costs far more per call than a text completion,
-	// so it's worth an operator seeing this count separately.
+	// Same window/reasoning as above, for services.CheckCreditBudget's AI
+	// image tool path — image generation costs far more per call than a text
+	// completion, so it's worth an operator seeing this count separately.
 	newAiImageUsageQuery := func() *gorm.DB {
-		q := initializers.DB.Model(&models.LandingPageImageGenUsage{}).Where("shop_id = ?", shopID)
+		q := initializers.DB.Model(&models.AiImageToolUsage{}).Where("shop_id = ?", shopID)
 		if subErr == nil && !subscription.StartedAt.IsZero() {
 			q = q.Where("created_at >= ?", subscription.StartedAt)
 		}
@@ -145,7 +145,10 @@ func GetShop(c *gin.Context) {
 
 	// The merchant-facing figure, so an operator sees the same number the
 	// shop's quota is measured against — not just the raw call counts above.
-	creditsUsed := aiCallsThisMonth*services.CreditCostDescription + aiImagesThisMonth*services.CreditCostImage
+	// Images are billed per-model now, so this reuses the same accounting
+	// CheckCreditBudget enforces rather than a flat per-image rate.
+	creditsSummary, _ := services.GetCreditsSummary(shopID)
+	creditsUsed := creditsSummary.Used
 
 	resp := gin.H{
 		"shop":              shop,

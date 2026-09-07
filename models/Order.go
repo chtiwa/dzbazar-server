@@ -83,6 +83,17 @@ type Order struct {
 	// retry forever.
 	MetaPurchaseAttempts int `gorm:"not null;default:0" json:"metaPurchaseAttempts"`
 
+	// Set once this order has been successfully appended as a row to the
+	// shop's connected Google Sheet. Same idempotency-claim shape as
+	// MetaPurchaseSentAt: NULL means eligible to export, non-NULL means
+	// already sent (or currently being attempted).
+	SheetsExportSentAt *time.Time `json:"sheetsExportSentAt"`
+
+	// Counts every Google Sheets export attempt for this order (success or
+	// failure). StartSheetsExportRetrySweep stops retrying once this hits
+	// sheetsExportMaxAttempts.
+	SheetsExportAttempts int `gorm:"not null;default:0" json:"sheetsExportAttempts"`
+
 	// The actual page URL the customer's browser was on at checkout
 	// (window.location.href, captured client-side). Used as the
 	// event_source_url / page.url for the Meta and TikTok CAPI sends instead

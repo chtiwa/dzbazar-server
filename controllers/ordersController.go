@@ -27,6 +27,9 @@ type CreateOrderInput struct {
 	ShippingMethod   string  `json:"shippingMethod" binding:"required"`
 	ShippingPrice    float64 `json:"shippingPrice"`
 	TotalPrice       float64 `json:"totalPrice"`
+	// Staff-only manual total override (see IsStaffOrder). Ignored for
+	// anonymous checkout — total there always stays server-calculated.
+	OverrideTotalPrice *float64 `json:"overrideTotalPrice"`
 	Note             string  `json:"note"`
 	Ouvrable         bool    `json:"ouvrable"`
 	Fragile          bool    `json:"fragile"`
@@ -642,6 +645,14 @@ func CreateOrderByShopID(c *gin.Context) {
 		}
 		calculatedTotalPrice += shippingPrice
 
+		// Staff placing the order manually can override the final total (e.g.
+		// a verbal discount). Only trusted when IsStaffOrder verified real
+		// shop membership above — anonymous checkout can send this field too
+		// but it's silently ignored, same trust boundary as item.Price.
+		if middleware.IsStaffOrder(c) && body.OverrideTotalPrice != nil {
+			calculatedTotalPrice = *body.OverrideTotalPrice
+		}
+
 		// A banned client id never reaches this point at all (see the
 		// short-circuit above, before this transaction started). This is
 		// purely first-offense detection: a cussword name on an id that
@@ -737,7 +748,7 @@ func CreateOrderByShopID(c *gin.Context) {
 
 	// 3. Async side-effects (email, Meta CAPI, live broadcast) run on the
 	// bounded order-event worker pool — see controllers/orderEvents.go.
-	enqueueOrderEvent(order.ID)
+	enqueueOrderEvent(order.ID, isStaffOrder)
 
 	InvalidateDashboardCache(parsedShopID)
 	InvalidateProductCaches(uuid.Nil, parsedShopID)

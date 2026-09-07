@@ -11,6 +11,7 @@ import (
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/chtiwa/dzbazar-server/realtime"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -24,49 +25,65 @@ const (
 	metaPurchaseSweepLockKey = "lock:tick:meta_purchase_sweep"
 )
 
+// Google Sheets order export retry sweep — see StartSheetsExportRetrySweep.
+const (
+	sheetsExportRetryAge     = 15 * time.Minute
+	sheetsExportSweepEvery   = 15 * time.Minute
+	sheetsExportMaxAttempts  = 5
+	sheetsExportSweepLockKey = "lock:tick:sheets_export_sweep"
+)
+
+// orderEventPayload is what CreateOrderByShopID hands off to the worker
+// pool. IsStaffOrder rides along because processOrderEvent runs with no
+// *gin.Context — it can't re-derive middleware.IsStaffOrder(c) itself.
+type orderEventPayload struct {
+	OrderID      uuid.UUID
+	IsStaffOrder bool
+}
+
 // Order side-effects (confirmation email, Meta CAPI purchase event, live
 // dashboard broadcast) run on a small bounded worker pool instead of one raw
 // goroutine per order — a traffic spike can no longer fan out unbounded
 // goroutines, and DrainOrderEvents lets graceful shutdown wait for in-flight
 // work instead of losing it mid-send when the process exits.
 var (
-	orderEvents  chan uuid.UUID
+	orderEvents  chan orderEventPayload
 	orderEventWG sync.WaitGroup
 )
 
 // StartOrderEventWorkers must be called once at boot, before any order can
 // be created, otherwise enqueueOrderEvent has nothing to send to.
 func StartOrderEventWorkers(n int) {
-	orderEvents = make(chan uuid.UUID, 256)
+	orderEvents = make(chan orderEventPayload, 256)
 	for i := 0; i < n; i++ {
 		go orderEventWorker()
 	}
 }
 
 func orderEventWorker() {
-	for orderID := range orderEvents {
-		runOrderEvent(orderID)
+	for evt := range orderEvents {
+		runOrderEvent(evt)
 	}
 }
 
-func runOrderEvent(orderID uuid.UUID) {
+func runOrderEvent(evt orderEventPayload) {
 	defer orderEventWG.Done()
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Printf("Recovered from panic inside order event worker: %v\n", r)
 		}
 	}()
-	processOrderEvent(orderID)
+	processOrderEvent(evt.OrderID, evt.IsStaffOrder)
 }
 
 // enqueueOrderEvent hands an order off to the worker pool. If the queue is
 // full (a sustained spike outrunning the workers), the event is dropped
 // rather than blocking the checkout request — checkout must stay fast even
 // if that means an occasional missed pixel/email under extreme load.
-func enqueueOrderEvent(orderID uuid.UUID) {
+func enqueueOrderEvent(orderID uuid.UUID, isStaffOrder bool) {
 	orderEventWG.Add(1)
 	select {
-	case orderEvents <- orderID:
+	case orderEvents <- orderEventPayload{OrderID: orderID, IsStaffOrder: isStaffOrder}:
 	default:
 		orderEventWG.Done()
 		log.Printf("order events: queue full, dropping side-effects order=%s", orderID)
@@ -99,7 +116,10 @@ func DrainOrderEvents(timeout time.Duration) {
 // merchant email, live dashboard broadcast, and the Meta CAPI purchase
 // event. Moved verbatim out of the old per-order goroutine in
 // CreateOrderByShopID; behavior is unchanged, only the scheduling around it.
-func processOrderEvent(orderID uuid.UUID) {
+// isStaffOrder skips the merchant notification email — a staff member
+// placing the order from the dashboard already knows about it; the email
+// exists to alert staff to orders they don't yet know about.
+func processOrderEvent(orderID uuid.UUID, isStaffOrder bool) {
 	var fullOrder models.Order
 	preloadErr := initializers.DB.
 		Preload("Client").
@@ -131,7 +151,10 @@ func processOrderEvent(orderID uuid.UUID) {
 
 	// Cussword orders are silently accepted for the client but kept out of
 	// sight of the admin entirely — no notification email, no live broadcast.
-	if isProduction && fullOrder.Status != "Confirmé" && !fullOrder.IsHidden {
+	// Staff-created orders also skip the email: the person creating it from
+	// the dashboard already knows about it, the email exists to alert staff
+	// to orders they don't yet know about.
+	if isProduction && !isStaffOrder && fullOrder.Status != "Confirmé" && !fullOrder.IsHidden {
 		var shop models.Shop
 		initializers.DB.Select("name").First(&shop, "id = ?", fullOrder.ShopID)
 
@@ -221,6 +244,8 @@ func processOrderEvent(orderID uuid.UUID) {
 	// untouched and still used for attribution/ban-matching elsewhere
 	// (ordersController.go).
 	sendMetaPurchaseIfEligible(&fullOrder)
+
+	sendSheetsExportIfEligible(&fullOrder)
 }
 
 // sendMetaPurchaseIfEligible sends the Meta CAPI Purchase event for one
@@ -277,6 +302,141 @@ func sendMetaPurchaseIfEligible(order *models.Order) {
 // ponytail: TikTok CAPI (utils.SendTikTokPurchase) intentionally not wired in
 // here — frontend-only TikTok tracking for now, per product decision. Wire it
 // the same way as sendMetaPurchaseIfEligible above if that changes.
+
+// sendSheetsExportIfEligible appends one row to the shop's connected Google
+// Sheet for this order, if an active integration exists. Shared by
+// processOrderEvent (first attempt, at creation) and
+// retryPendingSheetsExports (the reconciliation sweep), same idempotency
+// shape as sendMetaPurchaseIfEligible: SheetsExportSentAt is the claim.
+func sendSheetsExportIfEligible(order *models.Order) {
+	var integ models.GoogleSheetsIntegration
+	integErr := initializers.DB.
+		Where("shop_id = ? AND is_active = ?", order.ShopID, true).
+		First(&integ).Error
+
+	if integErr != nil {
+		return
+	}
+
+	initializers.DB.Model(&models.Order{}).Where("id = ?", order.ID).
+		UpdateColumn("sheets_export_attempts", gorm.Expr("sheets_export_attempts + 1"))
+
+	products := make([]string, 0, len(order.Items))
+	for _, item := range order.Items {
+		name := item.Product.Title
+		if name == "" {
+			name = "Produit"
+		}
+		combo := item.ProductVariantCombination.CombinationString
+		if combo != "" {
+			products = append(products, fmt.Sprintf("%s (%s) x%d", name, combo, item.Quantity))
+		} else {
+			products = append(products, fmt.Sprintf("%s x%d", name, item.Quantity))
+		}
+	}
+
+	row := []interface{}{
+		order.ID.String(),
+		order.CreatedAt.Format("2006-01-02 15:04:05"),
+		order.Client.FullName,
+		order.Client.PhoneNumber,
+		order.Client.State,
+		order.Client.City,
+		order.Client.StopdeskPoint,
+		strings.Join(products, "; "),
+		order.TotalPrice,
+		order.Status,
+	}
+
+	svc, err := services.NewSheetsClient(integ.ServiceAccountJSON)
+	if err == nil {
+		err = services.AppendOrderRow(svc, integ.SpreadsheetID, integ.SheetName, row)
+	}
+
+	if err != nil {
+		log.Printf("sheets export: append failed order=%s shop=%s: %v", order.ID, order.ShopID, err)
+		integ.LastError = err.Error()
+		initializers.DB.Save(&integ)
+		return
+	}
+
+	now := time.Now()
+	if updErr := initializers.DB.Model(&models.Order{}).Where("id = ?", order.ID).
+		Update("sheets_export_sent_at", now).Error; updErr != nil {
+		log.Printf("sheets export: sent but failed to stamp sheets_export_sent_at order=%s shop=%s: %v", order.ID, order.ShopID, updErr)
+	}
+
+	integ.LastSyncedAt = &now
+	integ.LastError = ""
+	initializers.DB.Save(&integ)
+}
+
+// StartSheetsExportRetrySweep periodically retries the Google Sheets export
+// for orders whose shop has an active integration but the export never
+// succeeded. Mirrors StartMetaPurchaseRetrySweep exactly. Intended to run in
+// its own goroutine (see main.go).
+func StartSheetsExportRetrySweep() {
+	ticker := time.NewTicker(sheetsExportSweepEvery)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if !utils.TryAcquireTickLock(sheetsExportSweepLockKey, sheetsExportSweepEvery-time.Minute) {
+			continue
+		}
+		retryPendingSheetsExports()
+	}
+}
+
+// retryPendingSheetsExports finds non-hidden, non-abandoned orders older
+// than sheetsExportRetryAge whose shop currently has an active Sheets
+// integration and never got a successful export, and retries them. Once an
+// integration's pending orders exhaust sheetsExportMaxAttempts without a
+// single success, it's deactivated below — a per-order cap alone would
+// retry every new order forever against a permanently-broken credential.
+func retryPendingSheetsExports() {
+	var orders []models.Order
+	cutoff := time.Now().Add(-sheetsExportRetryAge)
+
+	eligibleShops := initializers.DB.Model(&models.GoogleSheetsIntegration{}).
+		Select("shop_id").
+		Where("is_active = ?", true)
+
+	err := initializers.DB.
+		Preload("Client").
+		Preload("Items").
+		Preload("Items.Product").
+		Preload("Items.ProductVariantCombination").
+		Where("sheets_export_sent_at IS NULL").
+		Where("sheets_export_attempts < ?", sheetsExportMaxAttempts).
+		Where("is_hidden = ?", false).
+		Where("status <> ?", "Abandonné").
+		Where("created_at < ?", cutoff).
+		Where("shop_id IN (?)", eligibleShops).
+		Find(&orders).Error
+
+	if err != nil {
+		log.Printf("sheets export retry sweep: query failed: %v", err)
+		return
+	}
+
+	for i := range orders {
+		sendSheetsExportIfEligible(&orders[i])
+	}
+
+	// Deactivate any integration whose pending orders have now exhausted
+	// their attempts without a single success — prevents infinite retry
+	// against a permanently-broken credential (revoked key, unshared sheet).
+	initializers.DB.Exec(`
+		UPDATE google_sheets_integrations
+		SET is_active = false
+		WHERE is_active = true
+		AND shop_id IN (
+			SELECT shop_id FROM orders
+			WHERE sheets_export_sent_at IS NULL
+			AND sheets_export_attempts >= ?
+		)
+	`, sheetsExportMaxAttempts)
+}
 
 // StartMetaPurchaseRetrySweep periodically retries the Meta CAPI Purchase
 // send for orders whose shop has Facebook CAPI configured but the send never

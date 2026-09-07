@@ -100,7 +100,7 @@ func callImageGenModel(content []aiContentPart, model string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(b64)
 }
 
-// ReferenceImage is one product photo fed to the model as visual reference.
+// ReferenceImage is one photo fed to the model as visual reference.
 type ReferenceImage struct {
 	Bytes    []byte
 	MimeType string // e.g. "image/png", "image/jpeg"
@@ -112,46 +112,24 @@ type AIImageModel string
 const (
 	AIImageModelPro   AIImageModel = "google/gemini-3-pro-image-preview" // Nano Banana Pro
 	AIImageModelFlash AIImageModel = "google/gemini-2.5-flash-image"     // Nano Banana Flash
+	AIImageModelGPT   AIImageModel = "openai/gpt-image-1"                // GPT Image 1
+	AIImageModelFlux  AIImageModel = "black-forest-labs/flux.2-flex"     // FLUX.2 Flex
 )
+
+// AIImageModelCredits is the per-generation credit cost for each selectable
+// model, ranked by the provider's own per-image price (priciest first).
+// Merchants pick a model via the shopId/generate form field; the controller
+// validates it against this map and bills the matching cost.
+var AIImageModelCredits = map[AIImageModel]int{
+	AIImageModelGPT:   25,
+	AIImageModelPro:   20,
+	AIImageModelFlash: 10,
+	AIImageModelFlux:  6,
+}
 
 func (m AIImageModel) Valid() bool {
-	return m == AIImageModelPro || m == AIImageModelFlash
-}
-
-// CreditCost returns the per-image credit charge for this model.
-func (m AIImageModel) CreditCost() int {
-	if m == AIImageModelFlash {
-		return CreditCostImageFlash
-	}
-	return CreditCostImagePro
-}
-
-const landingPageImagePromptWrapper = `Use the attached product photo(s) as the ONLY reference for the product's appearance, packaging, logo, and colors. Keep the product 100%% consistent with the photos. Do NOT alter the product's logo, shape, or packaging details.
-
-%s
-
-Output: ONE full-width landing-page section image, 9:16 vertical, 2K, photorealistic, high-end e-commerce style. Any text rendered in the image MUST be in Arabic only — no French, no English, no other language anywhere in the image. Text must be legible, correctly spelled Arabic, right-to-left, professionally typeset.`
-
-const (
-	MaxLandingPageImageCount = 5
-)
-
-// GenerateLandingPageImage generates one landing-page image from a free-text
-// prompt plus 1-5 reference photos, using the given model. The prompt is
-// wrapped with fixed technical constraints (9:16, Arabic-only text,
-// photorealistic) so output stays on-spec regardless of what the merchant
-// writes as the creative brief.
-func GenerateLandingPageImage(refs []ReferenceImage, prompt string, model AIImageModel) ([]byte, error) {
-	imageParts := make([]aiContentPart, len(refs))
-	for i, ref := range refs {
-		imageParts[i] = aiContentPart{
-			Type:     "image_url",
-			ImageURL: &aiContentImage{URL: fmt.Sprintf("data:%s;base64,%s", ref.MimeType, base64.StdEncoding.EncodeToString(ref.Bytes))},
-		}
-	}
-	fullPrompt := fmt.Sprintf(landingPageImagePromptWrapper, prompt)
-	content := append([]aiContentPart{{Type: "text", Text: fullPrompt}}, imageParts...)
-	return callImageGen(content, string(model))
+	_, ok := AIImageModelCredits[m]
+	return ok
 }
 
 // ToWebP re-encodes an image (PNG or JPEG bytes, as returned by the AI
