@@ -25,6 +25,51 @@ import (
 	"github.com/google/uuid"
 )
 
+// uploadVariantItemImage uploads a variant item's image file to B2, mirroring the
+// inline upload block used for product images (see CreateProductByShop/UpdateProductImagesByShop).
+func uploadVariantItemImage(file *multipart.FileHeader) (string, error) {
+	src, err := file.Open()
+	if err != nil {
+		return "", err
+	}
+	defer src.Close()
+
+	key := fmt.Sprintf("uploads/variants/%d_%s", time.Now().UnixNano(), filepath.Base(file.Filename))
+	bucketName := os.Getenv("B2_BUCKET_NAME")
+
+	_, err = initializers.S3Client.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket:      aws.String(bucketName),
+		Key:         aws.String(key),
+		Body:        src,
+		ContentType: aws.String(file.Header.Get("Content-Type")),
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf(
+		"https://%s.s3.%s.backblazeb2.com/%s",
+		bucketName,
+		os.Getenv("B2_REGION"),
+		key,
+	), nil
+}
+
+// isTrustedImageURL rejects any imageUrl a client sends that isn't one we generated
+// ourselves — variant item images round-trip through JSON on every update (variant_items
+// rows are deleted/recreated each save), so without this check a merchant payload could
+// point the public storefront at an arbitrary external URL.
+func isTrustedImageURL(url string) bool {
+	if url == "" {
+		return false
+	}
+	if base := os.Getenv("B2_PUBLIC_BASE_URL"); base != "" && strings.HasPrefix(url, base) {
+		return true
+	}
+	prefix := fmt.Sprintf("https://%s.s3.%s.backblazeb2.com/", os.Getenv("B2_BUCKET_NAME"), os.Getenv("B2_REGION"))
+	return strings.HasPrefix(url, prefix)
+}
+
 // countOrdersByProductIDs returns, per product, how many non-deleted orders contain it
 // (regardless of status — used for "Orders" counts on product/landing page lists).
 func countOrdersByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]int64, error) {
@@ -485,7 +530,7 @@ func CreateProductByShop(c *gin.Context) {
 		return strings.ToLower(strings.TrimSpace(variantTitle)) + "::" + strings.ToLower(strings.TrimSpace(itemValue))
 	}
 
-	for _, v := range variants {
+	for vIdx, v := range variants {
 		variant := models.Variant{
 			ProductID: product.ID,
 			Title:     strings.TrimSpace(v.Title),
@@ -496,7 +541,7 @@ func CreateProductByShop(c *gin.Context) {
 			return
 		}
 
-		for _, item := range v.VariantItems {
+		for itemIdx, item := range v.VariantItems {
 			value := strings.TrimSpace(item.Value)
 			if value == "" {
 				c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "variant item value cannot be empty"})
@@ -506,6 +551,18 @@ func CreateProductByShop(c *gin.Context) {
 			vItem := models.VariantItem{
 				VariantID: variant.ID,
 				Value:     value,
+			}
+
+			if form != nil {
+				imgKey := fmt.Sprintf("variantImages[%d_%d]", vIdx, itemIdx)
+				if imgFiles := form.File[imgKey]; len(imgFiles) > 0 {
+					url, err := uploadVariantItemImage(imgFiles[0])
+					if err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to upload variant image"})
+						return
+					}
+					vItem.ImageURL = &url
+				}
 			}
 
 			if err := tx.Create(&vItem).Error; err != nil {
@@ -1125,8 +1182,9 @@ func IndexProductBySlug(c *gin.Context) {
 
 		for _, item := range v.VariantItems {
 			variantResponse.VariantItems = append(variantResponse.VariantItems, dto.VariantItemSimple{
-				ID:    item.ID.String(),
-				Value: item.Value,
+				ID:       item.ID.String(),
+				Value:    item.Value,
+				ImageURL: item.ImageURL,
 			})
 		}
 
@@ -1212,7 +1270,8 @@ func UpdateProductByShop(c *gin.Context) {
 	}
 
 	type VariantItemInput struct {
-		Value string `json:"value"`
+		Value    string  `json:"value"`
+		ImageURL *string `json:"imageUrl"`
 	}
 
 	type VariantInput struct {
@@ -1240,7 +1299,59 @@ func UpdateProductByShop(c *gin.Context) {
 	}
 
 	var body UpdateProductBody
-	if err := c.ShouldBindJSON(&body); err != nil {
+	var multipartForm *multipart.Form
+
+	if strings.HasPrefix(c.ContentType(), "multipart/form-data") {
+		form, err := c.MultipartForm()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid multipart form", "error": err.Error()})
+			return
+		}
+		multipartForm = form
+
+		if title := c.PostForm("title"); title != "" {
+			body.Title = &title
+		}
+		if description := c.PostForm("description"); description != "" {
+			body.Description = &description
+		}
+		if price := c.PostForm("price"); price != "" {
+			parsed, err := strconv.ParseFloat(price, 64)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid price"})
+				return
+			}
+			body.Price = &parsed
+		}
+		if oldPrice := c.PostForm("oldPrice"); oldPrice != "" {
+			parsed, err := strconv.ParseFloat(oldPrice, 64)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid old price"})
+				return
+			}
+			body.OldPrice = &parsed
+		}
+		if active := c.PostForm("active"); active != "" {
+			parsed, err := strconv.ParseBool(active)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid active flag"})
+				return
+			}
+			body.Active = &parsed
+		}
+		if variantsJSON := c.PostForm("variants"); variantsJSON != "" {
+			if err := json.Unmarshal([]byte(variantsJSON), &body.Variants); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid variants JSON"})
+				return
+			}
+		}
+		if combinationsJSON := c.PostForm("combinations"); combinationsJSON != "" {
+			if err := json.Unmarshal([]byte(combinationsJSON), &body.Combinations); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid combinations JSON"})
+				return
+			}
+		}
+	} else if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Invalid request body",
@@ -1482,7 +1593,7 @@ func UpdateProductByShop(c *gin.Context) {
 
 		itemIDs := make(map[string]uuid.UUID)
 
-		for _, v := range body.Variants {
+		for vIdx, v := range body.Variants {
 			variant := models.Variant{
 				ProductID: productID,
 				Title:     strings.TrimSpace(v.Title),
@@ -1498,12 +1609,34 @@ func UpdateProductByShop(c *gin.Context) {
 				return
 			}
 
-			for _, item := range v.VariantItems {
+			for itemIdx, item := range v.VariantItems {
 				value := strings.TrimSpace(item.Value)
 
 				variantItem := models.VariantItem{
 					VariantID: variant.ID,
 					Value:     value,
+				}
+
+				var uploadedThisItem bool
+				if multipartForm != nil {
+					imgKey := fmt.Sprintf("variantImages[%d_%d]", vIdx, itemIdx)
+					if imgFiles := multipartForm.File[imgKey]; len(imgFiles) > 0 {
+						url, err := uploadVariantItemImage(imgFiles[0])
+						if err != nil {
+							tx.Rollback()
+							c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to upload variant image"})
+							return
+						}
+						variantItem.ImageURL = &url
+						uploadedThisItem = true
+					}
+				}
+				// Every update path (JSON or multipart) must preserve an existing image the
+				// client echoed back — variant_items is deleted/recreated on every save, so a
+				// merchant editing unrelated fields (e.g. adding a new item with no file) would
+				// otherwise silently wipe images on every other item in the same variant.
+				if !uploadedThisItem && item.ImageURL != nil && isTrustedImageURL(*item.ImageURL) {
+					variantItem.ImageURL = item.ImageURL
 				}
 
 				if err := tx.Create(&variantItem).Error; err != nil {

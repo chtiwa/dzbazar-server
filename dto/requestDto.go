@@ -36,6 +36,7 @@ type VariantInput struct {
 		Value    string  `json:"value"`
 		Price    float64 `json:"price"`
 		Quantity int     `json:"quantity"`
+		ImageURL *string `json:"imageUrl"`
 	} `json:"variantItems"`
 }
 

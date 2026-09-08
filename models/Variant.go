@@ -17,6 +17,7 @@ type VariantItem struct {
 	VariantID uuid.UUID `gorm:"not null" json:"variantId"`
 	Variant   Variant   `gorm:"foreignKey:VariantID;references:ID" json:"variant"`
 	Value     string    `gorm:"not null" json:"value"` // 100ml - blue - 6.5
+	ImageURL  *string   `json:"imageUrl"`
 }
 
 type ProductVariantCombination struct {

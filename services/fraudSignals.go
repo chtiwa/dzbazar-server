@@ -16,6 +16,7 @@ const (
 	HiddenReasonIncognito    = "incognito"
 	HiddenReasonVpn          = "vpn"
 	HiddenReasonDatacenter   = "datacenter"
+	HiddenReasonRateLimited  = "rate_limited"
 )
 
 // FraudHiddenReason decides whether an order should be shadow-hidden based on

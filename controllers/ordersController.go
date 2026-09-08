@@ -429,6 +429,7 @@ func CreateOrderByShopID(c *gin.Context) {
 			First(&banned).Error == nil
 
 		if isBanned {
+			fmt.Println("CreateOrderByShopID: dropped order, banned platform client:", parsedShopID, banPlatform, banClientID)
 			c.JSON(http.StatusOK, gin.H{
 				"success": true,
 				"message": "Order received successfully",
@@ -444,6 +445,7 @@ func CreateOrderByShopID(c *gin.Context) {
 	if initializers.DB.
 		Where("phone_number = ? AND shop_id = ?", body.Client.PhoneNumber, parsedShopID).
 		First(&banCheckClient).Error == nil && banCheckClient.Banned {
+		fmt.Println("CreateOrderByShopID: dropped order, banned client phone:", parsedShopID, body.Client.PhoneNumber)
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "Order received successfully",
@@ -451,19 +453,13 @@ func CreateOrderByShopID(c *gin.Context) {
 		return
 	}
 
-	// Phone-per-shop rate limit: 1 order per 30 min. Silent drop on breach.
-	// Staff manually creating orders (e.g. re-entering the same customer) are
-	// exempt — this guard exists for anonymous spam, not their workflow.
+	// Phone-per-shop rate limit: 1 order per 30 min. A repeat hit within the
+	// window still creates the order (nothing is lost — a double-click or a
+	// genuine second purchase both keep their row), just shadow-hidden like
+	// any other fraud signal below, so the merchant can review and unhide it.
 	phoneKey := phoneOrderKey(parsedShopID, body.Client.PhoneNumber)
 	set, redisErr := initializers.RClient.SetNX(initializers.Ctx, phoneKey, 1, phoneOrderWindow).Result()
-	if !isStaffOrder && redisErr == nil && !set {
-		// Key already exists — this phone already ordered within the window.
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "Order received successfully",
-		})
-		return
-	}
+	rateLimited := !isStaffOrder && redisErr == nil && !set
 
 	var order models.Order
 	clientUserAgent := c.Request.UserAgent()
@@ -474,6 +470,9 @@ func CreateOrderByShopID(c *gin.Context) {
 	// reasoning as the rate limits above, and this is a network call, so it
 	// must run before the transaction opens, never inside it.
 	fraudHiddenReason := ""
+	if rateLimited {
+		fraudHiddenReason = services.HiddenReasonRateLimited
+	}
 	if !isStaffOrder {
 		var shopFraudSettings models.Shop
 		hasSettings := initializers.DB.
@@ -487,7 +486,9 @@ func CreateOrderByShopID(c *gin.Context) {
 				// FraudHiddenReason can never flag on it.
 				priv, _ = services.ClassifyIP(clientIP)
 			}
-			fraudHiddenReason = services.FraudHiddenReason(shopFraudSettings, body.Incognito, priv)
+			if reason := services.FraudHiddenReason(shopFraudSettings, body.Incognito, priv); reason != "" {
+				fraudHiddenReason = reason
+			}
 		}
 	}
 

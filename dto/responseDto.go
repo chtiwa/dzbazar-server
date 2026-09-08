@@ -62,10 +62,11 @@ type VariantResponse struct {
 }
 
 type VariantItemSimple struct {
-	ID       string `json:"id"`
-	Value    string `json:"value"`
-	Quantity int    `json:"quantity"`
-	Price    int    `json:"price"`
+	ID       string  `json:"id"`
+	Value    string  `json:"value"`
+	Quantity int     `json:"quantity"`
+	Price    int     `json:"price"`
+	ImageURL *string `json:"imageUrl,omitempty"`
 }
 type CombinationResponse struct {
 	ID                string  `json:"id"`
