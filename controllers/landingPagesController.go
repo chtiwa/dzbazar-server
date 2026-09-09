@@ -308,29 +308,39 @@ func GetLandingPagesByShop(c *gin.Context) {
 		return
 	}
 
-	cacheKey := services.LandingPagesCacheKeyByShop(shopID)
-	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
-	if err == nil {
-		var cachedResponse []models.LandingPage
-		if unmarshalErr := json.Unmarshal([]byte(val), &cachedResponse); unmarshalErr == nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": true,
-				"message": "Landing pages retrieved successfully (from cache)",
-				"data":    cachedResponse,
-			})
-			return
+	search := strings.TrimSpace(c.Query("search"))
+
+	var cacheKey string
+	if search == "" {
+		cacheKey = services.LandingPagesCacheKeyByShop(shopID)
+		val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
+		if err == nil {
+			var cachedResponse []models.LandingPage
+			if unmarshalErr := json.Unmarshal([]byte(val), &cachedResponse); unmarshalErr == nil {
+				c.JSON(http.StatusOK, gin.H{
+					"success": true,
+					"message": "Landing pages retrieved successfully (from cache)",
+					"data":    cachedResponse,
+				})
+				return
+			}
 		}
 	}
 
-	var landingPages []models.LandingPage
-	if err := initializers.DB.
+	db := initializers.DB.
 		Where("shop_id = ?", shopID).
 		Preload("Images", func(db *gorm.DB) *gorm.DB {
 			return db.Order("order_index ASC")
 		}).
 		Preload("Product").
-		Order("created_at DESC").
-		Find(&landingPages).Error; err != nil {
+		Order("created_at DESC")
+
+	if search != "" {
+		db = db.Where("title ILIKE ?", "%"+search+"%")
+	}
+
+	var landingPages []models.LandingPage
+	if err := db.Find(&landingPages).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to retrieve landing pages",
@@ -384,8 +394,10 @@ func GetLandingPagesByShop(c *gin.Context) {
 		landingPages[i].ConversionRate = conversionRate(landingPageOrders[landingPages[i].ID], landingPages[i].Views)
 	}
 
-	if jsonData, err := json.Marshal(landingPages); err == nil {
-		_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
+	if search == "" {
+		if jsonData, err := json.Marshal(landingPages); err == nil {
+			_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
