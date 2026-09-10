@@ -59,7 +59,8 @@ INSERT INTO public.role_action_defaults (role, action, allow) VALUES
 INSERT INTO public.bureaux (id, shop_id, wilaya_id, name)
 SELECT uuid_generate_v4(), s.id, w.id, w.name
 FROM public.shops s
-CROSS JOIN public.wilayas w;
+CROSS JOIN public.wilayas w
+ON CONFLICT DO NOTHING;
 
 -- +goose Down
 DELETE FROM public.role_action_defaults WHERE action IN ('bureaux.view', 'bureaux.edit');
