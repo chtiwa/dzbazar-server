@@ -23,7 +23,11 @@ goose -dir migrate/migrations create <name> sql
 # edit the generated file's -- +goose Up / -- +goose Down, then just boot the app — Migrate() runs it
 ```
 
-There are no tests in this project currently.
+Tests are pure-logic table tests with no DB or HTTP — see
+`controllers/deliveryRate_logic_test.go` and `services/orders_pricing_test.go`
+for the shape. Run them with `go test ./...`. Handlers that touch the DB are
+verified manually against the dev database (see `.claude/skills/run-server`),
+not with a test harness.
 
 ## Architecture
 
@@ -55,6 +59,7 @@ A `User` can belong to multiple `Shop`s via `ShopMember` (with a `role`: `owner`
 - `Shop` → `DeliveryCompany` (per-shop credentials) → `AvailableDeliveryCompany` (global admin-managed list with name, URL, image)
 - `Shop` → `DeliveryRate` (one row per wilaya, seeded at shop creation from the `wilayas` table — `services.GetWilayas`, in-memory cached, invalidated on super-admin edits via `services.InvalidateWilayaCache`)
 - `Shop` → `Pixel` (Facebook/TikTok conversion tracking pixels)
+- `Shop` + `DeliveryCompany` → `Bureau` (per-shop, per-carrier stopdesk desk names by wilaya, for carriers with no live hub API — Osen/Leopard/Anderson. ZR Express is rejected on create: it resolves hubs live via `resolveZrHubID` in `zrGeoController.go`. `Client.StopdeskPoint` stays a plain string with no FK, so deleting a bureau never touches past orders)
 
 ### Product variant update constraint
 When updating variants/combinations on a product, the order matters:
