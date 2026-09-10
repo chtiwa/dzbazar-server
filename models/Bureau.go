@@ -23,3 +23,9 @@ type Bureau struct {
 	WilayaID int    `gorm:"not null;index:idx_bureaux_shop_wilaya" json:"wilayaId"` // e.g. 16 for Alger
 	Name     string `gorm:"not null" json:"name"`
 }
+
+// TableName overrides GORM's default pluralization ("bureaus"), which does
+// not match the actual table name created by migration 00036 ("bureaux").
+func (Bureau) TableName() string {
+	return "bureaux"
+}
