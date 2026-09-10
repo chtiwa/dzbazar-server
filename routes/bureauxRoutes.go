@@ -12,7 +12,7 @@ func BureauxRoutes(router *gin.Engine) {
 	{
 		// All shop roles can read: confirmation staff create orders and need
 		// the stopdesk dropdown, same reasoning as GET delivery-rates.
-		bureaux.GET("", middleware.RequireShopAccess("owner", "moderator", "confirmation"), controllers.ListBureaux)
+		bureaux.GET("", middleware.RequireShopAccess("owner", "moderator", "confirmation"), middleware.RequireShopPermission("bureaux.view"), controllers.ListBureaux)
 		bureaux.POST("", middleware.RequireShopAccess(), middleware.RequireShopPermission("bureaux.edit"), controllers.CreateBureau)
 		bureaux.DELETE("/:id", middleware.RequireShopAccess(), middleware.RequireShopPermission("bureaux.edit"), controllers.DeleteBureau)
 	}
