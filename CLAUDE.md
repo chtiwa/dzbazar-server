@@ -59,7 +59,7 @@ A `User` can belong to multiple `Shop`s via `ShopMember` (with a `role`: `owner`
 - `Shop` → `DeliveryCompany` (per-shop credentials) → `AvailableDeliveryCompany` (global admin-managed list with name, URL, image)
 - `Shop` → `DeliveryRate` (one row per wilaya, seeded at shop creation from the `wilayas` table — `services.GetWilayas`, in-memory cached, invalidated on super-admin edits via `services.InvalidateWilayaCache`)
 - `Shop` → `Pixel` (Facebook/TikTok conversion tracking pixels)
-- `Shop` + `DeliveryCompany` → `Bureau` (per-shop, per-carrier stopdesk desk names by wilaya, for carriers with no live hub API — Osen/Leopard/Anderson. ZR Express is rejected on create: it resolves hubs live via `resolveZrHubID` in `zrGeoController.go`. `Client.StopdeskPoint` stays a plain string with no FK, so deleting a bureau never touches past orders)
+- `Shop` → `Bureau` (one stopdesk desk name per wilaya, seeded at shop creation from the `wilayas` table exactly like `DeliveryRate`, and backfilled for pre-existing shops by `00036_bureaux_table.sql`. Not carrier-linked — the carrier is chosen later at ship time, so one list serves all of them. `Client.StopdeskPoint` stays a plain string with no FK, so deleting a bureau never touches past orders)
 
 ### Product variant update constraint
 When updating variants/combinations on a product, the order matters:

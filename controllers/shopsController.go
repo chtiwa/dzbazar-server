@@ -402,6 +402,26 @@ func CreateShop(c *gin.Context) {
 			}
 		}
 
+		// One stopdesk bureau per wilaya, named after the wilaya, mirroring
+		// the DeliveryRate seed directly above -- so a brand-new shop's order
+		// form has a stopdesk option in every wilaya from minute one. The
+		// owner renames or adds beside them on the /bureaux page. Migration
+		// 00036 backfills the identical set for shops created before this.
+		bureaux := make([]models.Bureau, 0, len(wilayas))
+		for _, wilaya := range wilayas {
+			bureaux = append(bureaux, models.Bureau{
+				ShopID:   shop.ID,
+				WilayaID: wilaya.ID,
+				Name:     wilaya.Name,
+			})
+		}
+
+		if len(bureaux) > 0 {
+			if err := tx.Create(&bureaux).Error; err != nil {
+				return err
+			}
+		}
+
 		var trialPlan models.Plan
 		if err := tx.Where("name = ?", "Trial").First(&trialPlan).Error; err != nil {
 			return err
