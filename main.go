@@ -70,6 +70,7 @@ func main() {
 	routes.DashboardRoutes(router)
 	routes.DeliveryRatesRoutes(router)
 	routes.DeliveryCompaniesRoutes(router)
+	routes.BureauxRoutes(router)
 	routes.ClientsRoutes(router)
 	routes.PlansRoutes(router)
 	routes.OsenRoutes(router)
