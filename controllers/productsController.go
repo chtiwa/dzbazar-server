@@ -664,6 +664,7 @@ func CreateProductByShop(c *gin.Context) {
 
 		combinationsToSave = append(combinationsToSave, models.ProductVariantCombination{
 			ProductID:         product.ID,
+			ShopID:            product.ShopID,
 			SKU:               sku,
 			Price:             combo.Price,
 			Quantity:          combo.Quantity,
@@ -1782,6 +1783,7 @@ func UpdateProductByShop(c *gin.Context) {
 			} else {
 				newCombo := models.ProductVariantCombination{
 					ProductID:         productID,
+					ShopID:            shopID,
 					SKU:               rc.sku,
 					Price:             rc.price,
 					Quantity:          rc.quantity,
@@ -2494,6 +2496,7 @@ func UpdateProductVariantsByShop(c *gin.Context) {
 
 		combinationsToSave = append(combinationsToSave, models.ProductVariantCombination{
 			ProductID:         productID,
+			ShopID:            shopID,
 			SKU:               strings.TrimSpace(combo.SKU),
 			Price:             combo.Price,
 			Quantity:          combo.Quantity,
@@ -2579,6 +2582,7 @@ func InvalidateProductCaches(productID uuid.UUID, shopID uuid.UUID) {
 			Pluck("id", &landingPageIDs)
 		for _, id := range landingPageIDs {
 			initializers.RClient.Del(ctx, services.LandingPageCacheKeyByID(id))
+			initializers.RClient.Del(ctx, services.PublicLandingPageCacheKeyByID(id))
 		}
 		initializers.RClient.Del(ctx, services.LandingPagesCacheKeyByShop(shopID))
 	}()

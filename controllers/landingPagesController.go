@@ -474,7 +474,7 @@ func IndexLandingPage(c *gin.Context) {
 		return
 	}
 
-	cacheKey := services.LandingPageCacheKeyByID(landingPageID)
+	cacheKey := services.PublicLandingPageCacheKeyByID(landingPageID)
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
 		var cachedResponse dto.PublicLandingPageResponse

@@ -23,8 +23,12 @@ type VariantItem struct {
 type ProductVariantCombination struct {
 	BaseModel
 	ProductID uuid.UUID `gorm:"not null;index" json:"productId"`
+	// ShopID is denormalized from Product.ShopID so SKU uniqueness can be
+	// enforced per-shop at the DB level (uniqueIndex below is composite,
+	// not on SKU alone) — two shops may reuse the same SKU, one shop may not.
+	ShopID uuid.UUID `gorm:"not null;uniqueIndex:idx_pvc_shop_sku" json:"shopId"`
 
-	SKU      string  `gorm:"uniqueIndex;not null" json:"sku"`
+	SKU      string  `gorm:"uniqueIndex:idx_pvc_shop_sku;not null" json:"sku"`
 	Price    float64 `gorm:"not null" json:"price"`
 	Quantity int     `gorm:"default:0" json:"quantity"`
 	// Retired means the merchant removed this SKU but it's kept (FK RESTRICT from
