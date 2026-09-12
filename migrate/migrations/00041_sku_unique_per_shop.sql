@@ -8,17 +8,9 @@ WHERE p.id = pvc.product_id;
 
 ALTER TABLE public.product_variant_combinations ALTER COLUMN shop_id SET NOT NULL;
 
-DO $$
-DECLARE idx_name text;
-BEGIN
-  SELECT indexname INTO idx_name
-  FROM pg_indexes
-  WHERE tablename = 'product_variant_combinations'
-    AND indexdef LIKE '%UNIQUE%(sku)%';
-  IF idx_name IS NOT NULL THEN
-    EXECUTE format('DROP INDEX IF EXISTS %I', idx_name);
-  END IF;
-END $$;
+ALTER TABLE public.product_variant_combinations DROP CONSTRAINT IF EXISTS uni_product_variant_combinations_sku;
+DROP INDEX IF EXISTS idx_product_variant_combinations_sku;
+DROP INDEX IF EXISTS product_variant_combinations_sku_key;
 
 CREATE UNIQUE INDEX idx_pvc_shop_sku ON public.product_variant_combinations (shop_id, sku);
 
