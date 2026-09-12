@@ -77,4 +77,4 @@ After a successful order creation, a goroutine fires email notification (Resend)
 ### Environment variables required
 `DB_URI`, `JWT_SECRET`, `APP_ENV`, `B2_BUCKET_NAME`, `B2_REGION`, `B2_PUBLIC_BASE_URL`, `B2_KEY_ID`, `B2_APP_KEY`, `B2_ENDPOINT`, `REDIS_URL`, `RESEND_API_KEY`, `FACEBOOK_TEST_CODE` (dev only)
 
-Carrier credentials (Osen Express, Leopard Express, ZR Express) are per-shop `DeliveryCompany` rows, not env vars.
+Carrier credentials (Osen Express, Leopard Express, ZR Express, Anderson/Ecotrack) are per-shop `DeliveryCompany` rows, with a per-shop `IsActive` toggle (migration 00039) that pauses a carrier as a ship target without deleting its stored token.

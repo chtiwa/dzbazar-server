@@ -25,6 +25,9 @@ const procolisBaseURL = "https://procolis.com/api_v1"
 
 // ── Integration lookup ────────────────────────────────────────────────────────
 
+// findLeopardIntegration loads the shop's Leopard credentials and decrypts
+// Token/MerchantID in place — the single choke point every outbound Leopard
+// call routes through, so callers just use integration.Token/.MerchantID.
 func findLeopardIntegration(shopID uuid.UUID) (*models.DeliveryCompany, error) {
 	var integration models.DeliveryCompany
 	err := initializers.DB.
@@ -33,6 +36,9 @@ func findLeopardIntegration(shopID uuid.UUID) (*models.DeliveryCompany, error) {
 		Where("delivery_companies.shop_id = ? AND LOWER(adc.name) LIKE ?", shopID, "%leopard%").
 		First(&integration).Error
 	if err != nil {
+		return nil, err
+	}
+	if err := decryptDeliveryCompanyCredentials(&integration); err != nil {
 		return nil, err
 	}
 	return &integration, nil

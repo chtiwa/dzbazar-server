@@ -34,6 +34,10 @@ type Shop struct {
 	BanVpnEnabled        bool `gorm:"not null;default:false" json:"banVpnEnabled"`
 	BanDatacenterEnabled bool `gorm:"not null;default:false" json:"banDatacenterEnabled"`
 
+	// When on, checkout always charges 0 for shipping regardless of the
+	// wilaya's DeliveryRate — see services.ResolveShipping.
+	FreeDeliveryEnabled bool `gorm:"not null;default:false" json:"freeDeliveryEnabled"`
+
 	Members  []ShopMember `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"members,omitempty"`
 	Products []Product    `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"products"`
 	Orders   []Order      `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"orders"`

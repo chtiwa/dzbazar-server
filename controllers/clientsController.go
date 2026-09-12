@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/chtiwa/dzbazar-server/dto"
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/gin-gonic/gin"
@@ -101,7 +102,7 @@ func GetClientsByShopID(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    clients,
+		"data":    dto.ToClientResponses(clients),
 		"page":    page,
 		"limit":   limit,
 		"count":   len(clients),
@@ -155,7 +156,7 @@ func GetClientsBySearch(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"count":   len(clients),
-		"data":    clients,
+		"data":    dto.ToClientResponses(clients),
 	})
 }
 
@@ -205,7 +206,7 @@ func IndexClientByShopID(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    client,
+		"data":    dto.ToClientResponse(client),
 	})
 }
 
@@ -270,7 +271,7 @@ func CreateClientByShopID(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"message": "Client created successfully",
-		"data":    client,
+		"data":    dto.ToClientResponse(client),
 	})
 }
 
@@ -362,7 +363,7 @@ func UpdateClientByShopID(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "No changes provided",
-			"data":    client,
+			"data":    dto.ToClientResponse(client),
 		})
 		return
 	}
@@ -393,7 +394,7 @@ func UpdateClientByShopID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Client updated successfully",
-		"data":    client,
+		"data":    dto.ToClientResponse(client),
 	})
 }
 
@@ -597,7 +598,7 @@ func UploadExcelClients(c *gin.Context) {
 		"success": true,
 		"message": "Clients imported successfully",
 		"count":   len(clientsToInsert),
-		"data":    clientsToInsert,
+		"data":    dto.ToClientResponses(clientsToInsert),
 		"skipped": skipped,
 	})
 }

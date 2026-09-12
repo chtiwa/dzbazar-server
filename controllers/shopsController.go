@@ -16,6 +16,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/chtiwa/dzbazar-server/dto"
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/chtiwa/dzbazar-server/services"
@@ -46,6 +47,7 @@ type UpdateShopInput struct {
 	BanIncognitoEnabled  *bool `form:"banIncognitoEnabled"`
 	BanVpnEnabled        *bool `form:"banVpnEnabled"`
 	BanDatacenterEnabled *bool `form:"banDatacenterEnabled"`
+	FreeDeliveryEnabled  *bool `form:"freeDeliveryEnabled"`
 }
 
 type MyShopResponse struct {
@@ -172,10 +174,23 @@ func IndexShopBySlug(c *gin.Context) {
 		return
 	}
 
+	response := dto.PublicShopResponse{
+		ID:           shop.ID.String(),
+		Slug:         shop.Slug,
+		Name:         shop.Name,
+		Description:  shop.Description,
+		FacebookURL:  shop.FacebookURL,
+		InstagramURL: shop.InstagramURL,
+		TiktokURL:    shop.TiktokURL,
+	}
+	if shop.LogoImage != nil {
+		response.LogoImage = &dto.ProductImageResponse{ID: shop.LogoImage.ID.String(), URL: shop.LogoImage.URL}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Shop retrieved successfully",
-		"data":    shop,
+		"data":    response,
 	})
 }
 
@@ -402,7 +417,7 @@ func CreateShop(c *gin.Context) {
 			}
 		}
 
-		// One stopdesk bureau per wilaya, named after the wilaya, mirroring
+		// One stopdesk bureau per wilaya, named "Bureau {wilaya}", mirroring
 		// the DeliveryRate seed directly above -- so a brand-new shop's order
 		// form has a stopdesk option in every wilaya from minute one. The
 		// owner renames or adds beside them on the /bureaux page. Migration
@@ -412,7 +427,7 @@ func CreateShop(c *gin.Context) {
 			bureaux = append(bureaux, models.Bureau{
 				ShopID:   shop.ID,
 				WilayaID: wilaya.ID,
-				Name:     wilaya.Name,
+				Name:     "Bureau " + wilaya.Name,
 			})
 		}
 
@@ -616,6 +631,9 @@ func UpdateShop(c *gin.Context) {
 	if input.BanDatacenterEnabled != nil {
 		updateData["ban_datacenter_enabled"] = *input.BanDatacenterEnabled
 	}
+	if input.FreeDeliveryEnabled != nil {
+		updateData["free_delivery_enabled"] = *input.FreeDeliveryEnabled
+	}
 
 	if input.Slug != nil {
 		processedSlug := strings.ToLower(strings.TrimSpace(*input.Slug))
@@ -767,6 +785,10 @@ func UpdateShop(c *gin.Context) {
 			"error":   err.Error(),
 		})
 		return
+	}
+
+	if input.FreeDeliveryEnabled != nil {
+		invalidateDeliveryRatesCache(shopID)
 	}
 
 	var updatedShop models.Shop

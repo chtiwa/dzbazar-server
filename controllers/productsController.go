@@ -287,7 +287,7 @@ func confirmationRatesByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]*float
 		Where("order_items.product_id IN ? AND orders.deleted_at IS NULL AND orders.is_hidden = false AND orders.status <> 'Abandonné'", productIDs).
 		Select(`order_items.product_id AS product_id,
 			COUNT(DISTINCT order_items.order_id) AS total_orders,
-			COUNT(DISTINCT order_items.order_id) FILTER (WHERE `+wasEverConfirmed+`) AS confirmed`).
+			COUNT(DISTINCT order_items.order_id) FILTER (WHERE ` + wasEverConfirmed + `) AS confirmed`).
 		Group("order_items.product_id").
 		Scan(&rows).Error
 	if err != nil {
@@ -1030,7 +1030,7 @@ func GetActiveProductsBySlug(c *gin.Context) {
 
 	response := gin.H{
 		"success": true,
-		"data":    products,
+		"data":    toProductResponses(products),
 		"pagination": gin.H{
 			"page":       page,
 			"totalPages": totalPages,
@@ -1097,7 +1097,7 @@ func GetProductsBySearchBySlug(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    products,
+		"data":    toProductResponses(products),
 	})
 }
 
@@ -1148,22 +1148,38 @@ func IndexProductBySlug(c *gin.Context) {
 		return
 	}
 
-	itemValueByID := make(map[uuid.UUID]string)
-	for _, v := range product.Variants {
-		for _, item := range v.VariantItems {
-			itemValueByID[item.ID] = item.Value
-		}
+	response := toProductResponse(product)
+
+	if jsonData, err := json.Marshal(response); err == nil {
+		_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
+		_ = initializers.RClient.SAdd(initializers.Ctx, "cache:product:id", cacheKey).Err()
 	}
 
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "product was retrieved successfully",
+		"data":    response,
+	})
+}
+
+// toProductResponse projects a models.Product (with Images/Variants/
+// Combinations preloaded) down to dto.ProductResponse — the storefront-safe
+// shape that drops HiddenByPlatformAt and the duplicate ShopID. Extracted
+// from IndexProductBySlug so every public product-by-slug handler
+// (GetActiveProductsBySlug, GetProductsBySearchBySlug) returns the same
+// trimmed shape instead of the raw model.
+func toProductResponse(product models.Product) dto.ProductResponse {
 	response := dto.ProductResponse{
 		ID:           product.ID.String(),
 		Title:        product.Title,
 		Description:  product.Description,
 		Price:        product.Price,
-		OldPrice:     *product.OldPrice,
 		Images:       []dto.ProductImageResponse{},
 		Variants:     []dto.VariantResponse{},
 		Combinations: []dto.CombinationResponse{},
+	}
+	if product.OldPrice != nil {
+		response.OldPrice = *product.OldPrice
 	}
 
 	for _, i := range product.Images {
@@ -1236,16 +1252,15 @@ func IndexProductBySlug(c *gin.Context) {
 		})
 	}
 
-	if jsonData, err := json.Marshal(response); err == nil {
-		_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
-		_ = initializers.RClient.SAdd(initializers.Ctx, "cache:product:id", cacheKey).Err()
-	}
+	return response
+}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "product was retrieved successfully",
-		"data":    response,
-	})
+func toProductResponses(products []models.Product) []dto.ProductResponse {
+	out := make([]dto.ProductResponse, 0, len(products))
+	for _, p := range products {
+		out = append(out, toProductResponse(p))
+	}
+	return out
 }
 
 func UpdateProductByShop(c *gin.Context) {

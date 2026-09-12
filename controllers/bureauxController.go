@@ -1,9 +1,12 @@
 package controllers
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
@@ -19,9 +22,26 @@ func normalizeBureauName(raw string) string {
 	return strings.Join(strings.Fields(raw), " ")
 }
 
+// publicBureauxCacheKey is scoped by shop+wilaya, not just shop, because
+// ListPublicBureaux filters server-side (unlike delivery-rates' whole-shop
+// cache) — caching the filtered result means the key must carry the filter.
+func publicBureauxCacheKey(shopID uuid.UUID, wilayaID int) string {
+	return fmt.Sprintf("bureaux:public:shop=%s:wilaya=%d", shopID.String(), wilayaID)
+}
+
+func invalidatePublicBureauxCache(shopID uuid.UUID, wilayaID int) {
+	if err := initializers.RClient.Del(initializers.Ctx, publicBureauxCacheKey(shopID, wilayaID)).Err(); err != nil {
+		fmt.Println("Failed to delete bureaux cache key:", err)
+	}
+}
+
 type CreateBureauInput struct {
 	WilayaID int    `json:"wilayaId" binding:"required"`
 	Name     string `json:"name" binding:"required"`
+}
+
+type UpdateBureauInput struct {
+	Name string `json:"name" binding:"required"`
 }
 
 // ListBureaux returns the shop's bureaux, optionally narrowed to one wilaya.
@@ -54,6 +74,52 @@ func ListBureaux(c *gin.Context) {
 			"error":   err.Error(),
 		})
 		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": bureaux})
+}
+
+// ListPublicBureaux is the unauthenticated counterpart for the anonymous
+// storefront checkout. Unlike ListBureaux it requires wilayaId — the
+// storefront always knows the customer's wilaya by the time it asks, and a
+// required filter keeps the cache key space bounded to real wilayas.
+func ListPublicBureaux(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	wilayaID, err := strconv.Atoi(c.Query("wilayaId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "wilayaId is required"})
+		return
+	}
+
+	cacheKey := publicBureauxCacheKey(shopID, wilayaID)
+	if val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result(); err == nil {
+		var cached []models.Bureau
+		if unmarshalErr := json.Unmarshal([]byte(val), &cached); unmarshalErr == nil {
+			c.JSON(http.StatusOK, gin.H{"success": true, "data": cached})
+			return
+		}
+	}
+
+	bureaux := []models.Bureau{}
+	if err := initializers.DB.
+		Where("shop_id = ? AND wilaya_id = ?", shopID, wilayaID).
+		Order("name ASC").
+		Find(&bureaux).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to fetch bureaux",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	if jsonData, err := json.Marshal(bureaux); err == nil {
+		_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": bureaux})
@@ -125,9 +191,84 @@ func CreateBureau(c *gin.Context) {
 		return
 	}
 
+	invalidatePublicBureauxCache(shopID, input.WilayaID)
+
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"message": "Bureau created",
+		"data":    bureau,
+	})
+}
+
+// UpdateBureau renames an existing desk. The wilaya is immutable — moving a
+// desk to a different wilaya is a delete + create, not an edit.
+func UpdateBureau(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	bureauID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid bureau ID"})
+		return
+	}
+
+	var input UpdateBureauInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid payload",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	name := normalizeBureauName(input.Name)
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Bureau name is required"})
+		return
+	}
+
+	var bureau models.Bureau
+	if err := initializers.DB.
+		Where("id = ? AND shop_id = ?", bureauID, shopID).
+		First(&bureau).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Bureau not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Database error",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	bureau.Name = name
+	if err := initializers.DB.Save(&bureau).Error; err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"message": "This bureau already exists for that wilaya",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to update bureau",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	invalidatePublicBureauxCache(shopID, bureau.WilayaID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Bureau updated",
 		"data":    bureau,
 	})
 }
@@ -171,6 +312,8 @@ func DeleteBureau(c *gin.Context) {
 		})
 		return
 	}
+
+	invalidatePublicBureauxCache(shopID, bureau.WilayaID)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Bureau deleted"})
 }

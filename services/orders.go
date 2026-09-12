@@ -24,8 +24,9 @@ func IsValidPhoneNumber(phone string) bool {
 // ResolveShipping picks the authoritative shipping price off a shop's
 // DeliveryRate row for the wilaya being shipped to — never trust a
 // client-sent shippingPrice. Fails closed if the wilaya or the requested
-// method is disabled.
-func ResolveShipping(rate models.DeliveryRate, method string) (float64, error) {
+// method is disabled. freeDeliveryEnabled (Shop.FreeDeliveryEnabled) zeroes
+// the resolved price without touching the stored per-wilaya rates.
+func ResolveShipping(rate models.DeliveryRate, method string, freeDeliveryEnabled bool) (float64, error) {
 	if !rate.IsActive {
 		return 0, fmt.Errorf("delivery is inactive for wilaya %d", rate.WilayaID)
 	}
@@ -33,10 +34,16 @@ func ResolveShipping(rate models.DeliveryRate, method string) (float64, error) {
 		if !rate.HasDoorstep {
 			return 0, fmt.Errorf("doorstep delivery unavailable for wilaya %d", rate.WilayaID)
 		}
+		if freeDeliveryEnabled {
+			return 0, nil
+		}
 		return rate.DoorstepRate, nil
 	}
 	if !rate.HasStopdesk {
 		return 0, fmt.Errorf("stopdesk delivery unavailable for wilaya %d", rate.WilayaID)
+	}
+	if freeDeliveryEnabled {
+		return 0, nil
 	}
 	return rate.StopdeskRate, nil
 }

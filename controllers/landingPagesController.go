@@ -477,7 +477,7 @@ func IndexLandingPage(c *gin.Context) {
 	cacheKey := services.LandingPageCacheKeyByID(landingPageID)
 	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
 	if err == nil {
-		var cachedResponse models.LandingPage
+		var cachedResponse dto.PublicLandingPageResponse
 		if unmarshalErr := json.Unmarshal([]byte(val), &cachedResponse); unmarshalErr == nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": true,
@@ -520,7 +520,8 @@ func IndexLandingPage(c *gin.Context) {
 	// product-listing/search/detail endpoints — a landing page embeds its
 	// product regardless of that flag, so it needs its own check here.
 	// Reported the same as a missing landing page: the moderation state
-	// itself shouldn't leak to the public.
+	// itself shouldn't leak to the public. Runs against the fetched model,
+	// independent of the DTO projection below.
 	if landingPage.Product.HiddenByPlatformAt != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
@@ -529,15 +530,114 @@ func IndexLandingPage(c *gin.Context) {
 		return
 	}
 
-	if jsonData, err := json.Marshal(landingPage); err == nil {
+	response := toPublicLandingPageResponse(landingPage)
+
+	if jsonData, err := json.Marshal(response); err == nil {
 		_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Landing page retrieved successfully",
-		"data":    landingPage,
+		"data":    response,
 	})
+}
+
+// toPublicLandingPageResponse projects a models.LandingPage down to the
+// public DTO for IndexLandingPage — see dto.PublicLandingPageResponse for
+// exactly what's dropped. Only used on that one public unauthenticated path;
+// GetLandingPageByShop/GetLandingPagesByShop (merchant-dashboard, authenticated)
+// keep returning the full model.
+func toPublicLandingPageResponse(lp models.LandingPage) dto.PublicLandingPageResponse {
+	shop := dto.PublicLandingPageShop{
+		ID:   lp.Shop.ID.String(),
+		Slug: lp.Shop.Slug,
+		Name: lp.Shop.Name,
+	}
+	if lp.Shop.LogoImage != nil {
+		shop.LogoImage = &dto.ProductImageResponse{ID: lp.Shop.LogoImage.ID.String(), URL: lp.Shop.LogoImage.URL}
+	}
+
+	images := make([]dto.ProductImageResponse, 0, len(lp.Images))
+	for _, img := range lp.Images {
+		images = append(images, dto.ProductImageResponse{ID: img.ID.String(), URL: img.URL})
+	}
+
+	productImages := make([]dto.ProductImageResponse, 0, len(lp.Product.Images))
+	for _, img := range lp.Product.Images {
+		productImages = append(productImages, dto.ProductImageResponse{ID: img.ID.String(), URL: img.URL})
+	}
+
+	variants := make([]dto.PublicLandingPageVariant, 0, len(lp.Product.Variants))
+	for _, v := range lp.Product.Variants {
+		items := make([]dto.PublicLandingPageVariantItem, 0, len(v.VariantItems))
+		for _, item := range v.VariantItems {
+			items = append(items, dto.PublicLandingPageVariantItem{
+				ID:       item.ID.String(),
+				Value:    item.Value,
+				ImageURL: item.ImageURL,
+			})
+		}
+		variants = append(variants, dto.PublicLandingPageVariant{
+			ID:           v.ID.String(),
+			Title:        v.Title,
+			VariantItems: items,
+		})
+	}
+
+	toVariantItemPtr := func(item *models.VariantItem) *dto.PublicLandingPageVariantItem {
+		if item == nil {
+			return nil
+		}
+		return &dto.PublicLandingPageVariantItem{
+			ID:       item.ID.String(),
+			Value:    item.Value,
+			ImageURL: item.ImageURL,
+		}
+	}
+
+	combinations := make([]dto.PublicLandingPageCombination, 0, len(lp.Product.Combinations))
+	for _, combo := range lp.Product.Combinations {
+		combinations = append(combinations, dto.PublicLandingPageCombination{
+			ID:                combo.ID.String(),
+			ProductID:         combo.ProductID.String(),
+			Price:             combo.Price,
+			Quantity:          combo.Quantity,
+			CombinationString: combo.CombinationString,
+			Option1:           toVariantItemPtr(combo.Option1),
+			Option2:           toVariantItemPtr(combo.Option2),
+			Option3:           toVariantItemPtr(combo.Option3),
+		})
+	}
+
+	product := dto.PublicLandingPageProduct{
+		ID:           lp.Product.ID.String(),
+		Title:        lp.Product.Title,
+		Description:  lp.Product.Description,
+		Price:        lp.Product.Price,
+		OldPrice:     lp.Product.OldPrice,
+		Images:       productImages,
+		Variants:     variants,
+		Combinations: combinations,
+	}
+
+	var experimentID *string
+	if lp.ExperimentID != nil {
+		s := lp.ExperimentID.String()
+		experimentID = &s
+	}
+
+	return dto.PublicLandingPageResponse{
+		ID:           lp.ID.String(),
+		ShopID:       lp.ShopID.String(),
+		Shop:         shop,
+		ProductID:    lp.ProductID.String(),
+		Product:      product,
+		Title:        lp.Title,
+		Images:       images,
+		Active:       lp.Active,
+		ExperimentID: experimentID,
+	}
 }
 
 func UpdateLandingPageByShop(c *gin.Context) {

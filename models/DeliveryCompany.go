@@ -21,6 +21,7 @@ type DeliveryCompany struct {
 	ShopID                     uuid.UUID                `gorm:"type:uuid;not null;index;uniqueIndex:idx_shop_available_delivery_company" json:"shopId"`
 	AvailableDeliveryCompanyID uuid.UUID                `gorm:"type:uuid;not null;uniqueIndex:idx_shop_available_delivery_company" json:"availableDeliveryCompanyId"`
 	AvailableDeliveryCompany   AvailableDeliveryCompany `gorm:"foreignKey:AvailableDeliveryCompanyID;references:ID" json:"availableDeliveryCompany"`
-	Token                      string                   `json:"token"`
+	Token                      string                   `json:"-"`
 	MerchantID                 string                   `json:"merchantId"`
+	IsActive                   bool                     `gorm:"not null;default:true" json:"isActive"`
 }

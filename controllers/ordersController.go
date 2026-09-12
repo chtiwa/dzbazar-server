@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chtiwa/dzbazar-server/dto"
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/chtiwa/dzbazar-server/models"
@@ -23,23 +24,23 @@ import (
 
 // Replace your old CreateOrderInput with this:
 type CreateOrderInput struct {
-	ShopID           string  `json:"shopId" binding:"required"`
-	ShippingMethod   string  `json:"shippingMethod" binding:"required"`
-	ShippingPrice    float64 `json:"shippingPrice"`
-	TotalPrice       float64 `json:"totalPrice"`
+	ShopID         string  `json:"shopId" binding:"required"`
+	ShippingMethod string  `json:"shippingMethod" binding:"required"`
+	ShippingPrice  float64 `json:"shippingPrice"`
+	TotalPrice     float64 `json:"totalPrice"`
 	// Staff-only manual total override (see IsStaffOrder). Ignored for
 	// anonymous checkout — total there always stays server-calculated.
 	OverrideTotalPrice *float64 `json:"overrideTotalPrice"`
-	Note             string  `json:"note"`
-	Ouvrable         bool    `json:"ouvrable"`
-	Fragile          bool    `json:"fragile"`
-	Essayable        bool    `json:"essayable"`
-	ConversionSource string  `json:"conversionSource"`
-	FBclid           string  `json:"fbclid"`
-	FBc              string  `json:"fbc"`
-	FBp              string  `json:"fbp"`
-	TTclid           string  `json:"ttclid"`
-	TTp              string  `json:"ttp"`
+	Note               string   `json:"note"`
+	Ouvrable           bool     `json:"ouvrable"`
+	Fragile            bool     `json:"fragile"`
+	Essayable          bool     `json:"essayable"`
+	ConversionSource   string   `json:"conversionSource"`
+	FBclid             string   `json:"fbclid"`
+	FBc                string   `json:"fbc"`
+	FBp                string   `json:"fbp"`
+	TTclid             string   `json:"ttclid"`
+	TTp                string   `json:"ttp"`
 	// The customer's browser URL at checkout (window.location.href),
 	// forwarded as event_source_url/page.url on the Meta/TikTok CAPI Purchase
 	// sends (see orderEvents.go) instead of a hardcoded domain literal.
@@ -312,7 +313,7 @@ func GetOrdersByShopID(c *gin.Context) {
 	body, err := json.Marshal(gin.H{
 		"success":    true,
 		"message":    "Orders were retrieved successfully",
-		"data":       orders,
+		"data":       dto.ToOrderResponses(orders),
 		"pagination": pagination,
 	})
 	if err != nil {
@@ -640,7 +641,11 @@ func CreateOrderByShopID(c *gin.Context) {
 		if err := tx.Where("shop_id = ? AND wilaya_id = ?", parsedShopID, wilayaID).First(&rate).Error; err != nil {
 			return err
 		}
-		shippingPrice, shipErr := services.ResolveShipping(rate, body.ShippingMethod)
+		var shop models.Shop
+		if err := tx.Select("free_delivery_enabled").First(&shop, "id = ?", parsedShopID).Error; err != nil {
+			return err
+		}
+		shippingPrice, shipErr := services.ResolveShipping(rate, body.ShippingMethod, shop.FreeDeliveryEnabled)
 		if shipErr != nil {
 			return shipErr
 		}
@@ -825,7 +830,7 @@ func IndexOrderByShopID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Order was retrieved successfully",
-		"data":    order,
+		"data":    dto.ToOrderResponse(order),
 	})
 }
 
@@ -953,7 +958,11 @@ func UpdateOrderByShopID(c *gin.Context) {
 			if err := tx.Where("shop_id = ? AND wilaya_id = ?", shopID, wilayaID).First(&rate).Error; err != nil {
 				return err
 			}
-			resolved, shipErr := services.ResolveShipping(rate, method)
+			var shop models.Shop
+			if err := tx.Select("free_delivery_enabled").First(&shop, "id = ?", shopID).Error; err != nil {
+				return err
+			}
+			resolved, shipErr := services.ResolveShipping(rate, method, shop.FreeDeliveryEnabled)
 			if shipErr != nil {
 				return shipErr
 			}

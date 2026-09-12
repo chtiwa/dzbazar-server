@@ -59,6 +59,9 @@ func findAndersonIntegration(shopID uuid.UUID) (*models.DeliveryCompany, error) 
 	if err != nil {
 		return nil, err
 	}
+	if err := decryptDeliveryCompanyCredentials(&integration); err != nil {
+		return nil, err
+	}
 	return &integration, nil
 }
 

@@ -21,8 +21,10 @@ func DeliveryCompaniesRoutes(router *gin.Engine) {
 	integrations.Use(middleware.RequireAuthentication)
 	{
 		integrations.GET("", middleware.RequireShopAccess(), middleware.RequireShopPermission("delivery_companies.view"), controllers.GetShopDeliveryCompanies)
+		integrations.GET("/:id/bureau-options", middleware.RequireShopAccess(), middleware.RequireShopPermission("delivery_companies.view"), controllers.GetDeliveryCompanyBureauOptions)
 		integrations.POST("", middleware.RequireShopAccess(), middleware.RequireShopPermission("delivery_companies.edit"), controllers.ConnectDeliveryCompany)
 		integrations.PATCH("/:id", middleware.RequireShopAccess(), middleware.RequireShopPermission("delivery_companies.edit"), controllers.UpdateDeliveryCompanyCredentials)
+		integrations.PATCH("/:id/active", middleware.RequireShopAccess(), middleware.RequireShopPermission("delivery_companies.edit"), controllers.UpdateDeliveryCompanyActive)
 		integrations.DELETE("/:id", middleware.RequireShopAccess(), middleware.RequireShopPermission("delivery_companies.edit"), controllers.DisconnectDeliveryCompany)
 	}
 }

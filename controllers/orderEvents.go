@@ -264,6 +264,12 @@ func sendMetaPurchaseIfEligible(order *models.Order) {
 		return
 	}
 
+	accessToken, decErr := services.DecryptField(px.AccessToken)
+	if decErr != nil {
+		log.Printf("meta capi: skip order=%s shop=%s: failed to decrypt pixel access token: %v", order.ID, order.ShopID, decErr)
+		return
+	}
+
 	testCode := ""
 	if strings.Contains(strings.ToLower(order.Client.FullName), "test") {
 		testCode = os.Getenv("FACEBOOK_TEST_CODE")
@@ -274,7 +280,7 @@ func sendMetaPurchaseIfEligible(order *models.Order) {
 
 	fbErr := utils.SendFacebookPurchase(
 		px.PixelID,
-		px.AccessToken,
+		accessToken,
 		order.ID.String(),
 		order.Client.FullName,
 		order.Client.PhoneNumber,

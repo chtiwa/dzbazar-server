@@ -77,6 +77,10 @@ func ListShops(c *gin.Context) {
 		return
 	}
 
+	for i := range shops {
+		sanitize(&shops[i].Owner)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success":    true,
 		"data":       shops,
@@ -104,6 +108,11 @@ func GetShop(c *gin.Context) {
 		}
 		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
+	}
+
+	sanitize(&shop.Owner)
+	for i := range shop.Members {
+		sanitize(&shop.Members[i].User)
 	}
 
 	var subscription models.ShopSubscription

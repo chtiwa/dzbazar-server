@@ -104,18 +104,30 @@ func validateOsenToken(token string) (bool, string) {
 // (see initializers/osen_geo.go) instead of being fetched live, since it rarely
 // changes and the live geo endpoint adds avoidable latency to order creation.
 
+// OsenMatchQuality reports how confidently findOsenMunicipalityID picked a
+// municipality: "exact" for a case-insensitive full name match, "substring"
+// for a partial name match, "fallback" when neither matched and the first
+// municipality in the province was silently picked instead.
+type OsenMatchQuality string
+
+const (
+	OsenMatchExact    OsenMatchQuality = "exact"
+	OsenMatchSubstr   OsenMatchQuality = "substring"
+	OsenMatchFallback OsenMatchQuality = "fallback"
+)
+
 // findOsenMunicipalityID maps a wilaya stateCode + city name to an Osen municipality ID.
 // Osen province IDs map 1:1 to Algerian wilaya codes (1–58).
 // Falls back to the first municipality in the province if no city name match.
-func findOsenMunicipalityID(stateCode, cityName string) (int, error) {
+func findOsenMunicipalityID(stateCode, cityName string) (int, OsenMatchQuality, error) {
 	provinces, err := initializers.GetOsenMunicipalities()
 	if err != nil {
-		return 0, fmt.Errorf("failed to load Osen geography: %w", err)
+		return 0, "", fmt.Errorf("failed to load Osen geography: %w", err)
 	}
 
 	stateCodeInt, err := strconv.Atoi(stateCode)
 	if err != nil {
-		return 0, fmt.Errorf("invalid wilaya code %q: %w", stateCode, err)
+		return 0, "", fmt.Errorf("invalid wilaya code %q: %w", stateCode, err)
 	}
 
 	var target *initializers.OsenProvinceSeed
@@ -126,7 +138,7 @@ func findOsenMunicipalityID(stateCode, cityName string) (int, error) {
 		}
 	}
 	if target == nil || len(target.Municipalities) == 0 {
-		return 0, fmt.Errorf("province %s not found in Osen coverage", stateCode)
+		return 0, "", fmt.Errorf("province %s not found in Osen coverage", stateCode)
 	}
 
 	cityLower := strings.ToLower(strings.TrimSpace(cityName))
@@ -134,19 +146,19 @@ func findOsenMunicipalityID(stateCode, cityName string) (int, error) {
 		// Exact match
 		for _, m := range target.Municipalities {
 			if strings.ToLower(m.NameLatin) == cityLower {
-				return m.ID, nil
+				return m.ID, OsenMatchExact, nil
 			}
 		}
 		// Contains match
 		for _, m := range target.Municipalities {
 			mLower := strings.ToLower(m.NameLatin)
 			if strings.Contains(mLower, cityLower) || strings.Contains(cityLower, mLower) {
-				return m.ID, nil
+				return m.ID, OsenMatchSubstr, nil
 			}
 		}
 	}
 	// Fallback: first municipality
-	return target.Municipalities[0].ID, nil
+	return target.Municipalities[0].ID, OsenMatchFallback, nil
 }
 
 // ── Orders cache ──────────────────────────────────────────────────────────────
@@ -182,6 +194,9 @@ func findOsenIntegration(shopID uuid.UUID) (*models.DeliveryCompany, error) {
 		Where("delivery_companies.shop_id = ? AND LOWER(adc.name) LIKE ?", shopID, "%osen%").
 		First(&integration).Error
 	if err != nil {
+		return nil, err
+	}
+	if err := decryptDeliveryCompanyCredentials(&integration); err != nil {
 		return nil, err
 	}
 	return &integration, nil
@@ -302,7 +317,13 @@ func (e *osenShipError) Error() string { return e.msg }
 // On success it stores Osen's tracking number, marks the order as shipped, and
 // decrements stock for each ordered variant. The order must have Client and
 // Items.Product preloaded.
-func shipOrderToOsen(c *gin.Context, order *models.Order, integration *models.DeliveryCompany) (map[string]any, error) {
+//
+// bureauOverride, when non-empty, is a municipality ID (parsed via
+// strconv.Atoi) used directly instead of calling findOsenMunicipalityID — the
+// manual-pick second pass in BulkCreateOsenOrders supplies this from a
+// dropdown of real municipality IDs. When empty, behaves exactly as before
+// and also returns the match quality findOsenMunicipalityID obtained.
+func shipOrderToOsen(c *gin.Context, order *models.Order, integration *models.DeliveryCompany, bureauOverride string) (map[string]any, OsenMatchQuality, error) {
 	// For Stopdesk orders the commune is stored in StopdeskPoint (the bureau
 	// name); City is left empty by the storefront checkout in that case.
 	cityName := order.Client.City
@@ -310,9 +331,20 @@ func shipOrderToOsen(c *gin.Context, order *models.Order, integration *models.De
 		cityName = order.Client.StopdeskPoint
 	}
 
-	municipalityID, err := findOsenMunicipalityID(order.Client.StateCode, cityName)
-	if err != nil {
-		return nil, &osenShipError{http.StatusBadRequest, fmt.Sprintf("Zone de livraison non couverte: %s", err.Error())}
+	var municipalityID int
+	var quality OsenMatchQuality
+	if bureauOverride != "" {
+		parsed, parseErr := strconv.Atoi(bureauOverride)
+		if parseErr != nil {
+			return nil, "", &osenShipError{http.StatusBadRequest, "Bureau override invalide"}
+		}
+		municipalityID = parsed
+	} else {
+		var err error
+		municipalityID, quality, err = findOsenMunicipalityID(order.Client.StateCode, cityName)
+		if err != nil {
+			return nil, "", &osenShipError{http.StatusBadRequest, fmt.Sprintf("Zone de livraison non couverte: %s", err.Error())}
+		}
 	}
 
 	description := buildShipmentDescription(order)
@@ -354,7 +386,7 @@ func shipOrderToOsen(c *gin.Context, order *models.Order, integration *models.De
 	resp, err := httpClient.Do(createReq)
 	if err != nil {
 		log.Printf("osen: ship order %s request failed: %v", order.ID, err)
-		return nil, &osenShipError{http.StatusBadGateway, "Impossible de joindre Osen Express"}
+		return nil, "", &osenShipError{http.StatusBadGateway, "Impossible de joindre Osen Express"}
 	}
 	defer resp.Body.Close()
 
@@ -367,7 +399,7 @@ func shipOrderToOsen(c *gin.Context, order *models.Order, integration *models.De
 		if m, ok := osenErr["message"].(string); ok && m != "" {
 			msg = m
 		}
-		return nil, &osenShipError{http.StatusBadRequest, msg}
+		return nil, "", &osenShipError{http.StatusBadRequest, msg}
 	}
 
 	var osenOrder map[string]any
@@ -411,22 +443,22 @@ func shipOrderToOsen(c *gin.Context, order *models.Order, integration *models.De
 	result := initializers.DB.Model(&models.Order{}).Where("id = ?", order.ID).Updates(updates)
 	if result.Error != nil {
 		log.Printf("osen: order %s shipped at carrier but local status update failed: %v", order.ID, result.Error)
-		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez Osen Express mais échec de la mise à jour locale du statut"}
+		return nil, "", &osenShipError{http.StatusInternalServerError, "Commande expédiée chez Osen Express mais échec de la mise à jour locale du statut"}
 	}
 	if result.RowsAffected == 0 {
 		log.Printf("osen: order %s shipped at carrier but local status update affected 0 rows", order.ID)
-		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez Osen Express mais le statut local n'a pas pu être mis à jour"}
+		return nil, "", &osenShipError{http.StatusInternalServerError, "Commande expédiée chez Osen Express mais le statut local n'a pas pu être mis à jour"}
 	}
 
 	if err := services.DecrementOrderItemsStock(initializers.DB, order.Items); err != nil {
 		log.Printf("osen: order %s shipped but stock decrement failed: %v", order.ID, err)
-		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez Osen Express mais échec de la mise à jour du stock"}
+		return nil, "", &osenShipError{http.StatusInternalServerError, "Commande expédiée chez Osen Express mais échec de la mise à jour du stock"}
 	}
 
 	bumpOsenOrdersCacheVersion(order.ShopID)
 	invalidateOrdersListCache(order.ShopID)
 
-	return osenOrder, nil
+	return osenOrder, quality, nil
 }
 
 // CreateOsenOrder creates + validates an Osen order mapped from a shop order.
@@ -475,7 +507,7 @@ func CreateOsenOrder(c *gin.Context) {
 		return
 	}
 
-	osenOrder, err := shipOrderToOsen(c, &order, integration)
+	osenOrder, _, err := shipOrderToOsen(c, &order, integration, "")
 	if err != nil {
 		var shipErr *osenShipError
 		if errors.As(err, &shipErr) {
@@ -492,14 +524,16 @@ func CreateOsenOrder(c *gin.Context) {
 // ── Bulk shipping ─────────────────────────────────────────────────────────────
 
 type bulkOsenOrderInput struct {
-	OrderIDs []string `json:"orderIds" binding:"required"`
+	OrderIDs        []string          `json:"orderIds" binding:"required"`
+	BureauOverrides map[string]string `json:"bureauOverrides,omitempty"` // orderId -> municipality ID
 }
 
 type bulkOsenShipResult struct {
-	OrderID    string `json:"orderId"`
-	Success    bool   `json:"success"`
-	Message    string `json:"message,omitempty"`
-	TrackingID string `json:"trackingId,omitempty"`
+	OrderID         string `json:"orderId"`
+	Success         bool   `json:"success"`
+	Message         string `json:"message,omitempty"`
+	TrackingID      string `json:"trackingId,omitempty"`
+	NeedsManualPick bool   `json:"needsManualPick,omitempty"`
 }
 
 // BulkCreateOsenOrders ships multiple shop orders to Osen Express in one request.
@@ -547,7 +581,24 @@ func BulkCreateOsenOrders(c *gin.Context) {
 			continue
 		}
 
-		osenOrder, err := shipOrderToOsen(c, &order, integration)
+		override := body.BureauOverrides[idStr] // "" if absent
+
+		// Lightweight pre-check via the existing resolver, batch-ship only:
+		// only stopdesk orders can mismatch (doorstep orders never resolve a
+		// municipality in "pickup-point" mode). When no override was supplied
+		// and resolution would fall back to "first municipality in province"
+		// instead of a real match, don't ship on a guess — flag it for manual
+		// pick without ever calling shipOrderToOsen, so the order stays
+		// genuinely untouched.
+		if override == "" && order.ShippingMethod != "Domicile" {
+			_, quality, resolveErr := findOsenMunicipalityID(order.Client.StateCode, order.Client.StopdeskPoint)
+			if resolveErr == nil && quality == OsenMatchFallback {
+				results = append(results, bulkOsenShipResult{OrderID: idStr, NeedsManualPick: true, Message: "Bureau introuvable pour ce transporteur, sélection manuelle requise"})
+				continue
+			}
+		}
+
+		osenOrder, _, err := shipOrderToOsen(c, &order, integration, override)
 		if err != nil {
 			results = append(results, bulkOsenShipResult{OrderID: idStr, Success: false, Message: err.Error()})
 			continue

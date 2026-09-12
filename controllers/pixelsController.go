@@ -28,6 +28,40 @@ type UpdatePixelInput struct {
 	ClearToken  *bool   `json:"clearToken"`
 }
 
+// pixelResponse is the AccessToken-free projection of models.Pixel returned
+// by every handler in this file — same reasoning as IndexActivePixelByShop's
+// existing whitelist below: the plaintext third-party API token never
+// belongs in an HTTP response.
+type pixelResponse struct {
+	ID             uuid.UUID `json:"id"`
+	ShopID         uuid.UUID `json:"shopId"`
+	Platform       string    `json:"platform"`
+	Title          string    `json:"title"`
+	PixelID        string    `json:"pixelId"`
+	HasAccessToken bool      `json:"hasAccessToken"`
+	IsActive       bool      `json:"isActive"`
+}
+
+func toPixelResponse(p models.Pixel) pixelResponse {
+	return pixelResponse{
+		ID:             p.ID,
+		ShopID:         p.ShopID,
+		Platform:       p.Platform,
+		Title:          p.Title,
+		PixelID:        p.PixelID,
+		HasAccessToken: p.HasAccessToken,
+		IsActive:       p.IsActive,
+	}
+}
+
+func toPixelResponses(pixels []models.Pixel) []pixelResponse {
+	out := make([]pixelResponse, 0, len(pixels))
+	for _, p := range pixels {
+		out = append(out, toPixelResponse(p))
+	}
+	return out
+}
+
 func GetPixelsByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
@@ -59,7 +93,7 @@ func GetPixelsByShop(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"count":   len(pixels),
-		"data":    pixels,
+		"data":    toPixelResponses(pixels),
 	})
 }
 
@@ -106,7 +140,7 @@ func IndexPixel(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    pixel,
+		"data":    toPixelResponse(pixel),
 	})
 }
 
@@ -204,6 +238,16 @@ func CreatePixel(c *gin.Context) {
 		return
 	}
 
+	encryptedAccessToken, err := services.EncryptPixelAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to secure access token",
+			"error":   err.Error(),
+		})
+		return
+	}
+
 	// New pixels always start inactive — admin activates explicitly via the
 	// Activate action, which is the only path that flips is_active to true.
 	pixel := models.Pixel{
@@ -212,7 +256,7 @@ func CreatePixel(c *gin.Context) {
 		Title:          title,
 		PixelID:        pixelID,
 		HasAccessToken: accessToken != "",
-		AccessToken:    accessToken,
+		AccessToken:    encryptedAccessToken,
 		IsActive:       false,
 	}
 
@@ -228,7 +272,7 @@ func CreatePixel(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"message": "Pixel created successfully",
-		"data":    pixel,
+		"data":    toPixelResponse(pixel),
 	})
 }
 
@@ -305,7 +349,17 @@ func UpdatePixel(c *gin.Context) {
 
 	if input.AccessToken != nil {
 		cleanToken := strings.TrimSpace(*input.AccessToken)
-		updateData["access_token"] = cleanToken
+		encryptedToken, err := services.EncryptPixelAccessToken(cleanToken)
+		if err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Failed to secure access token",
+				"error":   err.Error(),
+			})
+			return
+		}
+		updateData["access_token"] = encryptedToken
 		updateData["has_access_token"] = cleanToken != ""
 	}
 
@@ -340,7 +394,7 @@ func UpdatePixel(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "No changes provided",
-			"data":    pixel,
+			"data":    toPixelResponse(pixel),
 		})
 		return
 	}
@@ -376,7 +430,7 @@ func UpdatePixel(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Pixel updated successfully",
-		"data":    pixel,
+		"data":    toPixelResponse(pixel),
 	})
 }
 

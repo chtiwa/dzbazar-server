@@ -36,6 +36,17 @@ type BulkUpdateDeliveryRatesInput struct {
 	Rates []UpdateDeliveryRateInput `json:"rates" binding:"required,dive"`
 }
 
+// effectiveIsActive forces a rate inactive when both prices are 0 -- a free
+// shipping method the shop never intended, since the form has no "set price
+// to 0 on purpose" affordance. A shop that wants free shipping should use a
+// coupon/offer instead.
+func effectiveIsActive(isActive bool, doorstepRate, stopdeskRate float64) bool {
+	if doorstepRate == 0 && stopdeskRate == 0 {
+		return false
+	}
+	return isActive
+}
+
 func GetDeliveryRates(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
@@ -57,6 +68,9 @@ func GetDeliveryRates(c *gin.Context) {
 
 // GetPublicDeliveryRates is the unauthenticated counterpart of GetDeliveryRates,
 // used by the public storefront checkout to load shipping options for a shop.
+// freeDeliveryEnabled rides alongside the untouched per-wilaya rates (rather
+// than zeroing them) so the admin's configured prices stay intact if the
+// merchant later flips the toggle back off.
 func GetPublicDeliveryRates(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
@@ -64,11 +78,17 @@ func GetPublicDeliveryRates(c *gin.Context) {
 		return
 	}
 
+	var shop models.Shop
+	if err := initializers.DB.Select("free_delivery_enabled").First(&shop, "id = ?", shopID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch shop"})
+		return
+	}
+
 	cacheKey := publicDeliveryRatesCacheKey(shopID)
 	if val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result(); err == nil {
 		var cachedRates []models.DeliveryRate
 		if unmarshalErr := json.Unmarshal([]byte(val), &cachedRates); unmarshalErr == nil {
-			c.JSON(http.StatusOK, gin.H{"success": true, "data": cachedRates})
+			c.JSON(http.StatusOK, gin.H{"success": true, "data": cachedRates, "freeDeliveryEnabled": shop.FreeDeliveryEnabled})
 			return
 		}
 	}
@@ -84,8 +104,9 @@ func GetPublicDeliveryRates(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    rates,
+		"success":             true,
+		"data":                rates,
+		"freeDeliveryEnabled": shop.FreeDeliveryEnabled,
 	})
 }
 
@@ -110,7 +131,7 @@ func UpdateDeliveryRate(c *gin.Context) {
 	}
 
 	updates := map[string]interface{}{
-		"is_active":     input.IsActive,
+		"is_active":     effectiveIsActive(input.IsActive, input.DoorstepRate, input.StopdeskRate),
 		"has_doorstep":  input.HasDoorstep,
 		"doorstep_rate": input.DoorstepRate,
 		"has_stopdesk":  input.HasStopdesk,
@@ -185,7 +206,7 @@ func BulkUpdateDeliveryRates(c *gin.Context) {
 			result := tx.Model(&models.DeliveryRate{}).
 				Where("shop_id = ? AND wilaya_id = ?", shopID, item.WilayaID).
 				Updates(map[string]interface{}{
-					"is_active":     item.IsActive,
+					"is_active":     effectiveIsActive(item.IsActive, item.DoorstepRate, item.StopdeskRate),
 					"has_doorstep":  item.HasDoorstep,
 					"doorstep_rate": item.DoorstepRate,
 					"has_stopdesk":  item.HasStopdesk,

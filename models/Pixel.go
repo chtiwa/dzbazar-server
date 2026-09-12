@@ -12,7 +12,7 @@ type Pixel struct {
 	PixelID  string `gorm:"not null;index:idx_shop_platform_pixel,unique" json:"pixelId"`
 
 	HasAccessToken bool   `gorm:"default:false" json:"hasAccessToken"`
-	AccessToken    string `json:"accessToken,omitempty"`
+	AccessToken    string `json:"-"`
 
 	IsActive bool `json:"isActive"`
 }

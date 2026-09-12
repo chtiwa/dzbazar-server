@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -272,6 +274,74 @@ type UpdateDeliveryCompanyCredentialsInput struct {
 	MerchantID *string `json:"merchantId"`
 }
 
+// deliveryCompanyResponse is the credential-free projection of
+// models.DeliveryCompany. Token/MerchantID are carrier auth material (used
+// as API keys/tenant IDs in leopardController.go/zrController.go) and never
+// belong in an HTTP response — only whether one is set, plus the last 4
+// chars of Token for the admin to visually confirm which credential is live.
+type deliveryCompanyResponse struct {
+	ID                         uuid.UUID                       `json:"id"`
+	ShopID                     uuid.UUID                       `json:"shopId"`
+	AvailableDeliveryCompanyID uuid.UUID                       `json:"availableDeliveryCompanyId"`
+	AvailableDeliveryCompany   models.AvailableDeliveryCompany `json:"availableDeliveryCompany"`
+	HasToken                   bool                            `json:"hasToken"`
+	TokenLast4                 string                          `json:"tokenLast4"`
+	IsActive                   bool                            `json:"isActive"`
+}
+
+// decryptDeliveryCompanyCredentials decrypts integration.Token/MerchantID in
+// place. Shared by every carrier's find*Integration lookup (leopardController.go,
+// osenController.go, zrController.go, andersonController.go) — the single
+// choke point every outbound carrier call routes through, so the many call
+// sites that build HTTP requests from integration.Token/.MerchantID need no
+// change themselves.
+func decryptDeliveryCompanyCredentials(integration *models.DeliveryCompany) error {
+	token, err := services.DecryptField(integration.Token)
+	if err != nil {
+		return err
+	}
+	merchantID, err := services.DecryptField(integration.MerchantID)
+	if err != nil {
+		return err
+	}
+	integration.Token = token
+	integration.MerchantID = merchantID
+	return nil
+}
+
+func toDeliveryCompanyResponse(d models.DeliveryCompany) deliveryCompanyResponse {
+	// ponytail: decrypt here (not an outbound-call site) only to preserve the
+	// pre-existing masked "last 4 chars" display for the admin; d.Token itself
+	// is still never returned. Decrypt failure just hides the hint, not fatal.
+	tokenLast4 := ""
+	if d.Token != "" {
+		if plainToken, err := services.DecryptField(d.Token); err == nil {
+			if len(plainToken) <= 4 {
+				tokenLast4 = plainToken
+			} else {
+				tokenLast4 = plainToken[len(plainToken)-4:]
+			}
+		}
+	}
+	return deliveryCompanyResponse{
+		ID:                         d.ID,
+		ShopID:                     d.ShopID,
+		AvailableDeliveryCompanyID: d.AvailableDeliveryCompanyID,
+		AvailableDeliveryCompany:   d.AvailableDeliveryCompany,
+		HasToken:                   d.Token != "",
+		TokenLast4:                 tokenLast4,
+		IsActive:                   d.IsActive,
+	}
+}
+
+func toDeliveryCompanyResponses(companies []models.DeliveryCompany) []deliveryCompanyResponse {
+	out := make([]deliveryCompanyResponse, 0, len(companies))
+	for _, d := range companies {
+		out = append(out, toDeliveryCompanyResponse(d))
+	}
+	return out
+}
+
 func GetShopDeliveryCompanies(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
@@ -293,7 +363,7 @@ func GetShopDeliveryCompanies(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": integrations})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": toDeliveryCompanyResponses(integrations)})
 }
 
 func ConnectDeliveryCompany(c *gin.Context) {
@@ -375,11 +445,21 @@ func ConnectDeliveryCompany(c *gin.Context) {
 		return
 	}
 
+	encryptedToken, encryptedMerchantID, err := services.EncryptDeliveryCredentials(body.Token, body.MerchantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to secure delivery company credentials",
+			"error":   err.Error(),
+		})
+		return
+	}
+
 	integration := models.DeliveryCompany{
 		ShopID:                     shopID,
 		AvailableDeliveryCompanyID: availableID,
-		Token:                      body.Token,
-		MerchantID:                 body.MerchantID,
+		Token:                      encryptedToken,
+		MerchantID:                 encryptedMerchantID,
 	}
 
 	if err := initializers.DB.Create(&integration).Error; err != nil {
@@ -399,7 +479,7 @@ func ConnectDeliveryCompany(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"message": "Delivery company connected successfully",
-		"data":    integration,
+		"data":    toDeliveryCompanyResponse(integration),
 	})
 }
 
@@ -447,6 +527,23 @@ func UpdateDeliveryCompanyCredentials(c *gin.Context) {
 		return
 	}
 
+	if rawToken, ok := updates["token"].(string); ok {
+		if encryptedToken, err := services.EncryptField(rawToken); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to secure token", "error": err.Error()})
+			return
+		} else {
+			updates["token"] = encryptedToken
+		}
+	}
+	if rawMerchantID, ok := updates["merchant_id"].(string); ok {
+		if encryptedMerchantID, err := services.EncryptField(rawMerchantID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to secure merchant ID", "error": err.Error()})
+			return
+		} else {
+			updates["merchant_id"] = encryptedMerchantID
+		}
+	}
+
 	if err := initializers.DB.Model(&integration).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -464,8 +561,173 @@ func UpdateDeliveryCompanyCredentials(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Credentials updated successfully",
+		"data":    toDeliveryCompanyResponse(integration),
+	})
+}
+
+type UpdateDeliveryCompanyActiveInput struct {
+	IsActive bool `json:"isActive"`
+}
+
+// UpdateDeliveryCompanyActive sets (not toggles) whether this shop's carrier
+// integration is a live ship target. The client always sends the target
+// state rather than asking the server to flip it, avoiding a read-then-write
+// race if two tabs are open.
+func UpdateDeliveryCompanyActive(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	integrationID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid integration ID"})
+		return
+	}
+
+	var body UpdateDeliveryCompanyActiveInput
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		return
+	}
+
+	var integration models.DeliveryCompany
+	if err := initializers.DB.
+		Where("id = ? AND shop_id = ?", integrationID, shopID).
+		First(&integration).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Integration not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		return
+	}
+
+	if err := initializers.DB.Model(&integration).Update("is_active", body.IsActive).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to update carrier status",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	initializers.DB.
+		Preload("AvailableDeliveryCompany").
+		Preload("AvailableDeliveryCompany.Image").
+		First(&integration, "id = ?", integration.ID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Carrier status updated successfully",
 		"data":    integration,
 	})
+}
+
+// bureauOption is one selectable entry in the manual-pick dropdown that
+// Phase 5's ManualBureauPickModal renders for a needsManualPick order.
+type bureauOption struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+// GetDeliveryCompanyBureauOptions lists the real hubs/municipalities a
+// carrier resolves to for a given wilaya, powering the manual bureau-pick
+// dropdown for batch-ship orders that came back needsManualPick. Only ZR and
+// Osen have a location-resolution layer (Decision 1) — Leopard/Anderson 404,
+// since the client never calls this route for them.
+func GetDeliveryCompanyBureauOptions(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	integrationID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid integration ID"})
+		return
+	}
+
+	wilayaID := strings.TrimSpace(c.Query("wilayaId"))
+	if wilayaID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "wilayaId est requis"})
+		return
+	}
+
+	var integration models.DeliveryCompany
+	if err := initializers.DB.
+		Preload("AvailableDeliveryCompany").
+		Where("id = ? AND shop_id = ?", integrationID, shopID).
+		First(&integration).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Integration not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		return
+	}
+	if err := decryptDeliveryCompanyCredentials(&integration); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to decrypt delivery company credentials", "error": err.Error()})
+		return
+	}
+
+	name := strings.ToLower(integration.AvailableDeliveryCompany.Name)
+
+	switch {
+	case strings.Contains(name, "zr"):
+		wilaya, ok := findZrWilayaTerritory(wilayaID)
+		if !ok {
+			c.JSON(http.StatusOK, gin.H{"success": true, "data": []bureauOption{}})
+			return
+		}
+		hubs, err := loadZrHubs(shopID, &integration)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": "Impossible de charger les points de relais ZR Express", "error": err.Error()})
+			return
+		}
+		options := make([]bureauOption, 0, len(hubs))
+		for _, h := range hubs {
+			if !h.IsPickupPoint || !h.IsVisible || h.Address.CityTerritoryID != wilaya.ID {
+				continue
+			}
+			options = append(options, bureauOption{ID: h.ID, Label: h.Address.District})
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": options})
+		return
+
+	case strings.Contains(name, "osen"):
+		stateCodeInt, err := strconv.Atoi(wilayaID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "wilayaId invalide"})
+			return
+		}
+		provinces, err := initializers.GetOsenMunicipalities()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Impossible de charger la géographie Osen Express", "error": err.Error()})
+			return
+		}
+		options := []bureauOption{}
+		for _, p := range provinces {
+			if p.ID != stateCodeInt {
+				continue
+			}
+			for _, m := range p.Municipalities {
+				options = append(options, bureauOption{ID: strconv.Itoa(m.ID), Label: m.NameLatin})
+			}
+			break
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": options})
+		return
+
+	default:
+		// Leopard/Anderson have no location-resolution layer in this codebase
+		// (Decision 1) — this route is never called for them client-side, so
+		// a misrouted call fails loudly rather than returning nonsense.
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Sélection manuelle du bureau non prise en charge pour ce transporteur"})
+		return
+	}
 }
 
 func DisconnectDeliveryCompany(c *gin.Context) {

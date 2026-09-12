@@ -227,21 +227,35 @@ func resolveZrTerritoryID(stateCode, stateName, cityName string) (wilayaID strin
 	return wilaya.ID, commune.ID, nil
 }
 
+// ZrHubMatchQuality reports how confidently resolveZrHubID picked a hub:
+// "substring" means the client's stopdesk text matched a hub's district
+// name; "fallback" means no match was found and the first hub in the wilaya
+// was silently picked instead. There is no true "exact" tier in ZR's current
+// matching (only substring-contains or fallback) — the constant is kept for
+// symmetry/future use but is never returned today.
+type ZrHubMatchQuality string
+
+const (
+	ZrHubMatchExact    ZrHubMatchQuality = "exact"
+	ZrHubMatchSubstr   ZrHubMatchQuality = "substring"
+	ZrHubMatchFallback ZrHubMatchQuality = "fallback"
+)
+
 // resolveZrHubID picks a pickup-point hub for the order's wilaya. Hubs stay
 // live-fetched (per-account), but the wilaya ID feeding the match is now the
 // static territory GUID instead of a live/guessed one.
-func resolveZrHubID(shopID uuid.UUID, integration *models.DeliveryCompany, stateCode, stateName, cityName string) (string, error) {
+func resolveZrHubID(shopID uuid.UUID, integration *models.DeliveryCompany, stateCode, stateName, cityName string) (string, ZrHubMatchQuality, error) {
 	wilaya, ok := findZrWilayaTerritory(stateCode)
 	if !ok {
-		return "", fmt.Errorf("wilaya ZR Express introuvable pour %s", stateName)
+		return "", "", fmt.Errorf("wilaya ZR Express introuvable pour %s", stateName)
 	}
 
 	hubs, err := loadZrHubs(shopID, integration)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if len(hubs) == 0 {
-		return "", fmt.Errorf("aucun point de relais ZR Express disponible")
+		return "", "", fmt.Errorf("aucun point de relais ZR Express disponible")
 	}
 
 	cityLower := strings.ToLower(strings.TrimSpace(cityName))
@@ -257,14 +271,14 @@ func resolveZrHubID(shopID uuid.UUID, integration *models.DeliveryCompany, state
 			fallback = h.ID
 		}
 		if cityLower != "" && strings.Contains(strings.ToLower(h.Address.District), cityLower) {
-			return h.ID, nil
+			return h.ID, ZrHubMatchSubstr, nil
 		}
 	}
 	if fallback != "" {
-		return fallback, nil
+		return fallback, ZrHubMatchFallback, nil
 	}
 
-	return "", fmt.Errorf("aucun point de relais ZR Express dans la wilaya %s", stateName)
+	return "", "", fmt.Errorf("aucun point de relais ZR Express dans la wilaya %s", stateName)
 }
 
 // RefreshZrGeo force-refreshes the shop's cached ZR hub list, letting an

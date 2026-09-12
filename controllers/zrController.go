@@ -75,6 +75,9 @@ func findZrIntegration(shopID uuid.UUID) (*models.DeliveryCompany, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := decryptDeliveryCompanyCredentials(&integration); err != nil {
+		return nil, err
+	}
 	return &integration, nil
 }
 
@@ -216,7 +219,13 @@ func extractZrErrorMessage(body []byte) string {
 // success it stores ZR's tracking number, marks the order as shipped, and
 // decrements stock for each ordered variant. The order must have Client and
 // Items.Product/Items.ProductVariantCombination preloaded.
-func shipOrderToZr(c *gin.Context, order *models.Order, integration *models.DeliveryCompany) (map[string]any, error) {
+//
+// bureauOverride, when non-empty, is used directly as the resolved hub ID
+// (bypassing resolveZrHubID entirely) — the manual-pick second pass in
+// BulkCreateZrOrders supplies this from a dropdown of real hub IDs, so there
+// is no re-resolution ambiguity. When empty, behaves exactly as before and
+// also returns the match quality resolveZrHubID obtained.
+func shipOrderToZr(c *gin.Context, order *models.Order, integration *models.DeliveryCompany, bureauOverride string) (map[string]any, ZrHubMatchQuality, error) {
 	deliveryType := "home"
 	if order.ShippingMethod != "Domicile" {
 		deliveryType = "pickup-point"
@@ -232,14 +241,19 @@ func shipOrderToZr(c *gin.Context, order *models.Order, integration *models.Deli
 
 	wilayaID, districtID, err := resolveZrTerritoryID(order.Client.StateCode, order.Client.State, cityName)
 	if err != nil {
-		return nil, &osenShipError{http.StatusBadRequest, fmt.Sprintf("Zone de livraison ZR Express non couverte: %s", err.Error())}
+		return nil, "", &osenShipError{http.StatusBadRequest, fmt.Sprintf("Zone de livraison ZR Express non couverte: %s", err.Error())}
 	}
 
 	var hubID string
+	var quality ZrHubMatchQuality
 	if deliveryType == "pickup-point" {
-		hubID, err = resolveZrHubID(order.ShopID, integration, order.Client.StateCode, order.Client.State, cityName)
-		if err != nil {
-			return nil, &osenShipError{http.StatusBadRequest, "Point de relais ZR Express introuvable pour cette wilaya"}
+		if bureauOverride != "" {
+			hubID = bureauOverride
+		} else {
+			hubID, quality, err = resolveZrHubID(order.ShopID, integration, order.Client.StateCode, order.Client.State, cityName)
+			if err != nil {
+				return nil, "", &osenShipError{http.StatusBadRequest, "Point de relais ZR Express introuvable pour cette wilaya"}
+			}
 		}
 	}
 
@@ -282,7 +296,7 @@ func shipOrderToZr(c *gin.Context, order *models.Order, integration *models.Deli
 	reqBody, _ := json.Marshal(zrReq)
 	createReq, err := http.NewRequest("POST", zrBaseURL+"/api/v1/parcels", bytes.NewBuffer(reqBody))
 	if err != nil {
-		return nil, &osenShipError{http.StatusInternalServerError, "Impossible de créer la requête ZR Express"}
+		return nil, "", &osenShipError{http.StatusInternalServerError, "Impossible de créer la requête ZR Express"}
 	}
 	zrAuthHeaders(createReq, integration)
 	createReq.Header.Set("Content-Type", "application/json")
@@ -291,7 +305,7 @@ func shipOrderToZr(c *gin.Context, order *models.Order, integration *models.Deli
 	resp, err := httpClient.Do(createReq)
 	if err != nil {
 		log.Printf("zr: ship order %s request failed: %v", order.ID, err)
-		return nil, &osenShipError{http.StatusBadGateway, fmt.Sprintf("Impossible de joindre ZR Express: %s", err.Error())}
+		return nil, "", &osenShipError{http.StatusBadGateway, fmt.Sprintf("Impossible de joindre ZR Express: %s", err.Error())}
 	}
 	defer resp.Body.Close()
 
@@ -300,7 +314,7 @@ func shipOrderToZr(c *gin.Context, order *models.Order, integration *models.Deli
 	// Confirmed live: ZR returns 200 OK on a successful parcel creation, not
 	// the 201 Created its REST convention would suggest.
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, &osenShipError{http.StatusBadRequest, fmt.Sprintf("[HTTP %d] %s", resp.StatusCode, extractZrErrorMessage(respBody))}
+		return nil, "", &osenShipError{http.StatusBadRequest, fmt.Sprintf("[HTTP %d] %s", resp.StatusCode, extractZrErrorMessage(respBody))}
 	}
 
 	var zrParcel map[string]any
@@ -338,22 +352,22 @@ func shipOrderToZr(c *gin.Context, order *models.Order, integration *models.Deli
 	result := initializers.DB.Model(&models.Order{}).Where("id = ?", order.ID).Updates(updates)
 	if result.Error != nil {
 		log.Printf("zr: order %s shipped at carrier but local status update failed: %v", order.ID, result.Error)
-		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez ZR Express mais échec de la mise à jour locale du statut"}
+		return nil, "", &osenShipError{http.StatusInternalServerError, "Commande expédiée chez ZR Express mais échec de la mise à jour locale du statut"}
 	}
 	if result.RowsAffected == 0 {
 		log.Printf("zr: order %s shipped at carrier but local status update affected 0 rows", order.ID)
-		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez ZR Express mais le statut local n'a pas pu être mis à jour"}
+		return nil, "", &osenShipError{http.StatusInternalServerError, "Commande expédiée chez ZR Express mais le statut local n'a pas pu être mis à jour"}
 	}
 
 	if err := services.DecrementOrderItemsStock(initializers.DB, order.Items); err != nil {
 		log.Printf("zr: order %s shipped but stock decrement failed: %v", order.ID, err)
-		return nil, &osenShipError{http.StatusInternalServerError, "Commande expédiée chez ZR Express mais échec de la mise à jour du stock"}
+		return nil, "", &osenShipError{http.StatusInternalServerError, "Commande expédiée chez ZR Express mais échec de la mise à jour du stock"}
 	}
 
 	bumpZrOrdersCacheVersion(order.ShopID)
 	invalidateOrdersListCache(order.ShopID)
 
-	return zrParcel, nil
+	return zrParcel, quality, nil
 }
 
 type createZrOrderInput struct {
@@ -406,7 +420,7 @@ func CreateZrOrder(c *gin.Context) {
 		return
 	}
 
-	zrOrder, err := shipOrderToZr(c, &order, integration)
+	zrOrder, _, err := shipOrderToZr(c, &order, integration, "")
 	if err != nil {
 		var shipErr *osenShipError
 		if errors.As(err, &shipErr) {
@@ -423,14 +437,16 @@ func CreateZrOrder(c *gin.Context) {
 // ── Bulk shipping ─────────────────────────────────────────────────────────────
 
 type bulkZrOrderInput struct {
-	OrderIDs []string `json:"orderIds" binding:"required"`
+	OrderIDs        []string          `json:"orderIds" binding:"required"`
+	BureauOverrides map[string]string `json:"bureauOverrides,omitempty"` // orderId -> hub ID
 }
 
 type bulkZrShipResult struct {
-	OrderID    string `json:"orderId"`
-	Success    bool   `json:"success"`
-	Message    string `json:"message,omitempty"`
-	TrackingID string `json:"trackingId,omitempty"`
+	OrderID         string `json:"orderId"`
+	Success         bool   `json:"success"`
+	Message         string `json:"message,omitempty"`
+	TrackingID      string `json:"trackingId,omitempty"`
+	NeedsManualPick bool   `json:"needsManualPick,omitempty"`
 }
 
 // BulkCreateZrOrders ships multiple shop orders to ZR Express in one request.
@@ -478,7 +494,24 @@ func BulkCreateZrOrders(c *gin.Context) {
 			continue
 		}
 
-		zrOrder, err := shipOrderToZr(c, &order, integration)
+		override := body.BureauOverrides[idStr] // "" if absent
+
+		// Lightweight pre-check via the existing resolver, batch-ship only:
+		// only stopdesk orders can mismatch (doorstep orders never resolve a
+		// hub at all). When no override was supplied and resolution would
+		// fall back to "first hub in wilaya" instead of a real match, don't
+		// ship on a guess — flag it for manual pick without ever calling
+		// shipOrderToZr, so the order is genuinely untouched.
+		if override == "" && order.ShippingMethod != "Domicile" {
+			cityName := order.Client.StopdeskPoint
+			_, quality, resolveErr := resolveZrHubID(order.ShopID, integration, order.Client.StateCode, order.Client.State, cityName)
+			if resolveErr == nil && quality == ZrHubMatchFallback {
+				results = append(results, bulkZrShipResult{OrderID: idStr, NeedsManualPick: true, Message: "Bureau introuvable pour ce transporteur, sélection manuelle requise"})
+				continue
+			}
+		}
+
+		zrOrder, _, err := shipOrderToZr(c, &order, integration, override)
 		if err != nil {
 			results = append(results, bulkZrShipResult{OrderID: idStr, Success: false, Message: err.Error()})
 			continue
