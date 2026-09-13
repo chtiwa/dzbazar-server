@@ -79,6 +79,7 @@ func main() {
 	routes.AndersonRoutes(router)
 	routes.OffersRoutes(router)
 	routes.AbandonedLeadsRoutes(router)
+	routes.NotificationsRoutes(router)
 	routes.ConfirmatricesRoutes(router)
 	routes.HelpChatRoutes(router)
 	routes.SuperAdminRoutes(router)

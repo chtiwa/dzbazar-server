@@ -213,17 +213,20 @@ func processOrderEvent(orderID uuid.UUID, isStaffOrder bool) {
 		return
 	}
 
+	notificationPayload := map[string]any{
+		"orderId":     fullOrder.ID.String(),
+		"productName": mainProductName,
+		"clientName":  fullOrder.Client.FullName,
+		"totalPrice":  fullOrder.TotalPrice,
+		"itemsCount":  len(fullOrder.Items),
+	}
+	services.CreateNotificationsForShop(fullOrder.ShopID, "order_created", fullOrder.ID, notificationPayload)
+
 	select {
 	case realtime.Broadcast <- realtime.Message{
 		Event:  "order_created",
 		ShopID: fullOrder.ShopID.String(),
-		Data: map[string]any{
-			"orderId":     fullOrder.ID.String(),
-			"productName": mainProductName,
-			"clientName":  fullOrder.Client.FullName,
-			"totalPrice":  fullOrder.TotalPrice,
-			"itemsCount":  len(fullOrder.Items),
-		},
+		Data:   notificationPayload,
 	}:
 	case <-time.After(5 * time.Second):
 		fmt.Println("ws broadcast dropped: hub backpressure")

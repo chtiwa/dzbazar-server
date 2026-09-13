@@ -10,6 +10,7 @@ import (
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/chtiwa/dzbazar-server/realtime"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -89,15 +90,18 @@ func CreateAbandonedLead(c *gin.Context) {
 		return
 	}
 
+	notificationPayload := map[string]any{
+		"leadId":      lead.ID.String(),
+		"clientName":  lead.FullName,
+		"productName": lead.ProductTitle,
+	}
+	services.CreateNotificationsForShop(lead.ShopID, "abandoned_lead_created", lead.ID, notificationPayload)
+
 	select {
 	case realtime.Broadcast <- realtime.Message{
 		Event:  "abandoned_lead_created",
 		ShopID: lead.ShopID.String(),
-		Data: map[string]any{
-			"leadId":      lead.ID.String(),
-			"clientName":  lead.FullName,
-			"productName": lead.ProductTitle,
-		},
+		Data:   notificationPayload,
 	}:
 	case <-time.After(5 * time.Second):
 		fmt.Println("ws broadcast dropped: hub backpressure")
