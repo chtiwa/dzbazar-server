@@ -217,6 +217,11 @@ func CreateLeopardOrder(c *gin.Context) {
 		return
 	}
 
+	if !utils.TryAcquireTickLock(shipLockKey(order.ID), shipLockTTL) {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Expédition déjà en cours pour cette commande"})
+		return
+	}
+
 	integration, err := findLeopardIntegration(shopID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Leopard Express n'est pas connecté à cette boutique"})

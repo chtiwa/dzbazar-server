@@ -3,6 +3,7 @@ package controllers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -155,13 +156,17 @@ func syncShopZrOrders(shopID uuid.UUID) {
 					Where("id = ?", order.ID).
 					Update("status", newStatus).Error; err == nil {
 					invalidateOrdersListCache(shopID)
-					realtime.Broadcast <- realtime.Message{
+					select {
+					case realtime.Broadcast <- realtime.Message{
 						Event:  "order_status_synced",
 						ShopID: shopID.String(),
 						Data: map[string]any{
 							"orderId": order.ID,
 							"status":  newStatus,
 						},
+					}:
+					case <-time.After(5 * time.Second):
+						fmt.Println("ws broadcast dropped: hub backpressure")
 					}
 				}
 			}

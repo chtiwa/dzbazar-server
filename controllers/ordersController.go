@@ -340,6 +340,18 @@ func orderCooldownCookie(shopID uuid.UUID) string {
 	return "order_cd_" + shopID.String()
 }
 
+// shipLockTTL bounds how long a single "ship this order to a carrier" attempt
+// (HTTP call + local status update) is allowed to hold shipLockKey — used by
+// osenController.go/zrController.go/leopardController.go to close the
+// double-ship race between reading order.IsShipped and writing it back true.
+const shipLockTTL = 30 * time.Second
+
+func shipLockKey(orderID uuid.UUID) string {
+	return "ship-lock:" + orderID.String()
+}
+
+var errInsufficientStock = errors.New("insufficient stock for combination")
+
 func CreateOrderByShopID(c *gin.Context) {
 	var body CreateOrderInput
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -593,6 +605,16 @@ func CreateOrderByShopID(c *gin.Context) {
 				return fmt.Errorf("combination not found for this shop: %s", item.ProductVariantCombinationID)
 			}
 
+			// ponytail: stock is authoritative here but not row-locked — two
+			// concurrent checkouts can both pass this check for the last unit.
+			// Acceptable: real decrement happens at ship time (see
+			// DecrementOrderItemsStock), where a merchant reviews before
+			// committing. This just stops an obviously-oversold cart at
+			// order time instead of silently accepting it.
+			if int(item.Quantity) > combo.Quantity {
+				return fmt.Errorf("%w: %s", errInsufficientStock, combo.ID)
+			}
+
 			packageQty := item.Quantity
 			if item.OfferID != nil {
 				packageQty = packageQtyByOffer[*item.OfferID]
@@ -744,6 +766,14 @@ func CreateOrderByShopID(c *gin.Context) {
 	})
 
 	if err != nil {
+		if errors.Is(err, errInsufficientStock) {
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"message": "One or more items no longer have enough stock available",
+				"error":   err.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed saving records inside database transactions securely",
@@ -992,21 +1022,47 @@ func UpdateOrderByShopID(c *gin.Context) {
 				return err
 			}
 
+			// Reprice through services.PricedOrderItem — same offer-aware logic
+			// order creation uses — instead of combo.Price directly, so editing
+			// an order's items no longer silently drops any offer discount that
+			// was originally applied.
+			offerIDs := make([]*string, len(body.Items))
+			for i, item := range body.Items {
+				offerIDs[i] = item.OfferID
+			}
+			offerByID, err := services.FetchPublishedOffersForShop(tx, shopID, offerIDs)
+			if err != nil {
+				return err
+			}
+
+			packageQtyByOffer := map[string]uint{}
+			for _, item := range body.Items {
+				if item.OfferID != nil {
+					packageQtyByOffer[*item.OfferID] += item.Quantity
+				}
+			}
+
 			for i, item := range body.Items {
 				combo, ok := comboByID[comboIDs[i]]
 				if !ok {
 					return fmt.Errorf("combination not found for this shop: %s", item.ProductVariantCombinationID)
 				}
 
+				packageQty := item.Quantity
+				if item.OfferID != nil {
+					packageQty = packageQtyByOffer[*item.OfferID]
+				}
+				unitPrice, lineTotal := services.PricedOrderItem(combo, item.Quantity, packageQty, item.OfferID, offerByID)
+
 				newOrderItems = append(newOrderItems, models.OrderItem{
 					OrderID:                     order.ID,
 					ProductID:                   combo.ProductID,
 					ProductVariantCombinationID: combo.ID,
 					Quantity:                    item.Quantity,
-					Price:                       combo.Price,
+					Price:                       unitPrice,
 				})
 
-				calculatedTotalPrice += combo.Price * float64(item.Quantity)
+				calculatedTotalPrice += lineTotal
 			}
 
 			if err := tx.Create(&newOrderItems).Error; err != nil {

@@ -23,6 +23,16 @@ import (
 
 func init() {
 	initializers.LoadEnvVars()
+
+	// JWT_SECRET signs every access/refresh token (authController.go,
+	// requireAuth.go, utils/generateTokenString.go, superadmin/
+	// impersonationController.go) — read raw via os.Getenv with no prior
+	// validation anywhere, so an unset/weak secret would only surface as a
+	// confusing auth failure at request time. Fail fast at boot instead.
+	if secret := os.Getenv("JWT_SECRET"); len(secret) < 32 {
+		log.Fatalf("JWT_SECRET is not set or too short (must be at least 32 characters)")
+	}
+
 	initializers.InitStaticData()
 	initializers.ConnectToDB()
 	initializers.InitB2()

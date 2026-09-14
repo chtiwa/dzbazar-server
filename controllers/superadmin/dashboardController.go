@@ -44,7 +44,7 @@ func GetKPIs(c *gin.Context) {
 
 	uniqueVisitors, pageViews, err := services.PlatformTrafficKPIs(initializers.DB)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch traffic stats", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch traffic stats", err)
 		return
 	}
 
