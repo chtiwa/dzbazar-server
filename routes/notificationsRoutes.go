@@ -8,7 +8,7 @@ import (
 
 func NotificationsRoutes(router *gin.Engine) {
 	notifications := router.Group("/v1/notifications")
-	notifications.Use(middleware.RequireAuthentication)
+	notifications.Use(middleware.RequireAuthentication, middleware.RequireShopAccess())
 	{
 		notifications.GET("", controllers.GetMyNotifications)
 		notifications.GET("/unread-count", controllers.GetUnreadNotificationCount)

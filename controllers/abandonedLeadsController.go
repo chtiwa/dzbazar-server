@@ -132,7 +132,15 @@ func GetAbandonedLeadsByShopID(c *gin.Context) {
 		}
 	}
 
+	dateFrom := c.Query("dateFrom")
+
 	baseQuery := initializers.DB.Model(&models.AbandonedLead{}).Where("shop_id = ?", shopID)
+
+	if dateFrom != "" {
+		if parsed, err := time.Parse("2006-01-02", dateFrom); err == nil {
+			baseQuery = baseQuery.Where("created_at >= ?", parsed)
+		}
+	}
 
 	var totalRows int64
 	if err := baseQuery.Count(&totalRows).Error; err != nil {
@@ -156,6 +164,7 @@ func GetAbandonedLeadsByShopID(c *gin.Context) {
 	}
 
 	pagination := utils.GetPaginationData(page, totalPages, "/abandoned-leads")
+	pagination.TotalRows = totalRows
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":    true,

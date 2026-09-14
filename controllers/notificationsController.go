@@ -31,7 +31,8 @@ func GetMyNotifications(c *gin.Context) {
 		}
 	}
 
-	baseQuery := initializers.DB.Model(&models.Notification{}).Where("recipient_user_id = ?", user.ID)
+	shopID := c.GetString("activeShopID")
+	baseQuery := initializers.DB.Model(&models.Notification{}).Where("recipient_user_id = ? AND shop_id = ?", user.ID, shopID)
 
 	var totalRows int64
 	if err := baseQuery.Count(&totalRows).Error; err != nil {
@@ -51,7 +52,7 @@ func GetMyNotifications(c *gin.Context) {
 	var notifications []models.Notification
 	if err := initializers.DB.
 		Preload("Shop", func(db *gorm.DB) *gorm.DB { return db.Select("id", "name") }).
-		Where("recipient_user_id = ?", user.ID).
+		Where("recipient_user_id = ? AND shop_id = ?", user.ID, shopID).
 		Order("created_at DESC").
 		Limit(perPage).Offset(offset).
 		Find(&notifications).Error; err != nil {
@@ -79,9 +80,10 @@ func MarkNotificationRead(c *gin.Context) {
 		return
 	}
 
+	shopID := c.GetString("activeShopID")
 	now := time.Now()
 	if err := initializers.DB.Model(&models.Notification{}).
-		Where("id = ? AND recipient_user_id = ?", id, user.ID).
+		Where("id = ? AND recipient_user_id = ? AND shop_id = ?", id, user.ID, shopID).
 		Update("read_at", now).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to mark notification as read"})
 		return
@@ -93,9 +95,10 @@ func MarkNotificationRead(c *gin.Context) {
 func MarkAllNotificationsRead(c *gin.Context) {
 	user := c.MustGet("user").(models.User)
 
+	shopID := c.GetString("activeShopID")
 	now := time.Now()
 	if err := initializers.DB.Model(&models.Notification{}).
-		Where("recipient_user_id = ? AND read_at IS NULL", user.ID).
+		Where("recipient_user_id = ? AND shop_id = ? AND read_at IS NULL", user.ID, shopID).
 		Update("read_at", now).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to mark notifications as read"})
 		return
@@ -107,9 +110,10 @@ func MarkAllNotificationsRead(c *gin.Context) {
 func GetUnreadNotificationCount(c *gin.Context) {
 	user := c.MustGet("user").(models.User)
 
+	shopID := c.GetString("activeShopID")
 	var count int64
 	if err := initializers.DB.Model(&models.Notification{}).
-		Where("recipient_user_id = ? AND read_at IS NULL", user.ID).
+		Where("recipient_user_id = ? AND shop_id = ? AND read_at IS NULL", user.ID, shopID).
 		Count(&count).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to count unread notifications"})
 		return
