@@ -40,6 +40,37 @@ func RateLimitByIP(bucket string, max int64, window time.Duration) gin.HandlerFu
 	}
 }
 
+// TooManyFailedLogins reports whether an email has hit the failed-login cap
+// within window — checked inside Login (after body bind, before password
+// compare) since the email isn't known at route-middleware time.
+func TooManyFailedLogins(email string, max int64, window time.Duration) bool {
+	key := fmt.Sprintf("ratelimit:login:email:%s", email)
+	count, err := initializers.RClient.Get(initializers.Ctx, key).Int64()
+	if err != nil {
+		return false
+	}
+	return count >= max
+}
+
+// RecordFailedLogin increments the per-email failed-login counter, starting
+// the window on the first failure.
+func RecordFailedLogin(email string, window time.Duration) {
+	key := fmt.Sprintf("ratelimit:login:email:%s", email)
+	count, err := initializers.RClient.Incr(initializers.Ctx, key).Result()
+	if err != nil {
+		return
+	}
+	if count == 1 {
+		initializers.RClient.Expire(initializers.Ctx, key, window)
+	}
+}
+
+// ClearFailedLogins resets the per-email failed-login counter on success.
+func ClearFailedLogins(email string) {
+	key := fmt.Sprintf("ratelimit:login:email:%s", email)
+	initializers.RClient.Del(initializers.Ctx, key)
+}
+
 // AllowShopAction is the per-shop fixed-window check behind RateLimitByShop,
 // callable outside the middleware chain — for limits that depend on data the
 // router doesn't have yet (e.g. a cap that only applies to free-tier shops,

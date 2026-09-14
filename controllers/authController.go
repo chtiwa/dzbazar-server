@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
+	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
@@ -60,6 +61,17 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	const maxFailedLogins = 10
+	const failedLoginWindow = 15 * time.Minute
+
+	if middleware.TooManyFailedLogins(body.Email, maxFailedLogins, failedLoginWindow) {
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"success": false,
+			"message": "Too many attempts, please try again later",
+		})
+		return
+	}
+
 	var user models.User
 	err := initializers.DB.
 		Preload("Memberships").
@@ -67,6 +79,7 @@ func Login(c *gin.Context) {
 		First(&user).Error
 
 	if err != nil {
+		middleware.RecordFailedLogin(body.Email, failedLoginWindow)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"message": "Invalid email or password",
@@ -91,6 +104,7 @@ func Login(c *gin.Context) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
+		middleware.RecordFailedLogin(body.Email, failedLoginWindow)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"message": "Invalid email or password",
@@ -106,6 +120,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	middleware.ClearFailedLogins(body.Email)
 	sanitizeUser(&user)
 
 	c.JSON(http.StatusOK, gin.H{

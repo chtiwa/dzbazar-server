@@ -56,7 +56,8 @@ func envOr(key, fallback string) string {
 }
 
 func main() {
-	router := gin.Default()
+	router := gin.New()
+	router.Use(gin.Recovery(), middleware.RequestID(), middleware.RequestLogger())
 
 	router.Use(middleware.CORSMiddleware())
 
@@ -81,6 +82,7 @@ func main() {
 	routes.DeliveryRatesRoutes(router)
 	routes.DeliveryCompaniesRoutes(router)
 	routes.BureauxRoutes(router)
+	routes.CommunesRoutes(router)
 	routes.ClientsRoutes(router)
 	routes.PlansRoutes(router)
 	routes.OsenRoutes(router)

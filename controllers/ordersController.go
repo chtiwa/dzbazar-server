@@ -353,6 +353,15 @@ func shipLockKey(orderID uuid.UUID) string {
 var errInsufficientStock = errors.New("insufficient stock for combination")
 
 func CreateOrderByShopID(c *gin.Context) {
+	start := time.Now()
+	defer func() {
+		outcome := "success"
+		if c.Writer.Status() >= 400 {
+			outcome = "error"
+		}
+		services.OrderCreationDuration.WithLabelValues(outcome).Observe(time.Since(start).Seconds())
+	}()
+
 	var body CreateOrderInput
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
