@@ -851,16 +851,40 @@ func UpdateLandingPageByShop(c *gin.Context) {
 		}
 	}
 
-	// Rewrite order_index for retained existing images to reflect the frontend's ordering
-	for i, img := range existingImages {
+	// Rewrite order_index for retained existing images to reflect the frontend's unified
+	// ordering (existing + new images interleaved) — must use img.OrderIndex, not the loop
+	// index, since new images can be dragged between existing ones.
+	for _, img := range existingImages {
 		if err := tx.Model(&models.LandingPageImage{}).
 			Where("id = ? AND landing_page_id = ?", img.ID, landingPageID).
-			UpdateColumn("order_index", i).Error; err != nil {
+			UpdateColumn("order_index", img.OrderIndex).Error; err != nil {
 			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
 				"message": "Failed to reorder existing images",
 				"error":   err.Error(),
+			})
+			return
+		}
+	}
+
+	newImagePositionsJSON := c.PostForm("newImagePositions")
+	var newImagePositions []int
+	if newImagePositionsJSON != "" {
+		if err := json.Unmarshal([]byte(newImagePositionsJSON), &newImagePositions); err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Invalid newImagePositions JSON",
+				"error":   err.Error(),
+			})
+			return
+		}
+		if len(newImagePositions) != len(files) {
+			tx.Rollback()
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "newImagePositions must have one entry per uploaded image",
 			})
 			return
 		}
@@ -880,7 +904,11 @@ func UpdateLandingPageByShop(c *gin.Context) {
 
 	for i := range uploadedImages {
 		uploadedImages[i].LandingPageID = landingPageID
-		uploadedImages[i].OrderIndex = len(existingImages) + i
+		if i < len(newImagePositions) {
+			uploadedImages[i].OrderIndex = newImagePositions[i]
+		} else {
+			uploadedImages[i].OrderIndex = len(existingImages) + i
+		}
 	}
 
 	if len(uploadedImages) > 0 {
