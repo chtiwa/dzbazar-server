@@ -34,6 +34,7 @@ type Plan struct {
 	HasConfirmationOrders bool `gorm:"default:true" json:"hasConfirmationOrders"`
 	HasAbandonedOrders    bool `gorm:"default:false" json:"hasAbandonedOrders"`
 	HasOrderTracking      bool `gorm:"default:false" json:"hasOrderTracking"` // suivi
+	HasOrderHourlyStats   bool `gorm:"default:false" json:"hasOrderHourlyStats"`
 
 	// ---- Client features ----
 	// Saves clients on order + tracks delivery status — paid tiers only

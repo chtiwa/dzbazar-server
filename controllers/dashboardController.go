@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
+	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -504,6 +505,89 @@ func GetPagePerformance(c *gin.Context) {
 			"conversionRate": conversionRate(orders, views),
 		},
 	})
+}
+
+type HourCount struct {
+	Hour  int   `json:"hour"`
+	Count int64 `json:"count"`
+}
+
+// GetOrdersByHour returns order counts grouped by hour-of-day (0-23, Postgres
+// session-local time — same no-timezone-conversion convention as the rest of
+// this file). Pro-plan gated via services.HasOrderHourlyStats.
+func GetOrdersByHour(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	allowed, err := services.HasOrderHourlyStats(shopID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		return
+	}
+	if !allowed {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Upgrade your plan to see orders by hour.", "code": "PLAN_LIMIT_REACHED"})
+		return
+	}
+
+	fromStr := c.Query("from")
+	toStr := c.Query("to")
+	var fromTime, toTime time.Time
+	hasDateFilter := fromStr != "" && toStr != ""
+	if hasDateFilter {
+		fromTime, err = time.Parse("2006-01-02", fromStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid from date"})
+			return
+		}
+		toTime, err = time.Parse("2006-01-02", toStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid to date"})
+			return
+		}
+		toTime = toTime.Add(24 * time.Hour) // make end date inclusive
+	}
+
+	var productID uuid.UUID
+	if v := c.Query("productId"); v != "" {
+		productID, err = uuid.Parse(v)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid product ID"})
+			return
+		}
+	}
+	hasProduct := productID != uuid.Nil
+
+	var deliveryCompanyID uuid.UUID
+	if v := c.Query("deliveryCompanyId"); v != "" {
+		deliveryCompanyID, err = uuid.Parse(v)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid delivery company ID"})
+			return
+		}
+	}
+	hasDeliveryCompany := deliveryCompanyID != uuid.Nil
+
+	byHour := []HourCount{}
+	q := initializers.DB.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
+	if hasDateFilter {
+		q = q.Where("created_at >= ? AND created_at < ?", fromTime, toTime)
+	}
+	if hasProduct {
+		q = q.Where(orderContainsProductSQL, productID)
+	}
+	if hasDeliveryCompany {
+		q = q.Where("shipped_via_id = ?", deliveryCompanyID)
+	}
+	if err := q.Select("EXTRACT(HOUR FROM created_at)::int AS hour, COUNT(*) AS count").
+		Group("EXTRACT(HOUR FROM created_at)").Order("hour ASC").Scan(&byHour).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching hourly stats", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": byHour})
 }
 
 // entityShopJoin scopes page_visits to the requesting shop via the underlying product/landing_page

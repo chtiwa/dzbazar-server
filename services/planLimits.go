@@ -53,6 +53,16 @@ func IsFreeTier(shopID uuid.UUID) (bool, error) {
 	return sub.Plan.Price == 0, nil
 }
 
+// HasOrderHourlyStats reports whether the shop's plan includes the
+// "orders by hour of day" dashboard chart.
+func HasOrderHourlyStats(shopID uuid.UUID) (bool, error) {
+	sub, err := shopSubscription(shopID)
+	if err != nil {
+		return false, err
+	}
+	return sub.Plan.HasOrderHourlyStats, nil
+}
+
 func checkCap(max int, count int64) error {
 	if max == -1 || count < int64(max) {
 		return nil

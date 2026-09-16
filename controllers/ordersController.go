@@ -105,6 +105,10 @@ type UpdateOrderInput struct {
 	ShippedViaID   *string           `json:"shippedViaId"`
 	Client         *OrderClientInput `json:"client"`
 	Items          []OrderItemInput  `json:"items"`
+	// Merchant manual override of the recalculated total (e.g. a verbal
+	// discount). Route is already shop-member gated, same trust boundary as
+	// CreateOrderInput.OverrideTotalPrice.
+	OverrideTotalPrice *float64 `json:"overrideTotalPrice"`
 }
 
 // Only the unfiltered first page gets cached — any status/search/date filter
@@ -1086,6 +1090,10 @@ func UpdateOrderByShopID(c *gin.Context) {
 			for _, item := range existingItems {
 				calculatedTotalPrice += item.Price * float64(item.Quantity)
 			}
+		}
+
+		if body.OverrideTotalPrice != nil {
+			calculatedTotalPrice = *body.OverrideTotalPrice
 		}
 
 		updates := map[string]any{
