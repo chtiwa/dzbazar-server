@@ -44,7 +44,6 @@ func GetAvailableDeliveryCompanies(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to fetch available delivery companies",
-			"error":   err.Error(),
 		})
 		return
 	}
@@ -60,7 +59,6 @@ func ListAllAvailableDeliveryCompanies(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Failed to fetch available delivery companies",
-			"error":   err.Error(),
 		})
 		return
 	}

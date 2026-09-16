@@ -224,12 +224,12 @@ func DeletePlan(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Plan not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error"})
 		return
 	}
 
 	if err := initializers.DB.Delete(&plan).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to delete plan", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to delete plan"})
 		return
 	}
 
