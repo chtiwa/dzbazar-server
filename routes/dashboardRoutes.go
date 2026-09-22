@@ -13,5 +13,6 @@ func DashboardRoutes(router *gin.Engine) {
 		dashboard.GET("/orders", middleware.RequireShopAccess(), middleware.RequireShopPermission("dashboard.view"), controllers.GetOrdersDashboard)
 		dashboard.GET("/orders/by-hour", middleware.RequireShopAccess(), middleware.RequireShopPermission("dashboard.view"), controllers.GetOrdersByHour)
 		dashboard.GET("/page-performance", middleware.RequireShopAccess(), middleware.RequireShopPermission("dashboard.view"), controllers.GetPagePerformance)
+		dashboard.GET("/wilaya-delivery-rates", middleware.RequireShopAccess(), middleware.RequireShopPermission("dashboard.view"), controllers.GetWilayaDeliveryRates)
 	}
 }

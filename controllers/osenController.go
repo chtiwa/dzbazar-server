@@ -420,12 +420,18 @@ func shipOrderToOsen(c *gin.Context, order *models.Order, integration *models.De
 	// exclude the order from the confirmation-rate metric (which counts orders
 	// ever audit-logged into "Confirmé"). Backfill that transition here so
 	// shipping always implies confirmed.
+	preShipStatus := order.Status
 	if order.Status != "Confirmé" {
 		utils.LogAudit(c, "order.status_changed", "Order", &order.ID, map[string]string{
 			"from": order.Status,
 			"to":   "Confirmé",
 		})
+		preShipStatus = "Confirmé"
 	}
+	utils.LogAudit(c, "order.status_changed", "Order", &order.ID, map[string]string{
+		"from": preShipStatus,
+		"to":   "Expedié",
+	})
 
 	updates := map[string]any{
 		"is_shipped":     true,

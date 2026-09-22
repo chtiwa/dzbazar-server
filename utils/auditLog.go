@@ -41,3 +41,24 @@ func LogAudit(c *gin.Context, action string, targetType string, targetID *uuid.U
 
 	initializers.DB.Create(&entry)
 }
+
+// LogAuditSystem writes an audit trail entry with no HTTP-request actor, for
+// background jobs (carrier status-sync tickers) that have no gin.Context.
+func LogAuditSystem(action string, targetType string, targetID *uuid.UUID, metadata any) {
+	metadataJSON := ""
+	if metadata != nil {
+		if b, err := json.Marshal(metadata); err == nil {
+			metadataJSON = string(b)
+		}
+	}
+
+	entry := models.AuditLog{
+		ActorEmail: "system",
+		Action:     action,
+		TargetType: targetType,
+		TargetID:   targetID,
+		Metadata:   metadataJSON,
+	}
+
+	initializers.DB.Create(&entry)
+}

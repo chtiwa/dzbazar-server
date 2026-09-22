@@ -590,6 +590,94 @@ func GetOrdersByHour(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": byHour})
 }
 
+type WilayaDeliveryRateStat struct {
+	Wilaya            string  `json:"wilaya"`
+	ResolvedShipped   int64   `json:"resolvedShipped"`
+	ResolvedDelivered int64   `json:"resolvedDelivered"`
+	DeliveryRate      float64 `json:"deliveryRate"`
+}
+
+// GetWilayaDeliveryRates returns, per wilaya, how many shipments reached a
+// terminal state (Livré/Retour) and what fraction of those were delivered —
+// same resolvedShipped/resolvedDelivered definition as GetOrdersDashboard,
+// just broken out by wilaya instead of shop-wide.
+func GetWilayaDeliveryRates(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	fromStr := c.Query("from")
+	toStr := c.Query("to")
+
+	var fromTime, toTime time.Time
+	hasDateFilter := fromStr != "" && toStr != ""
+	if hasDateFilter {
+		fromTime, err = time.Parse("2006-01-02", fromStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid from date"})
+			return
+		}
+		toTime, err = time.Parse("2006-01-02", toStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid to date"})
+			return
+		}
+		toTime = toTime.Add(24 * time.Hour) // make end date inclusive
+	}
+
+	var productID uuid.UUID
+	if v := c.Query("productId"); v != "" {
+		productID, err = uuid.Parse(v)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid product ID"})
+			return
+		}
+	}
+	hasProduct := productID != uuid.Nil
+
+	var deliveryCompanyID uuid.UUID
+	if v := c.Query("deliveryCompanyId"); v != "" {
+		deliveryCompanyID, err = uuid.Parse(v)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid delivery company ID"})
+			return
+		}
+	}
+	hasDeliveryCompany := deliveryCompanyID != uuid.Nil
+
+	rows := []WilayaDeliveryRateStat{}
+	q := initializers.DB.Table("orders").
+		Joins("JOIN clients c ON c.id = orders.client_id").
+		Where("orders.shop_id = ? AND orders.deleted_at IS NULL AND orders.is_hidden = false AND orders.status <> 'Abandonné' AND c.state != '' AND orders.is_shipped = true", shopID)
+	if hasDateFilter {
+		q = q.Where("orders.created_at >= ? AND orders.created_at < ?", fromTime, toTime)
+	}
+	if hasProduct {
+		q = q.Where(orderContainsProductSQL, productID)
+	}
+	if hasDeliveryCompany {
+		q = q.Where("orders.shipped_via_id = ?", deliveryCompanyID)
+	}
+	if err := q.Select(`
+			c.state AS wilaya,
+			COUNT(*) FILTER (WHERE orders.status IN ('Livré','Retour')) AS resolved_shipped,
+			COUNT(*) FILTER (WHERE orders.status = 'Livré') AS resolved_delivered
+		`).Group("c.state").Order("resolved_shipped DESC").Scan(&rows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching wilaya delivery rates", "error": err.Error()})
+		return
+	}
+
+	for i := range rows {
+		if rows[i].ResolvedShipped > 0 {
+			rows[i].DeliveryRate = float64(rows[i].ResolvedDelivered) * 100.0 / float64(rows[i].ResolvedShipped)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": rows})
+}
+
 // entityShopJoin scopes page_visits to the requesting shop via the underlying product/landing_page
 // row, since page_visits itself has no shop_id column.
 func entityShopJoin(pageType string) string {
