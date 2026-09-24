@@ -63,6 +63,15 @@ func HasOrderHourlyStats(shopID uuid.UUID) (bool, error) {
 	return sub.Plan.HasOrderHourlyStats, nil
 }
 
+// checkCap and every Check*Limit function below are check-then-act with no
+// row lock or unique constraint behind the count. A shop parked at exactly
+// its cap can be overshot by a handful of rows under a concurrent burst
+// (multiple requests all pass the count check before any insert commits).
+// Accepted as a soft business-rule race, not a security or money-correctness
+// issue — fixing it properly means an advisory lock keyed by shop_id around
+// every caller's check-then-create sequence (CreateOrder, CreateProduct,
+// CreateLandingPage, CreateUser, CreatePixel), which isn't worth the
+// cross-controller change for a cap that's occasionally off by a few rows.
 func checkCap(max int, count int64) error {
 	if max == -1 || count < int64(max) {
 		return nil
