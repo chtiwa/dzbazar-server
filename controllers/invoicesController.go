@@ -112,6 +112,12 @@ func CreateInvoice(c *gin.Context) {
 // CreateShop's logo upload — this codebase deliberately keeps that inline
 // per-controller rather than sharing a helper (see server/CLAUDE.md).
 func UploadInvoiceProof(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
 	invoiceID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid invoice ID"})
@@ -119,7 +125,7 @@ func UploadInvoiceProof(c *gin.Context) {
 	}
 
 	var invoice models.Invoice
-	if err := initializers.DB.First(&invoice, "id = ?", invoiceID).Error; err != nil {
+	if err := initializers.DB.Where("id = ? AND shop_id = ?", invoiceID, shopID).First(&invoice).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Invoice not found"})
 			return
