@@ -42,7 +42,7 @@ func AskHelpChat(c *gin.Context) {
 	// so a malformed request doesn't burn the merchant's hourly allowance.
 	free, err := services.IsFreeTier(shopID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to verify plan limits", err)
 		return
 	}
 	if free && !middleware.AllowShopAction("help-chat-hourly", shopID.String(), freeTierChatQuestionsPerHour, time.Hour) {
@@ -71,7 +71,7 @@ func AskHelpChat(c *gin.Context) {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": "Help chat is not configured"})
 			return
 		}
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": "Failed to get an answer", "error": err.Error()})
+		RespondError(c, http.StatusBadGateway, "Failed to get an answer", err)
 		return
 	}
 

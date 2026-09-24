@@ -107,7 +107,7 @@ func CreateOffer(c *gin.Context) {
 
 	var body offerBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -200,7 +200,7 @@ func CreateOffer(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Create(&offer).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to create offer", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to create offer", err)
 		return
 	}
 
@@ -227,7 +227,7 @@ func GetOffersByShop(c *gin.Context) {
 
 	var offers []models.Offer
 	if err := query.Find(&offers).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to retrieve offers", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to retrieve offers", err)
 		return
 	}
 
@@ -279,7 +279,7 @@ func UpdateOffer(c *gin.Context) {
 
 	var body offerBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -335,7 +335,7 @@ func UpdateOffer(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Save(&offer).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update offer", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to update offer", err)
 		return
 	}
 
@@ -366,7 +366,7 @@ func setOfferStatus(c *gin.Context, status string) {
 		Where("id = ? AND shop_id = ? AND deleted_at IS NULL", offerID, shopID).
 		Update("status", status)
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update offer status", "error": result.Error.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to update offer status", result.Error)
 		return
 	}
 	if result.RowsAffected == 0 {
@@ -391,7 +391,7 @@ func DeleteOffer(c *gin.Context) {
 
 	result := initializers.DB.Where("id = ? AND shop_id = ?", offerID, shopID).Delete(&models.Offer{})
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to delete offer", "error": result.Error.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to delete offer", result.Error)
 		return
 	}
 	if result.RowsAffected == 0 {
@@ -442,7 +442,7 @@ func UpsertOfferOverride(c *gin.Context) {
 
 	var body overrideBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -476,7 +476,7 @@ func UpsertOfferOverride(c *gin.Context) {
 		Assign(override).
 		FirstOrCreate(&override).Error
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to save override", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to save override", err)
 		return
 	}
 
@@ -558,7 +558,7 @@ func EvaluateOffersPublic(c *gin.Context) {
 
 	var req EvaluateOffersRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -570,7 +570,7 @@ func EvaluateOffersPublic(c *gin.Context) {
 
 	results, err := resolveOffers(shop.ID, productID, req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to evaluate offers", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to evaluate offers", err)
 		return
 	}
 
@@ -983,7 +983,7 @@ func TrackOfferEventPublic(c *gin.Context) {
 
 	var body offerEventBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 

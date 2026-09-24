@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -89,7 +90,7 @@ func ConnectGoogleSheets(c *gin.Context) {
 
 	var body ConnectGoogleSheetsInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -102,11 +103,11 @@ func ConnectGoogleSheets(c *gin.Context) {
 
 	svc, err := services.NewSheetsClient(serviceAccountJSON)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid service account credentials", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid service account credentials", err)
 		return
 	}
 	if err := services.EnsureHeaderRow(svc, spreadsheetID, sheetName); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": sheetsAccessErrorMessage(err), "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, sheetsAccessErrorMessage(err), err)
 		return
 	}
 
@@ -119,7 +120,7 @@ func ConnectGoogleSheets(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Create(&integration).Error; err != nil {
-		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Failed to create integration. It may already exist for this shop.", "error": err.Error()})
+		RespondError(c, http.StatusConflict, "Failed to create integration. It may already exist for this shop.", err)
 		return
 	}
 
@@ -145,7 +146,7 @@ func UpdateGoogleSheetsCredentials(c *gin.Context) {
 
 	var body UpdateGoogleSheetsInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -166,11 +167,11 @@ func UpdateGoogleSheetsCredentials(c *gin.Context) {
 	if credentialsChanged {
 		svc, err := services.NewSheetsClient(integration.ServiceAccountJSON)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid service account credentials", "error": err.Error()})
+			RespondError(c, http.StatusBadRequest, "Invalid service account credentials", err)
 			return
 		}
 		if err := services.EnsureHeaderRow(svc, integration.SpreadsheetID, integration.SheetName); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": sheetsAccessErrorMessage(err), "error": err.Error()})
+			RespondError(c, http.StatusBadRequest, sheetsAccessErrorMessage(err), err)
 			return
 		}
 		integration.LastError = ""
@@ -181,7 +182,7 @@ func UpdateGoogleSheetsCredentials(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Save(&integration).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update integration", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to update integration", err)
 		return
 	}
 
@@ -197,7 +198,7 @@ func DisconnectGoogleSheets(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Where("shop_id = ?", shopID).Delete(&models.GoogleSheetsIntegration{}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to disconnect", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to disconnect", err)
 		return
 	}
 
@@ -247,7 +248,8 @@ func TestGoogleSheetsConnection(c *gin.Context) {
 	if err != nil {
 		integration.LastError = err.Error()
 		initializers.DB.Save(&integration)
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "Connection test failed", "error": err.Error(), "data": toSheetsStatusResponse(integration)})
+		log.Printf("%s %s: Connection test failed: %v", c.Request.Method, c.Request.URL.Path, err)
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "Connection test failed", "data": toSheetsStatusResponse(integration)})
 		return
 	}
 

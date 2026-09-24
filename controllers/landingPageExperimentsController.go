@@ -99,13 +99,13 @@ func loadExperimentWithSets(db *gorm.DB, shopID, experimentID uuid.UUID, experim
 func CreateExperimentByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 
 	var body experimentBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -122,13 +122,13 @@ func CreateExperimentByShop(c *gin.Context) {
 
 	productID, err := uuid.Parse(body.ProductID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid product ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid product ID", err)
 		return
 	}
 
 	var product models.Product
 	if err := initializers.DB.Where("id = ? AND shop_id = ?", productID, shopID).First(&product).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Product not found", "error": err.Error()})
+		RespondError(c, http.StatusNotFound, "Product not found", err)
 		return
 	}
 
@@ -136,7 +136,7 @@ func CreateExperimentByShop(c *gin.Context) {
 	for i, idStr := range body.LandingPageIDs {
 		id, parseErr := uuid.Parse(idStr)
 		if parseErr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid landing page ID", "error": parseErr.Error()})
+			RespondError(c, http.StatusBadRequest, "Invalid landing page ID", parseErr)
 			return
 		}
 		landingPageIDs[i] = id
@@ -146,7 +146,7 @@ func CreateExperimentByShop(c *gin.Context) {
 	if err := initializers.DB.
 		Where("id IN ? AND shop_id = ? AND product_id = ? AND experiment_id IS NULL", landingPageIDs, shopID, productID).
 		Find(&landingPages).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to load landing pages", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to load landing pages", err)
 		return
 	}
 	if len(landingPages) != len(landingPageIDs) {
@@ -180,19 +180,19 @@ func CreateExperimentByShop(c *gin.Context) {
 		return nil
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to create experiment", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to create experiment", err)
 		return
 	}
 
 	var created models.LandingPageExperiment
 	if err := loadExperimentWithSets(initializers.DB, shopID, experiment.ID, &created); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to reload experiment", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to reload experiment", err)
 		return
 	}
 
 	response, err := buildExperimentResponse(created)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to compute experiment standings", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to compute experiment standings", err)
 		return
 	}
 
@@ -202,7 +202,7 @@ func CreateExperimentByShop(c *gin.Context) {
 func GetExperimentsByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 
@@ -214,7 +214,7 @@ func GetExperimentsByShop(c *gin.Context) {
 		}).
 		Order("created_at DESC").
 		Find(&experiments).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to retrieve experiments", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to retrieve experiments", err)
 		return
 	}
 
@@ -222,7 +222,7 @@ func GetExperimentsByShop(c *gin.Context) {
 	for i, e := range experiments {
 		resp, err := buildExperimentResponse(e)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to compute experiment standings", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to compute experiment standings", err)
 			return
 		}
 		responses[i] = resp
@@ -234,24 +234,24 @@ func GetExperimentsByShop(c *gin.Context) {
 func GetExperimentByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 	experimentID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid experiment ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid experiment ID", err)
 		return
 	}
 
 	var experiment models.LandingPageExperiment
 	if err := loadExperimentWithSets(initializers.DB, shopID, experimentID, &experiment); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Experiment not found", "error": err.Error()})
+		RespondError(c, http.StatusNotFound, "Experiment not found", err)
 		return
 	}
 
 	response, err := buildExperimentResponse(experiment)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to compute experiment standings", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to compute experiment standings", err)
 		return
 	}
 
@@ -270,18 +270,18 @@ type addExperimentSetBody struct {
 func AddLandingPageToExperimentByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 	experimentID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid experiment ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid experiment ID", err)
 		return
 	}
 
 	var experiment models.LandingPageExperiment
 	if err := initializers.DB.Where("id = ? AND shop_id = ?", experimentID, shopID).First(&experiment).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Experiment not found", "error": err.Error()})
+		RespondError(c, http.StatusNotFound, "Experiment not found", err)
 		return
 	}
 	if experiment.Status != models.ExperimentStatusRunning {
@@ -291,12 +291,12 @@ func AddLandingPageToExperimentByShop(c *gin.Context) {
 
 	var body addExperimentSetBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 	landingPageID, err := uuid.Parse(body.LandingPageID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid landing page ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid landing page ID", err)
 		return
 	}
 
@@ -322,19 +322,19 @@ func AddLandingPageToExperimentByShop(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Landing page is invalid, belongs to a different product, or is already in a test"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to add landing page to the test", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to add landing page to the test", err)
 		return
 	}
 
 	var updated models.LandingPageExperiment
 	if err := loadExperimentWithSets(initializers.DB, shopID, experimentID, &updated); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to reload experiment", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to reload experiment", err)
 		return
 	}
 
 	response, err := buildExperimentResponse(updated)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to compute experiment standings", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to compute experiment standings", err)
 		return
 	}
 
@@ -349,23 +349,23 @@ func AddLandingPageToExperimentByShop(c *gin.Context) {
 func RemoveLandingPageFromExperimentByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 	experimentID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid experiment ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid experiment ID", err)
 		return
 	}
 	landingPageID, err := uuid.Parse(c.Param("landingPageId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid landing page ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid landing page ID", err)
 		return
 	}
 
 	var experiment models.LandingPageExperiment
 	if err := initializers.DB.Where("id = ? AND shop_id = ?", experimentID, shopID).First(&experiment).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Experiment not found", "error": err.Error()})
+		RespondError(c, http.StatusNotFound, "Experiment not found", err)
 		return
 	}
 	if experiment.Status != models.ExperimentStatusRunning {
@@ -400,20 +400,20 @@ func RemoveLandingPageFromExperimentByShop(c *gin.Context) {
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Set not found in this test"})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to remove the set", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to remove the set", err)
 		}
 		return
 	}
 
 	var updated models.LandingPageExperiment
 	if err := loadExperimentWithSets(initializers.DB, shopID, experimentID, &updated); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to reload experiment", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to reload experiment", err)
 		return
 	}
 
 	response, err := buildExperimentResponse(updated)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to compute experiment standings", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to compute experiment standings", err)
 		return
 	}
 
@@ -431,24 +431,24 @@ type updateExperimentBody struct {
 func UpdateExperimentByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 	experimentID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid experiment ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid experiment ID", err)
 		return
 	}
 
 	var experiment models.LandingPageExperiment
 	if err := initializers.DB.Where("id = ? AND shop_id = ?", experimentID, shopID).First(&experiment).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Experiment not found", "error": err.Error()})
+		RespondError(c, http.StatusNotFound, "Experiment not found", err)
 		return
 	}
 
 	var body updateExperimentBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -479,20 +479,20 @@ func UpdateExperimentByShop(c *gin.Context) {
 
 	if len(updates) > 0 {
 		if err := initializers.DB.Model(&experiment).Updates(updates).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update experiment", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to update experiment", err)
 			return
 		}
 	}
 
 	var updated models.LandingPageExperiment
 	if err := loadExperimentWithSets(initializers.DB, shopID, experimentID, &updated); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to reload experiment", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to reload experiment", err)
 		return
 	}
 
 	response, err := buildExperimentResponse(updated)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to compute experiment standings", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to compute experiment standings", err)
 		return
 	}
 
@@ -502,18 +502,18 @@ func UpdateExperimentByShop(c *gin.Context) {
 func DeleteExperimentByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 	experimentID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid experiment ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid experiment ID", err)
 		return
 	}
 
 	var experiment models.LandingPageExperiment
 	if err := initializers.DB.Where("id = ? AND shop_id = ?", experimentID, shopID).First(&experiment).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Experiment not found", "error": err.Error()})
+		RespondError(c, http.StatusNotFound, "Experiment not found", err)
 		return
 	}
 
@@ -528,7 +528,7 @@ func DeleteExperimentByShop(c *gin.Context) {
 		return tx.Delete(&experiment).Error
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to delete experiment", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to delete experiment", err)
 		return
 	}
 
@@ -542,7 +542,7 @@ type assignExperimentBody struct {
 func AssignExperimentVariantPublic(c *gin.Context) {
 	experimentID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid experiment ID", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid experiment ID", err)
 		return
 	}
 
@@ -562,7 +562,7 @@ func AssignExperimentVariantPublic(c *gin.Context) {
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Experiment not found"})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to assign a variant", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to assign a variant", err)
 		}
 		return
 	}

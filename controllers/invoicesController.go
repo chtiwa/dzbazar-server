@@ -48,7 +48,7 @@ func CreateInvoice(c *gin.Context) {
 
 	var body CreateInvoiceInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 
@@ -64,7 +64,7 @@ func CreateInvoice(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Plan not found or inactive"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -75,7 +75,7 @@ func CreateInvoice(c *gin.Context) {
 		return
 	}
 	if err != gorm.ErrRecordNotFound {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -83,7 +83,7 @@ func CreateInvoice(c *gin.Context) {
 	var sub models.ShopSubscription
 	subErr := initializers.DB.Preload("Plan").Where("shop_id = ?", shopID).First(&sub).Error
 	if subErr != nil && subErr != gorm.ErrRecordNotFound {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": subErr.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", subErr)
 		return
 	}
 	if subErr == nil && sub.Plan.Price > 0 {
@@ -97,7 +97,7 @@ func CreateInvoice(c *gin.Context) {
 
 	invoice := models.Invoice{ShopID: shopID, PlanID: planID, Amount: billedAmount, PaymentMethod: "redot", Status: "pending"}
 	if err := initializers.DB.Create(&invoice).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to create invoice", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to create invoice", err)
 		return
 	}
 
@@ -130,7 +130,7 @@ func UploadInvoiceProof(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Invoice not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 	if invoice.Status != "pending" {
@@ -146,7 +146,7 @@ func UploadInvoiceProof(c *gin.Context) {
 
 	src, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Failed to open uploaded screenshot", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Failed to open uploaded screenshot", err)
 		return
 	}
 	defer src.Close()
@@ -154,7 +154,7 @@ func UploadInvoiceProof(c *gin.Context) {
 	buffer := make([]byte, 512)
 	n, readErr := src.Read(buffer)
 	if readErr != nil && readErr != io.EOF {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Failed to read uploaded screenshot", "error": readErr.Error()})
+		RespondError(c, http.StatusBadRequest, "Failed to read uploaded screenshot", readErr)
 		return
 	}
 
@@ -170,7 +170,7 @@ func UploadInvoiceProof(c *gin.Context) {
 		return
 	}
 	if _, seekErr := seeker.Seek(0, io.SeekStart); seekErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to process uploaded screenshot", "error": seekErr.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to process uploaded screenshot", seekErr)
 		return
 	}
 
@@ -189,7 +189,7 @@ func UploadInvoiceProof(c *gin.Context) {
 		ContentLength: aws.Int64(file.Size),
 	})
 	if putErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to upload payment screenshot", "error": putErr.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to upload payment screenshot", putErr)
 		return
 	}
 
@@ -201,7 +201,7 @@ func UploadInvoiceProof(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Model(&invoice).Update("proof_screenshot_url", proofURL).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to save screenshot reference", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to save screenshot reference", err)
 		return
 	}
 
@@ -221,7 +221,7 @@ func ListMyInvoices(c *gin.Context) {
 
 	var invoices []models.Invoice
 	if err := initializers.DB.Preload("Plan").Where("shop_id = ?", shopID).Order("created_at DESC").Find(&invoices).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch invoices", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch invoices", err)
 		return
 	}
 

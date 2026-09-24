@@ -122,11 +122,7 @@ func cleanupUploadedKeys(keys []string) {
 func CreateLandingPageByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid shop ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 
@@ -139,17 +135,13 @@ func CreateLandingPageByShop(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to verify plan limits", err)
 		return
 	}
 
 	productID, err := uuid.Parse(c.PostForm("productId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid product ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid product ID", err)
 		return
 	}
 
@@ -166,21 +158,13 @@ func CreateLandingPageByShop(c *gin.Context) {
 	if err := initializers.DB.
 		Where("id = ? AND shop_id = ?", productID, shopID).
 		First(&product).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Product not found",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusNotFound, "Product not found", err)
 		return
 	}
 
 	form, err := c.MultipartForm()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid multipart form data",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid multipart form data", err)
 		return
 	}
 
@@ -203,11 +187,7 @@ func CreateLandingPageByShop(c *gin.Context) {
 
 	tx := initializers.DB.Begin()
 	if tx.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to start transaction",
-			"error":   tx.Error.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to start transaction", tx.Error)
 		return
 	}
 
@@ -228,11 +208,7 @@ func CreateLandingPageByShop(c *gin.Context) {
 
 	if err := tx.Create(&landingPage).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to create landing page",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to create landing page", err)
 		return
 	}
 
@@ -240,11 +216,7 @@ func CreateLandingPageByShop(c *gin.Context) {
 	if err != nil {
 		tx.Rollback()
 		cleanupUploadedKeys(uploadedKeys)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to upload landing page images",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to upload landing page images", err)
 		return
 	}
 
@@ -257,11 +229,7 @@ func CreateLandingPageByShop(c *gin.Context) {
 		if err := tx.Create(&uploadedImages).Error; err != nil {
 			tx.Rollback()
 			cleanupUploadedKeys(uploadedKeys)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to save landing page images",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to save landing page images", err)
 			return
 		}
 	}
@@ -270,21 +238,13 @@ func CreateLandingPageByShop(c *gin.Context) {
 	if err := loadLandingPageByShop(tx, shopID, landingPage.ID, &createdLandingPage); err != nil {
 		tx.Rollback()
 		cleanupUploadedKeys(uploadedKeys)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to reload landing page",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to reload landing page", err)
 		return
 	}
 
 	if err := tx.Commit().Error; err != nil {
 		cleanupUploadedKeys(uploadedKeys)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to commit transaction",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to commit transaction", err)
 		return
 	}
 
@@ -300,11 +260,7 @@ func CreateLandingPageByShop(c *gin.Context) {
 func GetLandingPagesByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid shop ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 
@@ -341,11 +297,7 @@ func GetLandingPagesByShop(c *gin.Context) {
 
 	var landingPages []models.LandingPage
 	if err := db.Find(&landingPages).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to retrieve landing pages",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to retrieve landing pages", err)
 		return
 	}
 
@@ -355,11 +307,7 @@ func GetLandingPagesByShop(c *gin.Context) {
 	}
 	orderCounts, err := countOrdersByProductIDs(productIDs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to count orders per landing page",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to count orders per landing page", err)
 		return
 	}
 
@@ -369,11 +317,7 @@ func GetLandingPagesByShop(c *gin.Context) {
 	}
 	views, err := viewsByEntityIDs("landing_page", landingPageIDs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to count views per landing page",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to count views per landing page", err)
 		return
 	}
 	// Numerator is orders attributed to this specific landing page (orders.landing_page_id),
@@ -381,11 +325,7 @@ func GetLandingPagesByShop(c *gin.Context) {
 	// landing pages, so conversion rate must stay scoped to the page that drove the sale.
 	landingPageOrders, err := countOrdersByLandingPageIDs(landingPageIDs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to count attributed orders per landing page",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to count attributed orders per landing page", err)
 		return
 	}
 	for i := range landingPages {
@@ -410,21 +350,13 @@ func GetLandingPagesByShop(c *gin.Context) {
 func GetLandingPageByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid shop ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 
 	landingPageID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid landing page ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid landing page ID", err)
 		return
 	}
 
@@ -444,11 +376,7 @@ func GetLandingPageByShop(c *gin.Context) {
 
 	var landingPage models.LandingPage
 	if err := loadLandingPageByShop(initializers.DB, shopID, landingPageID, &landingPage); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Landing page not found",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusNotFound, "Landing page not found", err)
 		return
 	}
 
@@ -466,11 +394,7 @@ func GetLandingPageByShop(c *gin.Context) {
 func IndexLandingPage(c *gin.Context) {
 	landingPageID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid landing page ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid landing page ID", err)
 		return
 	}
 
@@ -507,11 +431,7 @@ func IndexLandingPage(c *gin.Context) {
 		Preload("Product.Combinations.Option2").
 		Preload("Product.Combinations.Option3").
 		First(&landingPage).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Landing page not found",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusNotFound, "Landing page not found", err)
 		return
 	}
 
@@ -643,21 +563,13 @@ func toPublicLandingPageResponse(lp models.LandingPage) dto.PublicLandingPageRes
 func UpdateLandingPageByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid shop ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 
 	landingPageID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid landing page ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid landing page ID", err)
 		return
 	}
 
@@ -665,11 +577,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 	if err := initializers.DB.
 		Where("id = ? AND shop_id = ?", landingPageID, shopID).
 		First(&landingPage).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Landing page not found",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusNotFound, "Landing page not found", err)
 		return
 	}
 
@@ -691,11 +599,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 	if productIDValue != "" {
 		productID, err := uuid.Parse(productIDValue)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "Invalid product ID",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusBadRequest, "Invalid product ID", err)
 			return
 		}
 
@@ -703,11 +607,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 		if err := initializers.DB.
 			Where("id = ? AND shop_id = ?", productID, shopID).
 			First(&product).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"message": "Product not found",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusNotFound, "Product not found", err)
 			return
 		}
 
@@ -719,11 +619,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 		Where("landing_page_id = ?", landingPageID).
 		Order("order_index ASC, created_at ASC").
 		Find(&currentImages).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to retrieve landing page images",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to retrieve landing page images", err)
 		return
 	}
 
@@ -731,11 +627,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 	var existingImages []dto.UpdateLandingPageImageInput
 	if existingImagesJSON != "" {
 		if err := json.Unmarshal([]byte(existingImagesJSON), &existingImages); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "Invalid existingImages JSON",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusBadRequest, "Invalid existingImages JSON", err)
 			return
 		}
 	}
@@ -776,11 +668,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 
 	form, err := c.MultipartForm()
 	if err != nil && err != http.ErrNotMultipart {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid multipart form data",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid multipart form data", err)
 		return
 	}
 
@@ -799,11 +687,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 
 	tx := initializers.DB.Begin()
 	if tx.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to start transaction",
-			"error":   tx.Error.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to start transaction", tx.Error)
 		return
 	}
 
@@ -817,11 +701,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 	if len(updates) > 0 {
 		if err := tx.Model(&landingPage).Updates(updates).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to update landing page",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to update landing page", err)
 			return
 		}
 	}
@@ -842,11 +722,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 		if err := tx.Where("id = ? AND landing_page_id = ?", img.ID, landingPageID).
 			Delete(&models.LandingPageImage{}).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to delete removed images",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to delete removed images", err)
 			return
 		}
 	}
@@ -859,11 +735,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 			Where("id = ? AND landing_page_id = ?", img.ID, landingPageID).
 			UpdateColumn("order_index", img.OrderIndex).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to reorder existing images",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to reorder existing images", err)
 			return
 		}
 	}
@@ -873,11 +745,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 	if newImagePositionsJSON != "" {
 		if err := json.Unmarshal([]byte(newImagePositionsJSON), &newImagePositions); err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "Invalid newImagePositions JSON",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusBadRequest, "Invalid newImagePositions JSON", err)
 			return
 		}
 		if len(newImagePositions) != len(files) {
@@ -894,11 +762,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 	if err != nil {
 		tx.Rollback()
 		cleanupUploadedKeys(uploadedKeys)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to upload new images",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to upload new images", err)
 		return
 	}
 
@@ -915,11 +779,7 @@ func UpdateLandingPageByShop(c *gin.Context) {
 		if err := tx.Create(&uploadedImages).Error; err != nil {
 			tx.Rollback()
 			cleanupUploadedKeys(uploadedKeys)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to save new images",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to save new images", err)
 			return
 		}
 	}
@@ -928,21 +788,13 @@ func UpdateLandingPageByShop(c *gin.Context) {
 	if err := loadLandingPageByShop(tx, shopID, landingPageID, &updatedLandingPage); err != nil {
 		tx.Rollback()
 		cleanupUploadedKeys(uploadedKeys)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to reload updated landing page",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to reload updated landing page", err)
 		return
 	}
 
 	if err := tx.Commit().Error; err != nil {
 		cleanupUploadedKeys(uploadedKeys)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to commit transaction",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to commit transaction", err)
 		return
 	}
 
@@ -958,21 +810,13 @@ func UpdateLandingPageByShop(c *gin.Context) {
 func DeleteLandingPageByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid shop ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 
 	landingPageID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid landing page ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid landing page ID", err)
 		return
 	}
 
@@ -980,11 +824,7 @@ func DeleteLandingPageByShop(c *gin.Context) {
 	if err := initializers.DB.
 		Where("id = ? AND shop_id = ?", landingPageID, shopID).
 		First(&landingPage).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Landing page not found",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusNotFound, "Landing page not found", err)
 		return
 	}
 
@@ -992,40 +832,24 @@ func DeleteLandingPageByShop(c *gin.Context) {
 	if err := initializers.DB.
 		Where("landing_page_id = ?", landingPageID).
 		Find(&images).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to load landing page images",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to load landing page images", err)
 		return
 	}
 
 	tx := initializers.DB.Begin()
 	if tx.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to start transaction",
-			"error":   tx.Error.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to start transaction", tx.Error)
 		return
 	}
 
 	if err := tx.Delete(&models.LandingPage{}, "id = ? AND shop_id = ?", landingPageID, shopID).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to delete landing page",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to delete landing page", err)
 		return
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to commit transaction",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to commit transaction", err)
 		return
 	}
 

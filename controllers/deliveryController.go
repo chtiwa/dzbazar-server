@@ -122,11 +122,7 @@ func UpdateDeliveryRate(c *gin.Context) {
 
 	var input UpdateDeliveryRateInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid payload",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid payload", err)
 		return
 	}
 
@@ -144,11 +140,7 @@ func UpdateDeliveryRate(c *gin.Context) {
 		Updates(updates)
 
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to update delivery rate",
-			"error":   result.Error.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to update delivery rate", result.Error)
 		return
 	}
 
@@ -164,11 +156,7 @@ func UpdateDeliveryRate(c *gin.Context) {
 	if err := initializers.DB.
 		Where("shop_id = ? AND wilaya_id = ?", shopID, input.WilayaID).
 		First(&rate).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Delivery rate updated but failed to reload record",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Delivery rate updated but failed to reload record", err)
 		return
 	}
 
@@ -193,11 +181,7 @@ func BulkUpdateDeliveryRates(c *gin.Context) {
 
 	var input BulkUpdateDeliveryRatesInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid payload",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid payload", err)
 		return
 	}
 
@@ -226,11 +210,7 @@ func BulkUpdateDeliveryRates(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to update delivery rates",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to update delivery rates", err)
 		return
 	}
 
@@ -239,11 +219,7 @@ func BulkUpdateDeliveryRates(c *gin.Context) {
 		Where("shop_id = ?", shopID).
 		Order("wilaya_id ASC").
 		Find(&rates).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Delivery rates updated but failed to reload records",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Delivery rates updated but failed to reload records", err)
 		return
 	}
 

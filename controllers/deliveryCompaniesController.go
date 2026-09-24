@@ -69,7 +69,7 @@ func ListAllAvailableDeliveryCompanies(c *gin.Context) {
 func CreateAvailableDeliveryCompany(c *gin.Context) {
 	var body CreateAvailableDeliveryCompanyInput
 	if err := c.ShouldBindWith(&body, binding.FormMultipart); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 
@@ -106,11 +106,7 @@ func CreateAvailableDeliveryCompany(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to create available delivery company",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to create available delivery company", err)
 		return
 	}
 
@@ -136,7 +132,7 @@ func UpdateAvailableDeliveryCompany(c *gin.Context) {
 
 	var body UpdateAvailableDeliveryCompanyInput
 	if err := c.ShouldBindWith(&body, binding.FormMultipart); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 
@@ -146,7 +142,7 @@ func UpdateAvailableDeliveryCompany(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Delivery company not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -194,11 +190,7 @@ func UpdateAvailableDeliveryCompany(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to update delivery company",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to update delivery company", err)
 		return
 	}
 
@@ -236,16 +228,12 @@ func DeleteAvailableDeliveryCompany(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Delivery company not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
 	if err := initializers.DB.Delete(&company).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to delete delivery company",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to delete delivery company", err)
 		return
 	}
 
@@ -353,11 +341,7 @@ func GetShopDeliveryCompanies(c *gin.Context) {
 		Preload("AvailableDeliveryCompany.Image").
 		Where("shop_id = ?", shopID).
 		Find(&integrations).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to fetch shop delivery companies",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch shop delivery companies", err)
 		return
 	}
 
@@ -373,7 +357,7 @@ func ConnectDeliveryCompany(c *gin.Context) {
 
 	var body ConnectDeliveryCompanyInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 	body.Token = strings.TrimSpace(body.Token)
@@ -391,7 +375,7 @@ func ConnectDeliveryCompany(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Available delivery company not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -439,17 +423,13 @@ func ConnectDeliveryCompany(c *gin.Context) {
 		return
 	}
 	if err != gorm.ErrRecordNotFound {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
 	encryptedToken, encryptedMerchantID, err := services.EncryptDeliveryCredentials(body.Token, body.MerchantID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to secure delivery company credentials",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to secure delivery company credentials", err)
 		return
 	}
 
@@ -461,11 +441,7 @@ func ConnectDeliveryCompany(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Create(&integration).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to connect delivery company",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to connect delivery company", err)
 		return
 	}
 
@@ -496,7 +472,7 @@ func UpdateDeliveryCompanyCredentials(c *gin.Context) {
 
 	var body UpdateDeliveryCompanyCredentialsInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 
@@ -508,7 +484,7 @@ func UpdateDeliveryCompanyCredentials(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Integration not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -527,7 +503,7 @@ func UpdateDeliveryCompanyCredentials(c *gin.Context) {
 
 	if rawToken, ok := updates["token"].(string); ok {
 		if encryptedToken, err := services.EncryptField(rawToken); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to secure token", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to secure token", err)
 			return
 		} else {
 			updates["token"] = encryptedToken
@@ -535,7 +511,7 @@ func UpdateDeliveryCompanyCredentials(c *gin.Context) {
 	}
 	if rawMerchantID, ok := updates["merchant_id"].(string); ok {
 		if encryptedMerchantID, err := services.EncryptField(rawMerchantID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to secure merchant ID", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to secure merchant ID", err)
 			return
 		} else {
 			updates["merchant_id"] = encryptedMerchantID
@@ -543,11 +519,7 @@ func UpdateDeliveryCompanyCredentials(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Model(&integration).Updates(updates).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to update credentials",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to update credentials", err)
 		return
 	}
 
@@ -586,7 +558,7 @@ func UpdateDeliveryCompanyActive(c *gin.Context) {
 
 	var body UpdateDeliveryCompanyActiveInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 
@@ -598,16 +570,12 @@ func UpdateDeliveryCompanyActive(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Integration not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
 	if err := initializers.DB.Model(&integration).Update("is_active", body.IsActive).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to update carrier status",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to update carrier status", err)
 		return
 	}
 
@@ -663,11 +631,11 @@ func GetDeliveryCompanyBureauOptions(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Integration not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 	if err := decryptDeliveryCompanyCredentials(&integration); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to decrypt delivery company credentials", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to decrypt delivery company credentials", err)
 		return
 	}
 
@@ -682,7 +650,7 @@ func GetDeliveryCompanyBureauOptions(c *gin.Context) {
 		}
 		hubs, err := loadZrHubs(shopID, &integration)
 		if err != nil {
-			c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": "Impossible de charger les points de relais ZR Express", "error": err.Error()})
+			RespondError(c, http.StatusBadGateway, "Impossible de charger les points de relais ZR Express", err)
 			return
 		}
 		options := make([]bureauOption, 0, len(hubs))
@@ -703,7 +671,7 @@ func GetDeliveryCompanyBureauOptions(c *gin.Context) {
 		}
 		provinces, err := initializers.GetOsenMunicipalities()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Impossible de charger la géographie Osen Express", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Impossible de charger la géographie Osen Express", err)
 			return
 		}
 		options := []bureauOption{}
@@ -749,16 +717,12 @@ func DisconnectDeliveryCompany(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Integration not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
 	if err := initializers.DB.Delete(&integration).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to disconnect delivery company",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to disconnect delivery company", err)
 		return
 	}
 
