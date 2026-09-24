@@ -3,6 +3,7 @@ package controllers
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -75,11 +76,7 @@ func GetClientsByShopID(c *gin.Context) {
 	if err := initializers.DB.Model(&models.Client{}).
 		Where("shop_id = ?", shopID).
 		Count(&total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to count clients",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to count clients", err)
 		return
 	}
 
@@ -92,11 +89,7 @@ func GetClientsByShopID(c *gin.Context) {
 		Limit(limit).
 		Offset(offset).
 		Find(&clients).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to retrieve clients",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to retrieve clients", err)
 		return
 	}
 
@@ -145,11 +138,7 @@ func GetClientsBySearch(c *gin.Context) {
 		Order("created_at DESC").
 		Limit(5).
 		Find(&clients).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to search clients",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to search clients", err)
 		return
 	}
 
@@ -196,11 +185,7 @@ func IndexClientByShopID(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to retrieve client",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to retrieve client", err)
 		return
 	}
 
@@ -222,11 +207,7 @@ func CreateClientByShopID(c *gin.Context) {
 
 	var body CreateClientInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -260,11 +241,7 @@ func CreateClientByShopID(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Create(&client).Error; err != nil {
-		c.JSON(http.StatusConflict, gin.H{
-			"success": false,
-			"message": "Failed to create client. Phone number may already exist for this shop.",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusConflict, "Failed to create client. Phone number may already exist for this shop.", err)
 		return
 	}
 
@@ -296,11 +273,7 @@ func UpdateClientByShopID(c *gin.Context) {
 
 	var input UpdateClientInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -318,11 +291,7 @@ func UpdateClientByShopID(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to load client",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to load client", err)
 		return
 	}
 
@@ -369,11 +338,7 @@ func UpdateClientByShopID(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Model(&client).Updates(updateData).Error; err != nil {
-		c.JSON(http.StatusConflict, gin.H{
-			"success": false,
-			"message": "Failed to update client. Phone number may already exist for this shop.",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusConflict, "Failed to update client. Phone number may already exist for this shop.", err)
 		return
 	}
 
@@ -383,11 +348,7 @@ func UpdateClientByShopID(c *gin.Context) {
 			return db.Order("created_at DESC")
 		}).
 		First(&client).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Client updated but failed to reload record",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Client updated but failed to reload record", err)
 		return
 	}
 
@@ -431,20 +392,12 @@ func DeleteClientByShopID(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to load client",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to load client", err)
 		return
 	}
 
 	if err := initializers.DB.Delete(&client).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to delete client",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to delete client", err)
 		return
 	}
 
@@ -466,32 +419,20 @@ func UploadExcelClients(c *gin.Context) {
 
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Excel file is required",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Excel file is required", err)
 		return
 	}
 
 	file, err := fileHeader.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to open uploaded file",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to open uploaded file", err)
 		return
 	}
 	defer file.Close()
 
 	xl, err := excelize.OpenReader(file)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Failed to parse Excel file",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Failed to parse Excel file", err)
 		return
 	}
 	defer func() {
@@ -509,11 +450,7 @@ func UploadExcelClients(c *gin.Context) {
 
 	rows, err := xl.GetRows(sheets[0])
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Failed to read Excel rows",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Failed to read Excel rows", err)
 		return
 	}
 
@@ -585,10 +522,10 @@ func UploadExcelClients(c *gin.Context) {
 		Create(&clientsToInsert)
 
 	if result.Error != nil {
+		log.Printf("%s %s: Failed to import clients: %v", c.Request.Method, c.Request.URL.Path, result.Error)
 		c.JSON(http.StatusConflict, gin.H{
 			"success": false,
 			"message": "Failed to import clients. Some phone numbers may already exist for this shop.",
-			"error":   result.Error.Error(),
 			"skipped": skipped,
 		})
 		return

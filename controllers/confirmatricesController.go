@@ -33,7 +33,7 @@ func GetConfirmationRates(c *gin.Context) {
 
 	rates, err := services.ConfirmationRates(shopID, from, to)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error while computing confirmation rates", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Error while computing confirmation rates", err)
 		return
 	}
 

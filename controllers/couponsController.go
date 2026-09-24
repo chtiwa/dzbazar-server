@@ -92,7 +92,7 @@ func CreateCoupon(c *gin.Context) {
 
 	var body couponBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -125,11 +125,11 @@ func CreateCoupon(c *gin.Context) {
 		return
 	}
 	if productIDs, err = productsOwnedByShop(shopID, productIDs); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to validate product scope", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to validate product scope", err)
 		return
 	}
 	if landingPageIDs, err = landingPagesOwnedByShop(shopID, landingPageIDs); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to validate landing page scope", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to validate landing page scope", err)
 		return
 	}
 
@@ -155,7 +155,7 @@ func CreateCoupon(c *gin.Context) {
 		return replaceCouponLandingPages(tx, coupon.ID, landingPageIDs)
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to create coupon", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to create coupon", err)
 		return
 	}
 
@@ -242,7 +242,7 @@ func GetCouponsByShop(c *gin.Context) {
 		Preload("LandingPages").
 		Order("created_at DESC").
 		Find(&coupons).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to retrieve coupons", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to retrieve coupons", err)
 		return
 	}
 
@@ -269,7 +269,7 @@ func UpdateCoupon(c *gin.Context) {
 
 	var body couponBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -306,7 +306,7 @@ func UpdateCoupon(c *gin.Context) {
 
 	if len(updates) > 0 {
 		if err := initializers.DB.Model(&coupon).Updates(updates).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update coupon", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to update coupon", err)
 			return
 		}
 	}
@@ -318,11 +318,11 @@ func UpdateCoupon(c *gin.Context) {
 			return
 		}
 		if productIDs, err = productsOwnedByShop(shopID, productIDs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to validate product scope", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to validate product scope", err)
 			return
 		}
 		if err := replaceCouponProducts(initializers.DB, coupon.ID, productIDs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update product scope", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to update product scope", err)
 			return
 		}
 	}
@@ -334,11 +334,11 @@ func UpdateCoupon(c *gin.Context) {
 			return
 		}
 		if landingPageIDs, err = landingPagesOwnedByShop(shopID, landingPageIDs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to validate landing page scope", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to validate landing page scope", err)
 			return
 		}
 		if err := replaceCouponLandingPages(initializers.DB, coupon.ID, landingPageIDs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update landing page scope", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to update landing page scope", err)
 			return
 		}
 	}
@@ -362,7 +362,7 @@ func DeleteCoupon(c *gin.Context) {
 
 	result := initializers.DB.Where("id = ? AND shop_id = ?", couponID, shopID).Delete(&models.Coupon{})
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to delete coupon", "error": result.Error.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to delete coupon", result.Error)
 		return
 	}
 	if result.RowsAffected == 0 {
@@ -395,7 +395,7 @@ func CouponAvailableForProduct(c *gin.Context) {
 		Preload("Products").
 		Preload("LandingPages").
 		Find(&coupons).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to check coupons", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to check coupons", err)
 		return
 	}
 
@@ -427,7 +427,7 @@ func ValidateCouponPublic(c *gin.Context) {
 
 	var body validateCouponBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request body", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 

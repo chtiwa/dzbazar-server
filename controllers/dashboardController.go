@@ -157,7 +157,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 	if err := dailyQ.Select("DATE(created_at)::text AS label, COUNT(*) AS count").
 		Group("DATE(created_at)").Order("DATE(created_at) ASC").Scan(&daily).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching daily stats", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Error fetching daily stats", err)
 		return
 	}
 
@@ -176,7 +176,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 	if err := weeklyQ.Select("TO_CHAR(DATE_TRUNC('week', created_at), 'IYYY-IW') AS label, COUNT(*) AS count").
 		Group("DATE_TRUNC('week', created_at)").Order("DATE_TRUNC('week', created_at) ASC").Scan(&weekly).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching weekly stats", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Error fetching weekly stats", err)
 		return
 	}
 
@@ -195,7 +195,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 	if err := monthlyQ.Select("TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS label, COUNT(*) AS count").
 		Group("DATE_TRUNC('month', created_at)").Order("DATE_TRUNC('month', created_at) ASC").Scan(&monthly).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching monthly stats", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Error fetching monthly stats", err)
 		return
 	}
 
@@ -211,7 +211,7 @@ func GetOrdersDashboard(c *gin.Context) {
 		totalQ = totalQ.Where("shipped_via_id = ?", deliveryCompanyID)
 	}
 	if err := totalQ.Count(&totalOrders).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error counting total orders", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Error counting total orders", err)
 		return
 	}
 
@@ -291,7 +291,7 @@ func GetOrdersDashboard(c *gin.Context) {
 		`, deliveredExpr, netExpr, deliveredExpr, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, wasEverConfirmed)
 
 	if err := revQ.Select(revSelect).Scan(&rev).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching revenue stats", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Error fetching revenue stats", err)
 		return
 	}
 
@@ -355,7 +355,7 @@ func GetOrdersDashboard(c *gin.Context) {
 		statusQ = statusQ.Where("shipped_via_id = ?", deliveryCompanyID)
 	}
 	if err := statusQ.Select("status, COUNT(*) AS count").Group("status").Scan(&statusStats).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching status stats", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Error fetching status stats", err)
 		return
 	}
 	for i := range statusStats {
@@ -379,7 +379,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 	if err := wilayaQ.Select("c.state AS wilaya, COUNT(*) AS count").
 		Group("c.state").Order("count DESC").Scan(&wilayaStats).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching wilaya stats", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Error fetching wilaya stats", err)
 		return
 	}
 
@@ -467,7 +467,7 @@ func GetPagePerformance(c *gin.Context) {
 	}
 	var views int64
 	if err := viewsQ.Select("COUNT(DISTINCT page_visits.visitor_id)").Row().Scan(&views); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to count views", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to count views", err)
 		return
 	}
 
@@ -481,7 +481,7 @@ func GetPagePerformance(c *gin.Context) {
 			ordersQ = ordersQ.Where("orders.created_at >= ? AND orders.created_at < ?", fromTime, toTime)
 		}
 		if err := ordersQ.Select("COUNT(DISTINCT order_items.order_id)").Row().Scan(&orders); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to count orders", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to count orders", err)
 			return
 		}
 	} else {
@@ -492,7 +492,7 @@ func GetPagePerformance(c *gin.Context) {
 			ordersQ = ordersQ.Where("orders.created_at >= ? AND orders.created_at < ?", fromTime, toTime)
 		}
 		if err := ordersQ.Select("COUNT(*)").Row().Scan(&orders); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to count orders", "error": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Failed to count orders", err)
 			return
 		}
 	}
@@ -524,7 +524,7 @@ func GetOrdersByHour(c *gin.Context) {
 
 	allowed, err := services.HasOrderHourlyStats(shopID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 	if !allowed {
@@ -583,7 +583,7 @@ func GetOrdersByHour(c *gin.Context) {
 	}
 	if err := q.Select("EXTRACT(HOUR FROM created_at)::int AS hour, COUNT(*) AS count").
 		Group("EXTRACT(HOUR FROM created_at)").Order("hour ASC").Scan(&byHour).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching hourly stats", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Error fetching hourly stats", err)
 		return
 	}
 
@@ -665,7 +665,7 @@ func GetWilayaDeliveryRates(c *gin.Context) {
 			COUNT(*) FILTER (WHERE orders.status IN ('Livré','Retour')) AS resolved_shipped,
 			COUNT(*) FILTER (WHERE orders.status = 'Livré') AS resolved_delivered
 		`).Group("c.state").Order("resolved_shipped DESC").Scan(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching wilaya delivery rates", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Error fetching wilaya delivery rates", err)
 		return
 	}
 

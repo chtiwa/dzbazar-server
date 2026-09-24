@@ -97,7 +97,7 @@ func GenerateAIImage(c *gin.Context) {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": "Image generation is not configured"})
 			return
 		}
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": "Failed to verify prompt", "error": err.Error()})
+		RespondError(c, http.StatusBadGateway, "Failed to verify prompt", err)
 		return
 	}
 
@@ -110,7 +110,7 @@ func GenerateAIImage(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to verify plan limits", err)
 		return
 	}
 

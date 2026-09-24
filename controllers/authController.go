@@ -53,11 +53,7 @@ func Login(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -141,11 +137,7 @@ func SignUp(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -174,11 +166,7 @@ func SignUp(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Create(&user).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "User with this email may already exist",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "User with this email may already exist", err)
 		return
 	}
 
@@ -203,11 +191,7 @@ func VerifyUser(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -409,7 +393,7 @@ func ResetPassword(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Données invalides", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Données invalides", err)
 		return
 	}
 

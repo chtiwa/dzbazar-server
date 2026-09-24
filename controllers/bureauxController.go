@@ -68,11 +68,7 @@ func ListBureaux(c *gin.Context) {
 
 	bureaux := []models.Bureau{}
 	if err := query.Order("wilaya_id ASC, name ASC").Find(&bureaux).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to fetch bureaux",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch bureaux", err)
 		return
 	}
 
@@ -110,11 +106,7 @@ func ListPublicBureaux(c *gin.Context) {
 		Where("shop_id = ? AND wilaya_id = ?", shopID, wilayaID).
 		Order("name ASC").
 		Find(&bureaux).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to fetch bureaux",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch bureaux", err)
 		return
 	}
 
@@ -139,11 +131,7 @@ func CreateBureau(c *gin.Context) {
 
 	var input CreateBureauInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid payload",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid payload", err)
 		return
 	}
 
@@ -159,11 +147,7 @@ func CreateBureau(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Unknown wilaya"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Database error",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -183,11 +167,7 @@ func CreateBureau(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to create bureau",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to create bureau", err)
 		return
 	}
 
@@ -217,11 +197,7 @@ func UpdateBureau(c *gin.Context) {
 
 	var input UpdateBureauInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid payload",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid payload", err)
 		return
 	}
 
@@ -239,11 +215,7 @@ func UpdateBureau(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Bureau not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Database error",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -256,11 +228,7 @@ func UpdateBureau(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to update bureau",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to update bureau", err)
 		return
 	}
 
@@ -296,20 +264,12 @@ func DeleteBureau(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Bureau not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Database error",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
 	if err := initializers.DB.Delete(&bureau).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to delete bureau",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to delete bureau", err)
 		return
 	}
 
