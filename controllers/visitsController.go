@@ -120,7 +120,7 @@ func GetVisits(c *gin.Context) {
 		Where("shop_id = ? AND day > CURRENT_DATE - ?::int", shopID, days).
 		Select("day::text AS label, COUNT(*) AS count").
 		Group("day").Order("day ASC").Scan(&daily).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch visits", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch visits", err)
 		return
 	}
 

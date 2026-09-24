@@ -270,11 +270,7 @@ func GetOrdersByShopID(c *gin.Context) {
 
 	var totalRows int64
 	if err := baseQuery.Count(&totalRows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Error while counting the orders",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Error while counting the orders", err)
 		return
 	}
 
@@ -303,11 +299,7 @@ func GetOrdersByShopID(c *gin.Context) {
 		Limit(perPage).
 		Offset(offset).
 		Find(&orders).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Error retrieving the orders",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Error retrieving the orders", err)
 		return
 	}
 
@@ -368,11 +360,7 @@ func CreateOrderByShopID(c *gin.Context) {
 
 	var body CreateOrderInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Error while binding JSON request context",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Error while binding JSON request context", err)
 		return
 	}
 
@@ -402,7 +390,7 @@ func CreateOrderByShopID(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to verify plan limits", err)
 		return
 	}
 
@@ -780,18 +768,10 @@ func CreateOrderByShopID(c *gin.Context) {
 
 	if err != nil {
 		if errors.Is(err, errInsufficientStock) {
-			c.JSON(http.StatusConflict, gin.H{
-				"success": false,
-				"message": "One or more items no longer have enough stock available",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusConflict, "One or more items no longer have enough stock available", err)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed saving records inside database transactions securely",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed saving records inside database transactions securely", err)
 		return
 	}
 
@@ -862,11 +842,7 @@ func IndexOrderByShopID(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Database error while fetching order details",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Database error while fetching order details", err)
 		return
 	}
 
@@ -890,11 +866,7 @@ func ExportAsExcel(c *gin.Context) {
 
 	err := c.ShouldBindJSON(&body)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while parsing the body",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "error while parsing the body", err)
 		return
 	}
 
@@ -944,11 +916,7 @@ func UpdateOrderByShopID(c *gin.Context) {
 
 	var body UpdateOrderInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Error while binding JSON request context",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Error while binding JSON request context", err)
 		return
 	}
 
@@ -1166,11 +1134,7 @@ func UpdateOrderByShopID(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed updating order securely inside database transaction",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed updating order securely inside database transaction", err)
 		return
 	}
 
@@ -1188,11 +1152,7 @@ func UpdateOrderByShopID(c *gin.Context) {
 		Preload("Items.Product").
 		Preload("Items.ProductVariantCombination").
 		First(&updatedOrder, "id = ? AND shop_id = ?", orderID, shopID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Order updated but failed to reload final payload",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Order updated but failed to reload final payload", err)
 		return
 	}
 
@@ -1241,11 +1201,7 @@ func GetOrderStatusHistory(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Database error while looking up order",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Database error while looking up order", err)
 		return
 	}
 
@@ -1254,11 +1210,7 @@ func GetOrderStatusHistory(c *gin.Context) {
 		Where("target_type = ? AND target_id = ? AND action = ?", "Order", orderID, "order.status_changed").
 		Order("created_at DESC").
 		Find(&logs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to fetch order status history",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch order status history", err)
 		return
 	}
 
@@ -1300,20 +1252,12 @@ func DeleteOrderByShopID(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Database error while finding order before deletion",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Database error while finding order before deletion", err)
 		return
 	}
 
 	if err := initializers.DB.Delete(&order).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to delete order",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to delete order", err)
 		return
 	}
 
@@ -1347,7 +1291,7 @@ func BulkUpdateOrderStatusByShopID(c *gin.Context) {
 
 	var body BulkUpdateOrderStatusInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error while binding JSON request context", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Error while binding JSON request context", err)
 		return
 	}
 
@@ -1365,7 +1309,7 @@ func BulkUpdateOrderStatusByShopID(c *gin.Context) {
 	if err := initializers.DB.
 		Where("id IN ? AND shop_id = ?", orderIDs, shopID).
 		Find(&orders).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to load orders", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to load orders", err)
 		return
 	}
 
@@ -1375,7 +1319,7 @@ func BulkUpdateOrderStatusByShopID(c *gin.Context) {
 			Update("status", body.Status).Error
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update order statuses", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to update order statuses", err)
 		return
 	}
 
@@ -1411,7 +1355,7 @@ func BulkDeleteOrdersByShopID(c *gin.Context) {
 
 	var body BulkDeleteOrdersInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error while binding JSON request context", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Error while binding JSON request context", err)
 		return
 	}
 
@@ -1427,7 +1371,7 @@ func BulkDeleteOrdersByShopID(c *gin.Context) {
 
 	result := initializers.DB.Where("id IN ? AND shop_id = ?", orderIDs, shopID).Delete(&models.Order{})
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to delete orders", "error": result.Error.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to delete orders", result.Error)
 		return
 	}
 
@@ -1476,11 +1420,7 @@ func BanOrderClient(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Database error while looking up order",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Database error while looking up order", err)
 		return
 	}
 
@@ -1529,11 +1469,7 @@ func BanOrderClient(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to ban client",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to ban client", err)
 		return
 	}
 
@@ -1620,11 +1556,7 @@ func UnshipOrder(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to reverse shipment",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to reverse shipment", err)
 		return
 	}
 
@@ -1659,7 +1591,7 @@ func AssignOrderByShopID(c *gin.Context) {
 
 	var body AssignOrderInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error while binding JSON request context", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Error while binding JSON request context", err)
 		return
 	}
 
@@ -1678,7 +1610,7 @@ func AssignOrderByShopID(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Order not found, or member is not a confirmatrice of this shop"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to assign order", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to assign order", err)
 		return
 	}
 
@@ -1703,7 +1635,7 @@ func BulkAssignOrdersByShopID(c *gin.Context) {
 
 	var body BulkAssignOrdersInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error while binding JSON request context", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Error while binding JSON request context", err)
 		return
 	}
 
@@ -1733,7 +1665,7 @@ func BulkAssignOrdersByShopID(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Member is not a confirmatrice of this shop"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to bulk-assign orders", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to bulk-assign orders", err)
 		return
 	}
 

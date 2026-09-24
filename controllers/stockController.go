@@ -77,11 +77,7 @@ func GetShopStock(c *gin.Context) {
 
 	var totalRows int64
 	if err := base.Count(&totalRows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while counting stock rows",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "error while counting stock rows", err)
 		return
 	}
 
@@ -109,11 +105,7 @@ func GetShopStock(c *gin.Context) {
 		Offset((page - 1) * perPage).
 		Scan(&rows).Error
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while retrieving stock",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "error while retrieving stock", err)
 		return
 	}
 
@@ -159,11 +151,7 @@ func UpdateStockQuantity(c *gin.Context) {
 		Quantity int `json:"quantity" binding:"gte=0"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -179,11 +167,7 @@ func UpdateStockQuantity(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Model(&combination).Update("quantity", body.Quantity).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to update stock",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to update stock", err)
 		return
 	}
 

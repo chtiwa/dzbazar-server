@@ -78,11 +78,7 @@ func GetShopByID(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to retrieve shop",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to retrieve shop", err)
 		return
 	}
 
@@ -118,11 +114,7 @@ func GetMyShops(c *gin.Context) {
 		Preload("Shop.LogoImage").
 		Where("user_id = ?", userData.ID).
 		Find(&memberships).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to fetch user shop memberships",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch user shop memberships", err)
 		return
 	}
 
@@ -166,11 +158,7 @@ func IndexShopBySlug(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to retrieve shop by slug",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to retrieve shop by slug", err)
 		return
 	}
 
@@ -222,17 +210,13 @@ func CreateShop(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to verify plan limits", err)
 		return
 	}
 
 	var body CreateShopInput
 	if err := c.ShouldBindWith(&body, binding.FormMultipart); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Validation failed for request parameters",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Validation failed for request parameters", err)
 		return
 	}
 
@@ -260,11 +244,7 @@ func CreateShop(c *gin.Context) {
 
 	wilayas, err := services.GetWilayas()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to load static wilayas configuration",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to load static wilayas configuration", err)
 		return
 	}
 
@@ -274,11 +254,7 @@ func CreateShop(c *gin.Context) {
 	if err == nil && file != nil {
 		src, openErr := file.Open()
 		if openErr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "Failed to open uploaded logo image",
-				"error":   openErr.Error(),
-			})
+			RespondError(c, http.StatusBadRequest, "Failed to open uploaded logo image", openErr)
 			return
 		}
 		defer src.Close()
@@ -286,11 +262,7 @@ func CreateShop(c *gin.Context) {
 		buffer := make([]byte, 512)
 		n, readErr := src.Read(buffer)
 		if readErr != nil && readErr != io.EOF {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "Failed to read uploaded logo image",
-				"error":   readErr.Error(),
-			})
+			RespondError(c, http.StatusBadRequest, "Failed to read uploaded logo image", readErr)
 			return
 		}
 
@@ -313,11 +285,7 @@ func CreateShop(c *gin.Context) {
 		}
 
 		if _, seekErr := seeker.Seek(0, io.SeekStart); seekErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to process uploaded logo image",
-				"error":   seekErr.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to process uploaded logo image", seekErr)
 			return
 		}
 
@@ -336,11 +304,7 @@ func CreateShop(c *gin.Context) {
 			ContentLength: aws.Int64(file.Size),
 		})
 		if putErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to upload shop logo image",
-				"error":   putErr.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to upload shop logo image", putErr)
 			return
 		}
 
@@ -461,11 +425,7 @@ func CreateShop(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "An unexpected error occurred while instantiating the workspace",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "An unexpected error occurred while instantiating the workspace", err)
 		return
 	}
 
@@ -489,11 +449,7 @@ func UpdateShop(c *gin.Context) {
 
 	var input UpdateShopInput
 	if err := c.ShouldBind(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Validation failed for request parameters",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Validation failed for request parameters", err)
 		return
 	}
 
@@ -680,11 +636,7 @@ func UpdateShop(c *gin.Context) {
 	if err == nil && file != nil {
 		src, openErr := file.Open()
 		if openErr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "Failed to open uploaded logo image",
-				"error":   openErr.Error(),
-			})
+			RespondError(c, http.StatusBadRequest, "Failed to open uploaded logo image", openErr)
 			return
 		}
 		defer src.Close()
@@ -702,11 +654,7 @@ func UpdateShop(c *gin.Context) {
 		}
 
 		if _, seekErr := src.Seek(0, io.SeekStart); seekErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to process uploaded logo image",
-				"error":   seekErr.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to process uploaded logo image", seekErr)
 			return
 		}
 
@@ -730,11 +678,7 @@ func UpdateShop(c *gin.Context) {
 			ContentLength: aws.Int64(file.Size),
 		})
 		if putErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to upload shop logo image",
-				"error":   putErr.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to upload shop logo image", putErr)
 			return
 		}
 
@@ -779,11 +723,7 @@ func UpdateShop(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed updating shop workspace parameters downstream",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed updating shop workspace parameters downstream", err)
 		return
 	}
 
@@ -793,11 +733,7 @@ func UpdateShop(c *gin.Context) {
 
 	var updatedShop models.Shop
 	if err := initializers.DB.Preload("LogoImage").First(&updatedShop, "id = ?", shop.ID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Shop updated but failed to reload fresh state",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Shop updated but failed to reload fresh state", err)
 		return
 	}
 

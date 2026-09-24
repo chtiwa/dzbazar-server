@@ -344,7 +344,7 @@ func GenerateProductDescription(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to verify plan limits", err)
 		return
 	}
 
@@ -354,7 +354,7 @@ func GenerateProductDescription(c *gin.Context) {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": "AI description generation is not configured"})
 			return
 		}
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": "Failed to generate description", "error": err.Error()})
+		RespondError(c, http.StatusBadGateway, "Failed to generate description", err)
 		return
 	}
 
@@ -386,7 +386,7 @@ func CreateProductByShop(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Product limit reached for your plan. Upgrade to add more products.", "code": "PLAN_LIMIT_REACHED"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to verify plan limits", err)
 		return
 	}
 
@@ -455,11 +455,7 @@ func CreateProductByShop(c *gin.Context) {
 	}
 
 	if err := tx.Create(&product).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "failed to create product",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "failed to create product", err)
 		return
 	}
 
@@ -677,11 +673,7 @@ func CreateProductByShop(c *gin.Context) {
 
 	if len(combinationsToSave) > 0 {
 		if err := tx.Create(&combinationsToSave).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "failed to save product combinations",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "failed to save product combinations", err)
 			return
 		}
 	}
@@ -782,11 +774,7 @@ func GetProductsByShopAdmin(c *gin.Context) {
 	}
 
 	if err := db.Count(&totalRows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while counting products",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "error while counting products", err)
 		return
 	}
 
@@ -804,11 +792,7 @@ func GetProductsByShopAdmin(c *gin.Context) {
 		Limit(perPage).
 		Offset(offset).
 		Find(&products).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while retrieving products",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "error while retrieving products", err)
 		return
 	}
 
@@ -818,47 +802,27 @@ func GetProductsByShopAdmin(c *gin.Context) {
 	}
 	orderCounts, err := countOrdersByProductIDs(productIDs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while counting orders per product",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "error while counting orders per product", err)
 		return
 	}
 	deliveryRates, err := deliveryRatesByProductIDs(productIDs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while computing delivery rate per product",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "error while computing delivery rate per product", err)
 		return
 	}
 	views, err := viewsByEntityIDs("product", productIDs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while computing views per product",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "error while computing views per product", err)
 		return
 	}
 	directOrderCounts, err := countDirectProductOrdersByProductIDs(productIDs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while counting direct product-page orders per product",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "error while counting direct product-page orders per product", err)
 		return
 	}
 	confirmationRates, err := confirmationRatesByProductIDs(productIDs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while computing confirmation rate per product",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "error while computing confirmation rate per product", err)
 		return
 	}
 	for i := range products {
@@ -997,11 +961,7 @@ func GetActiveProductsBySlug(c *gin.Context) {
 	}
 
 	if err := db.Count(&totalRows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while counting the products",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "error while counting the products", err)
 		return
 	}
 
@@ -1021,11 +981,7 @@ func GetActiveProductsBySlug(c *gin.Context) {
 		Limit(perPage).
 		Offset(offset).
 		Find(&products).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "error while retrieving the products",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "error while retrieving the products", err)
 		return
 	}
 
@@ -1267,21 +1223,13 @@ func toProductResponses(products []models.Product) []dto.ProductResponse {
 func UpdateProductByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid shop ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 
 	productID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid product ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid product ID", err)
 		return
 	}
 
@@ -1320,7 +1268,7 @@ func UpdateProductByShop(c *gin.Context) {
 	if strings.HasPrefix(c.ContentType(), "multipart/form-data") {
 		form, err := c.MultipartForm()
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid multipart form", "error": err.Error()})
+			RespondError(c, http.StatusBadRequest, "invalid multipart form", err)
 			return
 		}
 		multipartForm = form
@@ -1368,11 +1316,7 @@ func UpdateProductByShop(c *gin.Context) {
 			}
 		}
 	} else if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -1380,11 +1324,7 @@ func UpdateProductByShop(c *gin.Context) {
 	if err := initializers.DB.
 		Where("id = ? AND shop_id = ?", productID, shopID).
 		First(&product).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Product not found",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusNotFound, "Product not found", err)
 		return
 	}
 
@@ -1542,11 +1482,7 @@ func UpdateProductByShop(c *gin.Context) {
 
 	tx := initializers.DB.Begin()
 	if tx.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to start transaction",
-			"error":   tx.Error.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to start transaction", tx.Error)
 		return
 	}
 
@@ -1560,11 +1496,7 @@ func UpdateProductByShop(c *gin.Context) {
 	if len(updates) > 0 {
 		if err := tx.Model(&product).Updates(updates).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to update product",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to update product", err)
 			return
 		}
 	}
@@ -1588,22 +1520,14 @@ func UpdateProductByShop(c *gin.Context) {
 				"option3_id": nil,
 			}).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to detach variant items from combinations",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to detach variant items from combinations", err)
 			return
 		}
 
 		// Now safe to delete variants (cascades to variant_items)
 		if err := tx.Where("product_id = ?", productID).Delete(&models.Variant{}).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to clear existing variants",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to clear existing variants", err)
 			return
 		}
 
@@ -1617,11 +1541,7 @@ func UpdateProductByShop(c *gin.Context) {
 
 			if err := tx.Create(&variant).Error; err != nil {
 				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"success": false,
-					"message": "Failed to create variant",
-					"error":   err.Error(),
-				})
+				RespondError(c, http.StatusInternalServerError, "Failed to create variant", err)
 				return
 			}
 
@@ -1657,11 +1577,7 @@ func UpdateProductByShop(c *gin.Context) {
 
 				if err := tx.Create(&variantItem).Error; err != nil {
 					tx.Rollback()
-					c.JSON(http.StatusInternalServerError, gin.H{
-						"success": false,
-						"message": "Failed to create variant item",
-						"error":   err.Error(),
-					})
+					RespondError(c, http.StatusInternalServerError, "Failed to create variant item", err)
 					return
 				}
 
@@ -1747,11 +1663,7 @@ func UpdateProductByShop(c *gin.Context) {
 		var existingCombos []models.ProductVariantCombination
 		if err := tx.Where("product_id = ?", productID).Find(&existingCombos).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to load existing combinations",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to load existing combinations", err)
 			return
 		}
 
@@ -1773,11 +1685,7 @@ func UpdateProductByShop(c *gin.Context) {
 					"retired":            false,
 				}).Error; err != nil {
 					tx.Rollback()
-					c.JSON(http.StatusInternalServerError, gin.H{
-						"success": false,
-						"message": fmt.Sprintf("Failed to update combination with SKU '%s'", rc.sku),
-						"error":   err.Error(),
-					})
+					RespondError(c, http.StatusInternalServerError, fmt.Sprintf("Failed to update combination with SKU '%s'", rc.sku), err)
 					return
 				}
 			} else {
@@ -1794,11 +1702,7 @@ func UpdateProductByShop(c *gin.Context) {
 				}
 				if err := tx.Create(&newCombo).Error; err != nil {
 					tx.Rollback()
-					c.JSON(http.StatusInternalServerError, gin.H{
-						"success": false,
-						"message": fmt.Sprintf("Failed to create combination with SKU '%s'", rc.sku),
-						"error":   err.Error(),
-					})
+					RespondError(c, http.StatusInternalServerError, fmt.Sprintf("Failed to create combination with SKU '%s'", rc.sku), err)
 					return
 				}
 			}
@@ -1814,11 +1718,7 @@ func UpdateProductByShop(c *gin.Context) {
 			if refCount == 0 {
 				if err := tx.Delete(&existing).Error; err != nil {
 					tx.Rollback()
-					c.JSON(http.StatusInternalServerError, gin.H{
-						"success": false,
-						"message": fmt.Sprintf("Failed to delete combination with SKU '%s'", existing.SKU),
-						"error":   err.Error(),
-					})
+					RespondError(c, http.StatusInternalServerError, fmt.Sprintf("Failed to delete combination with SKU '%s'", existing.SKU), err)
 					return
 				}
 			} else {
@@ -1830,11 +1730,7 @@ func UpdateProductByShop(c *gin.Context) {
 					"retired":  true,
 				}).Error; err != nil {
 					tx.Rollback()
-					c.JSON(http.StatusInternalServerError, gin.H{
-						"success": false,
-						"message": fmt.Sprintf("Failed to retire combination with SKU '%s'", existing.SKU),
-						"error":   err.Error(),
-					})
+					RespondError(c, http.StatusInternalServerError, fmt.Sprintf("Failed to retire combination with SKU '%s'", existing.SKU), err)
 					return
 				}
 			}
@@ -1850,20 +1746,12 @@ func UpdateProductByShop(c *gin.Context) {
 		Where("id = ? AND shop_id = ?", productID, shopID).
 		First(&product).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to reload updated product",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to reload updated product", err)
 		return
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to commit transaction",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to commit transaction", err)
 		return
 	}
 
@@ -1879,21 +1767,13 @@ func UpdateProductByShop(c *gin.Context) {
 func UpdateProductImagesByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid shop ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 
 	productID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid product ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid product ID", err)
 		return
 	}
 
@@ -1901,11 +1781,7 @@ func UpdateProductImagesByShop(c *gin.Context) {
 	if err := initializers.DB.
 		Where("id = ? AND shop_id = ?", productID, shopID).
 		First(&product).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Product not found",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusNotFound, "Product not found", err)
 		return
 	}
 
@@ -1914,11 +1790,7 @@ func UpdateProductImagesByShop(c *gin.Context) {
 		Where("product_id = ?", productID).
 		Order("order_index ASC, created_at ASC").
 		Find(&currentImages).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to retrieve product images",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to retrieve product images", err)
 		return
 	}
 
@@ -1926,11 +1798,7 @@ func UpdateProductImagesByShop(c *gin.Context) {
 	var existingImages []dto.UpdateProductsImageInput
 	if existingImagesJSON != "" {
 		if err := json.Unmarshal([]byte(existingImagesJSON), &existingImages); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "Invalid existingImages JSON",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusBadRequest, "Invalid existingImages JSON", err)
 			return
 		}
 	}
@@ -1971,11 +1839,7 @@ func UpdateProductImagesByShop(c *gin.Context) {
 
 	form, err := c.MultipartForm()
 	if err != nil && err != http.ErrNotMultipart {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid multipart form data",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid multipart form data", err)
 		return
 	}
 
@@ -2014,11 +1878,7 @@ func UpdateProductImagesByShop(c *gin.Context) {
 	for _, img := range imagesToDelete {
 		if err := tx.Where("id = ? AND product_id = ?", img.ID, productID).Delete(&models.ProductImage{}).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to delete removed images",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to delete removed images", err)
 			return
 		}
 	}
@@ -2030,11 +1890,7 @@ func UpdateProductImagesByShop(c *gin.Context) {
 		src, err := file.Open()
 		if err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "Failed to open uploaded file",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusBadRequest, "Failed to open uploaded file", err)
 			return
 		}
 
@@ -2050,11 +1906,7 @@ func UpdateProductImagesByShop(c *gin.Context) {
 
 		if err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": fmt.Sprintf("Failed to upload %s", file.Filename),
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, fmt.Sprintf("Failed to upload %s", file.Filename), err)
 			return
 		}
 
@@ -2078,11 +1930,7 @@ func UpdateProductImagesByShop(c *gin.Context) {
 				})
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to save new product images",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to save new product images", err)
 			return
 		}
 	}
@@ -2093,11 +1941,7 @@ func UpdateProductImagesByShop(c *gin.Context) {
 		Order("order_index ASC, created_at ASC").
 		Find(&finalImages).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to reload product images",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to reload product images", err)
 		return
 	}
 
@@ -2109,11 +1953,7 @@ func UpdateProductImagesByShop(c *gin.Context) {
 			})
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to commit transaction",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to commit transaction", err)
 		return
 	}
 
@@ -2132,21 +1972,13 @@ func UpdateProductImagesByShop(c *gin.Context) {
 func DeleteProductByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid shop ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 
 	productID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid product ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid product ID", err)
 		return
 	}
 
@@ -2154,21 +1986,13 @@ func DeleteProductByShop(c *gin.Context) {
 	if err := initializers.DB.
 		Where("id = ? AND shop_id = ?", productID, shopID).
 		First(&product).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Product not found",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusNotFound, "Product not found", err)
 		return
 	}
 
 	tx := initializers.DB.Begin()
 	if tx.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to start transaction",
-			"error":   tx.Error.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to start transaction", tx.Error)
 		return
 	}
 
@@ -2182,11 +2006,7 @@ func DeleteProductByShop(c *gin.Context) {
 	result := tx.Where("id = ? AND shop_id = ?", productID, shopID).Delete(&models.Product{})
 	if result.Error != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to delete product",
-			"error":   result.Error.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to delete product", result.Error)
 		return
 	}
 
@@ -2200,11 +2020,7 @@ func DeleteProductByShop(c *gin.Context) {
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to commit transaction",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to commit transaction", err)
 		return
 	}
 
@@ -2220,21 +2036,13 @@ func DeleteProductByShop(c *gin.Context) {
 func UpdateProductVariantsByShop(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid shop ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid shop ID", err)
 		return
 	}
 
 	productID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid product ID",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid product ID", err)
 		return
 	}
 
@@ -2263,11 +2071,7 @@ func UpdateProductVariantsByShop(c *gin.Context) {
 
 	var body UpdateProductVariantsBody
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -2275,11 +2079,7 @@ func UpdateProductVariantsByShop(c *gin.Context) {
 	if err := initializers.DB.
 		Where("id = ? AND shop_id = ?", productID, shopID).
 		First(&product).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Product not found",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusNotFound, "Product not found", err)
 		return
 	}
 
@@ -2368,11 +2168,7 @@ func UpdateProductVariantsByShop(c *gin.Context) {
 
 	tx := initializers.DB.Begin()
 	if tx.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to start transaction",
-			"error":   tx.Error.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to start transaction", tx.Error)
 		return
 	}
 
@@ -2385,21 +2181,13 @@ func UpdateProductVariantsByShop(c *gin.Context) {
 
 	if err := tx.Where("product_id = ?", productID).Delete(&models.ProductVariantCombination{}).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to clear existing combinations",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to clear existing combinations", err)
 		return
 	}
 
 	if err := tx.Where("product_id = ?", productID).Delete(&models.Variant{}).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to clear existing variants",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to clear existing variants", err)
 		return
 	}
 
@@ -2413,11 +2201,7 @@ func UpdateProductVariantsByShop(c *gin.Context) {
 
 		if err := tx.Create(&variant).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to create variant",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to create variant", err)
 			return
 		}
 
@@ -2431,11 +2215,7 @@ func UpdateProductVariantsByShop(c *gin.Context) {
 
 			if err := tx.Create(&variantItem).Error; err != nil {
 				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"success": false,
-					"message": "Failed to create variant item",
-					"error":   err.Error(),
-				})
+				RespondError(c, http.StatusInternalServerError, "Failed to create variant item", err)
 				return
 			}
 
@@ -2510,11 +2290,7 @@ func UpdateProductVariantsByShop(c *gin.Context) {
 	if len(combinationsToSave) > 0 {
 		if err := tx.Create(&combinationsToSave).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to save combinations",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to save combinations", err)
 			return
 		}
 	}
@@ -2527,20 +2303,12 @@ func UpdateProductVariantsByShop(c *gin.Context) {
 		Where("id = ? AND shop_id = ?", productID, shopID).
 		First(&updatedProduct).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to reload updated product",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to reload updated product", err)
 		return
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to commit transaction",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to commit transaction", err)
 		return
 	}
 

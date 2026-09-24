@@ -82,11 +82,7 @@ func GetPixelsByShop(c *gin.Context) {
 	}
 
 	if err := query.Order("created_at DESC").Find(&pixels).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to retrieve pixels",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to retrieve pixels", err)
 		return
 	}
 
@@ -130,11 +126,7 @@ func IndexPixel(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to retrieve pixel",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to retrieve pixel", err)
 		return
 	}
 
@@ -212,11 +204,7 @@ func CreatePixel(c *gin.Context) {
 
 	var body CreatePixelInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -234,17 +222,13 @@ func CreatePixel(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to verify plan limits", err)
 		return
 	}
 
 	encryptedAccessToken, err := services.EncryptPixelAccessToken(accessToken)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to secure access token",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to secure access token", err)
 		return
 	}
 
@@ -261,11 +245,7 @@ func CreatePixel(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Create(&pixel).Error; err != nil {
-		c.JSON(http.StatusConflict, gin.H{
-			"success": false,
-			"message": "Failed to create pixel. It may already exist for this shop.",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusConflict, "Failed to create pixel. It may already exist for this shop.", err)
 		return
 	}
 
@@ -297,11 +277,7 @@ func UpdatePixel(c *gin.Context) {
 
 	var input UpdatePixelInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -319,21 +295,13 @@ func UpdatePixel(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to load pixel",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to load pixel", err)
 		return
 	}
 
 	tx := initializers.DB.Begin()
 	if tx.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to start transaction",
-			"error":   tx.Error.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to start transaction", tx.Error)
 		return
 	}
 
@@ -352,11 +320,7 @@ func UpdatePixel(c *gin.Context) {
 		encryptedToken, err := services.EncryptPixelAccessToken(cleanToken)
 		if err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to secure access token",
-				"error":   err.Error(),
-			})
+			RespondError(c, http.StatusInternalServerError, "Failed to secure access token", err)
 			return
 		}
 		updateData["access_token"] = encryptedToken
@@ -375,11 +339,7 @@ func UpdatePixel(c *gin.Context) {
 				Where("shop_id = ? AND platform = ? AND id <> ?", pixel.ShopID, pixel.Platform, pixel.ID).
 				Update("is_active", false).Error; err != nil {
 				tx.Rollback()
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"success": false,
-					"message": "Failed to deactivate other pixels",
-					"error":   err.Error(),
-				})
+				RespondError(c, http.StatusInternalServerError, "Failed to deactivate other pixels", err)
 				return
 			}
 
@@ -401,29 +361,17 @@ func UpdatePixel(c *gin.Context) {
 
 	if err := tx.Model(&pixel).Updates(updateData).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to update pixel",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to update pixel", err)
 		return
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to commit pixel update",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to commit pixel update", err)
 		return
 	}
 
 	if err := initializers.DB.First(&pixel, "id = ?", pixel.ID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Pixel updated but failed to reload record",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Pixel updated but failed to reload record", err)
 		return
 	}
 
@@ -467,20 +415,12 @@ func DeletePixel(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to load pixel",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to load pixel", err)
 		return
 	}
 
 	if err := initializers.DB.Delete(&pixel).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to delete pixel",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusInternalServerError, "Failed to delete pixel", err)
 		return
 	}
 

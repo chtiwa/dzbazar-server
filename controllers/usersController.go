@@ -147,11 +147,7 @@ func CreateUserByShop(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -175,7 +171,7 @@ func CreateUserByShop(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to verify plan limits", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to verify plan limits", err)
 		return
 	}
 
@@ -337,11 +333,7 @@ func UpdateUserByShop(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Invalid request body",
-			"error":   err.Error(),
-		})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -530,7 +522,7 @@ func GetConfirmatriceProducts(c *gin.Context) {
 	if err := initializers.DB.Model(&models.ConfirmatriceProduct{}).
 		Where("shop_member_id = ?", member.ID).
 		Pluck("product_id", &productIDs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error while retrieving product scope", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Error while retrieving product scope", err)
 		return
 	}
 
@@ -548,7 +540,7 @@ func SetConfirmatriceProducts(c *gin.Context) {
 		ProductIDs []string `json:"productIds"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error while binding JSON request context", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Error while binding JSON request context", err)
 		return
 	}
 
@@ -572,7 +564,7 @@ func SetConfirmatriceProducts(c *gin.Context) {
 		return tx.Create(&rows).Error
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error while saving product scope", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Error while saving product scope", err)
 		return
 	}
 

@@ -65,7 +65,7 @@ type UpdatePlanInput struct {
 func GetPlans(c *gin.Context) {
 	var plans []models.Plan
 	if err := initializers.DB.Where("is_active = true").Find(&plans).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch plans", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch plans", err)
 		return
 	}
 
@@ -75,7 +75,7 @@ func GetPlans(c *gin.Context) {
 func CreatePlan(c *gin.Context) {
 	var body CreatePlanInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 
@@ -114,7 +114,7 @@ func CreatePlan(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Create(&plan).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to create plan", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to create plan", err)
 		return
 	}
 
@@ -132,7 +132,7 @@ func UpdatePlan(c *gin.Context) {
 
 	var body UpdatePlanInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 
@@ -142,7 +142,7 @@ func UpdatePlan(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Plan not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -202,7 +202,7 @@ func UpdatePlan(c *gin.Context) {
 	}
 
 	if err := initializers.DB.Model(&plan).Updates(updates).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update plan", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to update plan", err)
 		return
 	}
 
@@ -257,7 +257,7 @@ func GetShopSubscription(c *gin.Context) {
 	var sub *models.ShopSubscription
 	err = initializers.DB.Preload("Plan").Where("shop_id = ?", shopID).First(&sub).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch subscription", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch subscription", err)
 		return
 	}
 	// GORM allocates a zero-value struct through a **T dest even on
@@ -270,7 +270,7 @@ func GetShopSubscription(c *gin.Context) {
 	var pendingRequest *models.PlanSwitchRequest
 	err = initializers.DB.Preload("Plan").Where("shop_id = ? AND status = 'pending'", shopID).First(&pendingRequest).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch pending request", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch pending request", err)
 		return
 	}
 	if err == gorm.ErrRecordNotFound {
@@ -279,7 +279,7 @@ func GetShopSubscription(c *gin.Context) {
 
 	credits, err := services.GetCreditsSummary(shopID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to fetch AI credits", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch AI credits", err)
 		return
 	}
 
@@ -302,7 +302,7 @@ func SubscribeShopToPlan(c *gin.Context) {
 
 	var body SubscribeInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Validation failed", "error": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Validation failed", err)
 		return
 	}
 
@@ -318,7 +318,7 @@ func SubscribeShopToPlan(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Plan not found or inactive"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
@@ -329,13 +329,13 @@ func SubscribeShopToPlan(c *gin.Context) {
 		return
 	}
 	if err != gorm.ErrRecordNotFound {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
 	request := models.PlanSwitchRequest{ShopID: shopID, PlanID: planID, Status: "pending"}
 	if err := initializers.DB.Create(&request).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to request plan switch", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to request plan switch", err)
 		return
 	}
 
@@ -359,12 +359,12 @@ func CancelShopSubscription(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "No active subscription found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Database error", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Database error", err)
 		return
 	}
 
 	if err := initializers.DB.Delete(&sub).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to cancel subscription", "error": err.Error()})
+		RespondError(c, http.StatusInternalServerError, "Failed to cancel subscription", err)
 		return
 	}
 
