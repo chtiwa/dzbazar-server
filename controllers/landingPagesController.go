@@ -403,6 +403,22 @@ func IndexLandingPage(c *gin.Context) {
 	if err == nil {
 		var cachedResponse dto.PublicLandingPageResponse
 		if unmarshalErr := json.Unmarshal([]byte(val), &cachedResponse); unmarshalErr == nil {
+			// A shop suspended after this entry was cached must still 404 —
+			// re-checked on every hit (its own 60s cache) instead of trusting
+			// a 10-minute-old landing-page cache entry. See important.todo
+			// LAUNCH BLOCKER 6.
+			if shopID, parseErr := uuid.Parse(cachedResponse.ShopID); parseErr == nil {
+				active, activeErr := services.IsShopActive(shopID)
+				if activeErr == nil && !active {
+					c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Landing page not found"})
+					return
+				}
+				// LAUNCH BLOCKER 12: acceptingOrders hits the DB
+				// (CheckOrderLimit) so it's computed fresh on every hit, same
+				// as IsShopActive just above — never trusted from the cached
+				// blob, which can be up to 10 minutes stale.
+				cachedResponse.Shop.AcceptingOrders = activeErr == nil && active && services.HasOrderCapacity(shopID)
+			}
 			c.JSON(http.StatusOK, gin.H{
 				"success": true,
 				"message": "Landing page retrieved successfully (from cache)",
@@ -435,6 +451,17 @@ func IndexLandingPage(c *gin.Context) {
 		return
 	}
 
+	// A suspended shop's landing pages must 404 like they don't exist — this
+	// is a common ad-landing entry point, checked before caching the fresh
+	// response. See important.todo LAUNCH BLOCKER 6.
+	if !landingPage.Shop.IsActive {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Landing page not found",
+		})
+		return
+	}
+
 	// A super-admin force-hidden product (see Product.HiddenByPlatformAt)
 	// must disappear from every customer-facing view, not just the direct
 	// product-listing/search/detail endpoints — a landing page embeds its
@@ -452,9 +479,15 @@ func IndexLandingPage(c *gin.Context) {
 
 	response := toPublicLandingPageResponse(landingPage)
 
+	// Cache the response with AcceptingOrders left at its zero value — it's
+	// overwritten fresh below on every response (cached or not), same as the
+	// cache-hit branch above. Never bake a CheckOrderLimit result into a
+	// 10-minute blob. See important.todo LAUNCH BLOCKER 12.
 	if jsonData, err := json.Marshal(response); err == nil {
 		_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
 	}
+
+	response.Shop.AcceptingOrders = services.HasOrderCapacity(landingPage.ShopID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -536,6 +569,7 @@ func toPublicLandingPageResponse(lp models.LandingPage) dto.PublicLandingPageRes
 		Description:  lp.Product.Description,
 		Price:        lp.Product.Price,
 		OldPrice:     lp.Product.OldPrice,
+		TrackStock:   lp.Product.TrackStock,
 		Images:       productImages,
 		Variants:     variants,
 		Combinations: combinations,

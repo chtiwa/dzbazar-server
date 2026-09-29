@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
@@ -17,6 +18,15 @@ import (
 )
 
 const refreshTokenTTLSeconds = 60 * 60 * 24 * 7 // 7d, per CLAUDE.md
+
+// normalizeEmail lowercases and trims an email input so per-email rate
+// limits/counters (Redis keys keyed on email) and lookups can't be
+// sidestepped by varying case or padding (see important.todo LAUNCH BLOCKER
+// 4). Applied to every email field read from a request body before it's
+// used for a DB lookup or a rate-limit key.
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
 
 func setAuthCookies(c *gin.Context, user models.User) error {
 	refreshToken := utils.GenerateToken(user.ID, refreshTokenTTLSeconds, user.Role)
@@ -56,6 +66,7 @@ func Login(c *gin.Context) {
 		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
+	body.Email = normalizeEmail(body.Email)
 
 	const maxFailedLogins = 10
 	const failedLoginWindow = 15 * time.Minute
@@ -87,6 +98,7 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
 			"message": "Please verify your email address before logging in",
+			"code":    "EMAIL_NOT_VERIFIED",
 		})
 		return
 	}
@@ -140,6 +152,7 @@ func SignUp(c *gin.Context) {
 		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
+	body.Email = normalizeEmail(body.Email)
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
 	if err != nil {
@@ -184,6 +197,36 @@ func SignUp(c *gin.Context) {
 	})
 }
 
+// otpDecision is the outcome of checking a submitted OTP against a user's
+// stored OTP, for an already-unverified user. It never grants a session for
+// a verified user — that path is handled separately in VerifyUser before
+// this is even called.
+type otpDecision int
+
+const (
+	otpOK otpDecision = iota
+	otpMismatch
+	otpExpired
+	otpAlreadyVerified
+)
+
+// verifyOTPDecision is the pure decision for VerifyUser: whether a submitted
+// OTP for an unverified user matches and is still valid. A verified user is
+// never otpOK here (defense in depth behind VerifyUser's own 409 guard) —
+// that was the original login-without-OTP bug.
+func verifyOTPDecision(isVerified bool, storedOTP, submittedOTP string, expiresAt *time.Time, now time.Time) otpDecision {
+	if isVerified {
+		return otpAlreadyVerified
+	}
+	if storedOTP == "" || storedOTP != submittedOTP {
+		return otpMismatch
+	}
+	if expiresAt == nil || now.After(*expiresAt) {
+		return otpExpired
+	}
+	return otpOK
+}
+
 func VerifyUser(c *gin.Context) {
 	var body struct {
 		Email string `json:"email" binding:"required,email"`
@@ -192,6 +235,18 @@ func VerifyUser(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&body); err != nil {
 		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+	body.Email = normalizeEmail(body.Email)
+
+	const maxOTPAttempts = 5
+	const otpAttemptWindow = 15 * time.Minute // matches the OTP's own TTL
+
+	if middleware.TooManyOTPAttempts("verify", body.Email, maxOTPAttempts) {
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"success": false,
+			"message": "Too many attempts, please try again later",
+		})
 		return
 	}
 
@@ -214,40 +269,38 @@ func VerifyUser(c *gin.Context) {
 	}
 
 	if user.IsVerified {
-		if err := setAuthCookies(c, user); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to create authentication cookies",
-			})
-			return
-		}
-
-		sanitizeUser(&user)
-
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "User already verified",
-			"role":    user.Role,
-			"user":    user,
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false,
+			"message": "Account already verified, please log in",
 		})
 		return
 	}
 
-	if user.EmailOTP != body.OTP {
+	decision := verifyOTPDecision(user.IsVerified, user.EmailOTP, body.OTP, user.EmailOTPExpiresAt, time.Now())
+	switch decision {
+	case otpAlreadyVerified:
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false,
+			"message": "Account already verified, please log in",
+		})
+		return
+	case otpMismatch:
+		middleware.RecordOTPAttempt("verify", body.Email, otpAttemptWindow)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"message": "The OTP doesn't match",
 		})
 		return
-	}
-
-	if user.EmailOTPExpiresAt == nil || time.Now().After(*user.EmailOTPExpiresAt) {
+	case otpExpired:
+		middleware.RecordOTPAttempt("verify", body.Email, otpAttemptWindow)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"message": "The OTP code has expired",
 		})
 		return
 	}
+
+	middleware.ClearOTPAttempts("verify", body.Email)
 
 	user.IsVerified = true
 	user.EmailOTP = ""
@@ -277,6 +330,47 @@ func VerifyUser(c *gin.Context) {
 		"role":    user.Role,
 		"user":    user,
 	})
+}
+
+// ResendOTP issues a fresh EmailOTP for an existing, unverified user. Always
+// responds with the same generic success message regardless of whether the
+// account exists or is already verified — no account enumeration (see
+// important.todo LAUNCH BLOCKER 14).
+func ResendOTP(c *gin.Context) {
+	var body struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+
+	if err := c.ShouldBindJSON(&body); err != nil {
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+	body.Email = normalizeEmail(body.Email)
+
+	const genericResponse = "If an account exists and is not yet verified, a new code has been sent."
+
+	var user models.User
+	err := initializers.DB.Where("email = ?", body.Email).First(&user).Error
+	if err != nil || user.IsVerified {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": genericResponse})
+		return
+	}
+
+	otp := utils.GenerateOTP()
+	expiresAt := time.Now().Add(15 * time.Minute)
+	user.EmailOTP = otp
+	user.EmailOTPExpiresAt = &expiresAt
+
+	if err := initializers.DB.Save(&user).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": genericResponse})
+		return
+	}
+
+	middleware.ClearOTPAttempts("verify", user.Email)
+
+	_ = utils.SendOTPEmail(user.Email, otp)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": genericResponse})
 }
 
 func Validate(c *gin.Context) {
@@ -360,6 +454,7 @@ func ForgotPassword(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Email invalide"})
 		return
 	}
+	body.Email = normalizeEmail(body.Email)
 
 	var user models.User
 	if err := initializers.DB.Where("email = ?", body.Email).First(&user).Error; err != nil {
@@ -376,6 +471,9 @@ func ForgotPassword(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Erreur lors de la génération du code"})
 		return
 	}
+
+	// A fresh OTP resets the attempt budget from the previous code.
+	middleware.ClearOTPAttempts("reset", user.Email)
 
 	if err := utils.SendPasswordResetEmail(user.Email, otp); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Impossible d'envoyer l'email"})
@@ -396,6 +494,15 @@ func ResetPassword(c *gin.Context) {
 		RespondError(c, http.StatusBadRequest, "Données invalides", err)
 		return
 	}
+	body.Email = normalizeEmail(body.Email)
+
+	const maxOTPAttempts = 5
+	const otpAttemptWindow = 15 * time.Minute // matches the OTP's own TTL
+
+	if middleware.TooManyOTPAttempts("reset", body.Email, maxOTPAttempts) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "message": "Trop de tentatives, réessayez plus tard"})
+		return
+	}
 
 	var user models.User
 	if err := initializers.DB.Where("email = ?", body.Email).First(&user).Error; err != nil {
@@ -408,14 +515,18 @@ func ResetPassword(c *gin.Context) {
 	}
 
 	if user.EmailOTP == "" || user.EmailOTP != body.OTP {
+		middleware.RecordOTPAttempt("reset", body.Email, otpAttemptWindow)
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Code OTP invalide"})
 		return
 	}
 
 	if user.EmailOTPExpiresAt == nil || time.Now().After(*user.EmailOTPExpiresAt) {
+		middleware.RecordOTPAttempt("reset", body.Email, otpAttemptWindow)
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Code OTP expiré"})
 		return
 	}
+
+	middleware.ClearOTPAttempts("reset", body.Email)
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
 	if err != nil {
@@ -426,6 +537,11 @@ func ResetPassword(c *gin.Context) {
 	user.Password = string(hash)
 	user.EmailOTP = ""
 	user.EmailOTPExpiresAt = nil
+	// Proving inbox ownership via OTP is equivalent to email verification —
+	// unblocks a signed-up-but-never-verified user who forgot their password
+	// instead of leaving them stuck behind both gates (important.todo LAUNCH
+	// BLOCKER 14).
+	user.IsVerified = true
 
 	if err := initializers.DB.Save(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Erreur lors de la mise à jour du mot de passe"})

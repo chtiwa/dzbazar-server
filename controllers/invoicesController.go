@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -32,13 +33,57 @@ type CreateInvoiceInput struct {
 // if this ever needs to change without a redeploy.
 const transferFeeRate = 0.002
 
+// ErrDowngradeNotSupported is returned by billedPlanAmount when the target
+// plan is cheaper than the shop's current active plan — downgrades aren't
+// supported through the invoice flow.
+var ErrDowngradeNotSupported = gorm.ErrInvalidData
+
+// billedPlanAmount computes what a shop must pay (before the transfer fee)
+// to move onto targetPlan, given its current subscription state. Pure
+// function, no DB/time.Now() access, so it's table-testable:
+//   - no current subscription, or the current one is expired -> full
+//     targetPlan.Price (blocker 8: an expired sub used to be treated as
+//     still "current", which let a lapsed paying merchant renew for free).
+//   - same plan (renewal) -> full targetPlan.Price (used to bill 0, since
+//     the old code only ever billed a diff and Price - Price = 0).
+//   - true upgrade within an active period -> prorated
+//     (targetPlan.Price - currentPlan.Price) * remainingDays / 30, rounded
+//     to the cent, never negative.
+//   - cheaper target plan while the current one is still active ->
+//     ErrDowngradeNotSupported (unchanged from the pre-existing behavior).
+//
+// remainingDays is days left until currentPlan's period ends (0 if already
+// expired or unknown); it is the caller's job to compute it from
+// sub.ExpiresAt and clamp it at 0.
+func billedPlanAmount(targetPlan models.Plan, currentPlan models.Plan, hasActiveSub bool, remainingDays int) (float64, error) {
+	if !hasActiveSub || currentPlan.Price == 0 {
+		return targetPlan.Price, nil
+	}
+	if targetPlan.ID == currentPlan.ID {
+		return targetPlan.Price, nil
+	}
+	if targetPlan.Price < currentPlan.Price {
+		return 0, ErrDowngradeNotSupported
+	}
+
+	diff := targetPlan.Price - currentPlan.Price
+	prorated := diff * float64(remainingDays) / 30
+	if prorated < 0 {
+		prorated = 0
+	}
+	return roundToCents(prorated), nil
+}
+
+func roundToCents(amount float64) float64 {
+	return math.Round(amount*100) / 100
+}
+
 // CreateInvoice files a pending invoice for one of the paid plans. Amount is
 // taken from the plan's own price — never trust a client-supplied amount for
-// a money field. If the shop already has an active paid subscription and is
-// jumping to a higher-priced plan, only the difference is billed (e.g.
-// Starter -> Growth bills Growth.Price - Starter.Price, not Growth.Price in
-// full). A 0.2% transfer fee is added on top either way. Downgrades aren't
-// supported through this flow.
+// a money field. See billedPlanAmount for the exact billing rules (same-plan
+// renewal and expired subscriptions bill full price; a true upgrade within
+// an active period bills the prorated difference). A 0.2% transfer fee is
+// added on top either way. Downgrades aren't supported through this flow.
 func CreateInvoice(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
@@ -79,19 +124,26 @@ func CreateInvoice(c *gin.Context) {
 		return
 	}
 
-	billedAmount := plan.Price
 	var sub models.ShopSubscription
 	subErr := initializers.DB.Preload("Plan").Where("shop_id = ?", shopID).First(&sub).Error
 	if subErr != nil && subErr != gorm.ErrRecordNotFound {
 		RespondError(c, http.StatusInternalServerError, "Database error", subErr)
 		return
 	}
-	if subErr == nil && sub.Plan.Price > 0 {
-		if plan.Price < sub.Plan.Price {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Downgrading plans isn't supported here — contact support"})
-			return
+
+	hasActiveSub := subErr == nil && (sub.ExpiresAt == nil || sub.ExpiresAt.After(time.Now()))
+	remainingDays := 0
+	if hasActiveSub && sub.ExpiresAt != nil {
+		remainingDays = int(math.Ceil(time.Until(*sub.ExpiresAt).Hours() / 24))
+		if remainingDays < 0 {
+			remainingDays = 0
 		}
-		billedAmount = plan.Price - sub.Plan.Price
+	}
+
+	billedAmount, err := billedPlanAmount(plan, sub.Plan, hasActiveSub, remainingDays)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Downgrading plans isn't supported here — contact support"})
+		return
 	}
 	billedAmount += billedAmount * transferFeeRate
 

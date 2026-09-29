@@ -7,6 +7,7 @@ import (
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/chtiwa/dzbazar-server/services"
+	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -150,6 +151,7 @@ func CreateUserByShop(c *gin.Context) {
 		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
+	body.Email = normalizeEmail(body.Email)
 
 	if body.Role == "" {
 		body.Role = "moderator"
@@ -199,67 +201,56 @@ func CreateUserByShop(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-
+	// An existing account (any shop, including another merchant or a
+	// super-admin) must never be silently attached without consent — that
+	// was an account-takeover path (see important.todo LAUNCH BLOCKER 2). A
+	// proper invite/accept flow is a P1 follow-up; for now the caller has to
+	// create a brand-new account for a brand-new email.
 	if lookupErr == nil {
-		user = existingUser
+		tx.Rollback()
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false,
+			"message": "This email already has an account",
+		})
+		return
+	}
 
-		var existingMembership models.ShopMember
-		memErr := tx.Where("shop_id = ? AND user_id = ?", shopID, user.ID).First(&existingMembership).Error
-		if memErr == nil {
-			tx.Rollback()
-			c.JSON(http.StatusConflict, gin.H{
-				"success": false,
-				"message": "This user is already a member of this shop",
-			})
-			return
-		}
-		if !errors.Is(memErr, gorm.ErrRecordNotFound) {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Error while checking existing membership",
-			})
-			return
-		}
-	} else {
-		if body.FirstName == "" || body.LastName == "" || body.PhoneNumber == "" || len(body.Password) < 6 {
-			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "firstName, lastName, phoneNumber and a password (min 6 chars) are required to create a new user",
-			})
-			return
-		}
+	if body.FirstName == "" || body.LastName == "" || body.PhoneNumber == "" || len(body.Password) < 6 {
+		tx.Rollback()
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "firstName, lastName, phoneNumber and a password (min 6 chars) are required to create a new user",
+		})
+		return
+	}
 
-		hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
-		if err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to hash the password",
-			})
-			return
-		}
+	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
+	if err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to hash the password",
+		})
+		return
+	}
 
-		user = models.User{
-			FirstName:   body.FirstName,
-			LastName:    body.LastName,
-			PhoneNumber: body.PhoneNumber,
-			Email:       body.Email,
-			Password:    string(hash),
-			Role:        body.Role,
-			IsVerified:  true,
-		}
+	user := models.User{
+		FirstName:   body.FirstName,
+		LastName:    body.LastName,
+		PhoneNumber: body.PhoneNumber,
+		Email:       body.Email,
+		Password:    string(hash),
+		Role:        body.Role,
+		IsVerified:  true,
+	}
 
-		if err := tx.Create(&user).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "Failed to create user (email may already exist)",
-			})
-			return
-		}
+	if err := tx.Create(&user).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Failed to create user (email may already exist)",
+		})
+		return
 	}
 
 	member := models.ShopMember{
@@ -288,16 +279,31 @@ func CreateUserByShop(c *gin.Context) {
 	user.Password = ""
 	user.EmailOTP = ""
 
-	message := "User was created successfully"
-	if lookupErr == nil {
-		message = "Existing user was added to the shop"
-	}
-
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
-		"message": message,
+		"message": "User was created successfully",
 		"data":    user,
 	})
+}
+
+// memberUpdateDecision is the pure authorization check for UpdateUserByShop:
+// whether the caller (with role callerRole in this shop) may modify the
+// target member (whose current shop role is targetCurrentRole and whose user
+// ID is targetUserID), and whether email/password fields in the request may
+// be applied. isSelf means the caller is editing their own account.
+//
+// Rules (see important.todo LAUNCH BLOCKER 2):
+//   - email/password can only ever be changed by the account owner themself.
+//   - only a shop owner may change anyone's role to/from "owner".
+//   - only a shop owner may edit a member who currently holds "owner".
+func memberUpdateDecision(callerRole, targetCurrentRole string, isSelf bool, newRole *string) (allowIdentityFields bool, forbidden bool, forbiddenReason string) {
+	if !isSelf && targetCurrentRole == "owner" && callerRole != "owner" {
+		return false, true, "You do not have permission to modify the shop owner"
+	}
+	if newRole != nil && (*newRole == "owner" || targetCurrentRole == "owner") && callerRole != "owner" {
+		return false, true, "Only the shop owner can change ownership"
+	}
+	return isSelf, false, ""
 }
 
 func UpdateUserByShop(c *gin.Context) {
@@ -336,6 +342,10 @@ func UpdateUserByShop(c *gin.Context) {
 		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
+	if body.Email != nil {
+		normalized := normalizeEmail(*body.Email)
+		body.Email = &normalized
+	}
 
 	var user models.User
 	err = initializers.DB.
@@ -359,6 +369,34 @@ func UpdateUserByShop(c *gin.Context) {
 		return
 	}
 
+	var targetMembership models.ShopMember
+	if err := initializers.DB.Where("shop_id = ? AND user_id = ?", shopID, userID).First(&targetMembership).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Database error while retrieving membership",
+		})
+		return
+	}
+
+	requester := c.MustGet("user").(models.User)
+	callerRole := c.MustGet("userShopRole").(string)
+	isSelf := requester.ID == userID
+
+	allowIdentityFields, forbidden, forbiddenReason := memberUpdateDecision(callerRole, targetMembership.Role, isSelf, body.Role)
+	if forbidden {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": forbiddenReason,
+		})
+		return
+	}
+	if !allowIdentityFields {
+		// Other members may only have first/last name, phone, role, active
+		// changed — never someone else's email or password.
+		body.Email = nil
+		body.Password = nil
+	}
+
 	tx := initializers.DB.Begin()
 	if tx.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -367,6 +405,8 @@ func UpdateUserByShop(c *gin.Context) {
 		})
 		return
 	}
+
+	passwordChanged := false
 
 	if body.FirstName != nil {
 		user.FirstName = *body.FirstName
@@ -391,6 +431,7 @@ func UpdateUserByShop(c *gin.Context) {
 			return
 		}
 		user.Password = string(hash)
+		passwordChanged = true
 	}
 
 	if err := tx.Save(&user).Error; err != nil {
@@ -446,6 +487,10 @@ func UpdateUserByShop(c *gin.Context) {
 		return
 	}
 
+	if passwordChanged && isSelf {
+		utils.RevokeAllSessions(user.ID.String())
+	}
+
 	user.Password = ""
 	user.EmailOTP = ""
 
@@ -492,6 +537,16 @@ func DeleteUserByShop(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"message": "Error while retrieving membership",
+		})
+		return
+	}
+
+	requester := c.MustGet("user").(models.User)
+	callerRole := c.MustGet("userShopRole").(string)
+	if member.Role == "owner" && callerRole != "owner" && requester.ID != userID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "You do not have permission to modify the shop owner",
 		})
 		return
 	}

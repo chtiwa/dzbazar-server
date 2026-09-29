@@ -19,13 +19,15 @@ func PlansRoutes(router *gin.Engine) {
 		plans.GET("", middleware.RateLimitByIP("plans", 30, time.Minute), controllers.GetPlans)
 	}
 
+	// Public: admin shows it on SelectShop before a shop exists (LAUNCH BLOCKER 18).
+	router.GET("/v1/support", middleware.RateLimitByIP("support", 30, time.Minute), controllers.GetSupportContact)
+
 	// Per-shop subscription
 	sub := router.Group("/v1/shops/:shopId/subscription")
 	sub.Use(middleware.RequireAuthentication)
 	{
 		sub.GET("", middleware.RequireShopAccess(), middleware.RequireShopPermission("subscription.view"), controllers.GetShopSubscription)
 		sub.POST("", middleware.RequireShopAccess(), middleware.RequireShopPermission("subscription.edit"), middleware.RateLimitByShop("plan-switch", 3, time.Hour), controllers.SubscribeShopToPlan)
-		sub.DELETE("", middleware.RequireShopAccess(), middleware.RequireShopPermission("subscription.edit"), controllers.CancelShopSubscription)
 	}
 
 	// Per-shop invoices — manual Redot payment proof, reviewed by super admin.

@@ -71,6 +71,42 @@ func ClearFailedLogins(email string) {
 	initializers.RClient.Del(initializers.Ctx, key)
 }
 
+// TooManyOTPAttempts and RecordOTPAttempt guard OTP verification (VerifyUser,
+// ResetPassword) against unlimited guessing of a 6-digit code — same
+// fixed-window pattern as the failed-login counters above but under a
+// distinct key prefix ("otp", not "login") so the two can't be sidestepped
+// against each other. bucket distinguishes verify-otp from reset-password so
+// one doesn't burn the other's attempt budget.
+func TooManyOTPAttempts(bucket, email string, max int64) bool {
+	key := fmt.Sprintf("ratelimit:otp:%s:email:%s", bucket, email)
+	count, err := initializers.RClient.Get(initializers.Ctx, key).Int64()
+	if err != nil {
+		return false
+	}
+	return count >= max
+}
+
+// RecordOTPAttempt increments the per-email OTP attempt counter, starting a
+// window equal to the OTP's own lifetime on the first attempt so the counter
+// never outlives the code it's guarding.
+func RecordOTPAttempt(bucket, email string, window time.Duration) {
+	key := fmt.Sprintf("ratelimit:otp:%s:email:%s", bucket, email)
+	count, err := initializers.RClient.Incr(initializers.Ctx, key).Result()
+	if err != nil {
+		return
+	}
+	if count == 1 {
+		initializers.RClient.Expire(initializers.Ctx, key, window)
+	}
+}
+
+// ClearOTPAttempts resets the per-email OTP attempt counter after a
+// successful verification or when a fresh OTP is issued.
+func ClearOTPAttempts(bucket, email string) {
+	key := fmt.Sprintf("ratelimit:otp:%s:email:%s", bucket, email)
+	initializers.RClient.Del(initializers.Ctx, key)
+}
+
 // AllowShopAction is the per-shop fixed-window check behind RateLimitByShop,
 // callable outside the middleware chain — for limits that depend on data the
 // router doesn't have yet (e.g. a cap that only applies to free-tier shops,

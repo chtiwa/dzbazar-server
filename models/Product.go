@@ -14,6 +14,14 @@ type Product struct {
 	Price       float64   `gorm:"not null" json:"price"`
 	OldPrice    *float64  `gorm:"default:0" json:"oldPrice"`
 	Active      bool      `gorm:"default:true" json:"active"`
+	// TrackStock opts a product into stock enforcement (LAUNCH BLOCKER 13,
+	// OWNER DECIDED 2026-09-28). Defaults false so dropshippers who never set
+	// real stock numbers (Variant quantity defaults to 0) aren't suddenly
+	// unable to sell once the server stock check went live. When false, the
+	// order-time 409 stock check and every client stock UI affordance
+	// (sold-out badge, qty clamp, disabled submit) are skipped, and stock is
+	// not decremented at ship time either.
+	TrackStock bool `gorm:"not null;default:false" json:"trackStock"`
 	// HiddenByPlatformAt is platform-owned moderation, not a merchant field:
 	// non-nil means a super admin force-hid this single listing (e.g. fraud)
 	// without suspending the whole shop. Distinct from

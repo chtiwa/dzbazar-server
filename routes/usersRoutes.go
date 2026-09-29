@@ -16,6 +16,7 @@ func UsersRoutes(router *gin.Engine) {
 		users.GET("/logout", controllers.Logout)
 		users.POST("/verify-otp", middleware.RateLimitByIP("verify-otp", 10, 15*time.Minute), controllers.VerifyUser)
 		users.POST("/forgot-password", middleware.RateLimitByIP("forgot-password", 5, time.Hour), controllers.ForgotPassword)
+		users.POST("/resend-otp", middleware.RateLimitByIP("resend-otp", 5, time.Hour), controllers.ResendOTP)
 		users.POST("/reset-password", middleware.RateLimitByIP("reset-password", 10, 15*time.Minute), controllers.ResetPassword)
 
 		users.GET("/validate", middleware.RequireAuthentication, controllers.Validate)

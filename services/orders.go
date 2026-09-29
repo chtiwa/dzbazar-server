@@ -61,6 +61,9 @@ func FetchCombinationsForShop(tx *gorm.DB, shopID uuid.UUID, comboIDs []uuid.UUI
 	if err := tx.
 		Joins("JOIN products ON products.id = product_variant_combinations.product_id").
 		Where("product_variant_combinations.id IN ? AND products.shop_id = ? AND product_variant_combinations.retired = ?", comboIDs, shopID, false).
+		// Preload Product so callers can read Product.TrackStock (LAUNCH
+		// BLOCKER 13) without a second query.
+		Preload("Product").
 		Find(&combos).Error; err != nil {
 		return nil, err
 	}
@@ -93,6 +96,13 @@ func GetOrderDetail(db *gorm.DB, orderID uuid.UUID) (models.Order, error) {
 // so a failed decrement can never pass silently as a successful ship.
 func DecrementOrderItemsStock(tx *gorm.DB, items []models.OrderItem) error {
 	for _, item := range items {
+		// LAUNCH BLOCKER 13, OWNER DECIDED 2026-09-28: an untracked product's
+		// quantity is meaningless (never validated, usually left at 0) —
+		// decrementing it would drive it negative for no reason. Every caller
+		// of this function already preloads Items.Product.
+		if !item.Product.TrackStock {
+			continue
+		}
 		if err := tx.Model(&models.ProductVariantCombination{}).
 			Where("id = ?", item.ProductVariantCombinationID).
 			UpdateColumn("quantity", gorm.Expr("quantity - ?", item.Quantity)).Error; err != nil {
@@ -108,6 +118,11 @@ func DecrementOrderItemsStock(tx *gorm.DB, items []models.OrderItem) error {
 // if the owner re-ships it to another carrier afterward.
 func RestoreOrderItemsStock(tx *gorm.DB, items []models.OrderItem) error {
 	for _, item := range items {
+		// Mirror DecrementOrderItemsStock: untracked products were never
+		// decremented, so nothing to put back. Callers must preload Items.Product.
+		if !item.Product.TrackStock {
+			continue
+		}
 		if err := tx.Model(&models.ProductVariantCombination{}).
 			Where("id = ?", item.ProductVariantCombinationID).
 			UpdateColumn("quantity", gorm.Expr("quantity + ?", item.Quantity)).Error; err != nil {

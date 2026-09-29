@@ -72,6 +72,22 @@ func GetPlans(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": plans})
 }
 
+// GetSupportContact exposes only the support_whatsapp / support_email
+// global_settings keys (edited in super-admin Settings) — never the whole
+// table. Missing keys come back as "" and the admin hides that link.
+func GetSupportContact(c *gin.Context) {
+	var settings []models.GlobalSetting
+	if err := initializers.DB.Where("key IN ?", []string{"support_whatsapp", "support_email"}).Find(&settings).Error; err != nil {
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch support contact", err)
+		return
+	}
+	data := gin.H{"whatsapp": "", "email": ""}
+	for _, s := range settings {
+		data[strings.TrimPrefix(s.Key, "support_")] = strings.TrimSpace(s.Value)
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": data})
+}
+
 func CreatePlan(c *gin.Context) {
 	var body CreatePlanInput
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -344,29 +360,4 @@ func SubscribeShopToPlan(c *gin.Context) {
 	initializers.DB.Preload("Plan").First(&request, "id = ?", request.ID)
 
 	c.JSON(http.StatusCreated, gin.H{"success": true, "message": "Plan switch requested — pending super admin approval", "data": request})
-}
-
-func CancelShopSubscription(c *gin.Context) {
-	shopID, err := uuid.Parse(c.Param("shopId"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
-		return
-	}
-
-	var sub models.ShopSubscription
-	if err := initializers.DB.Where("shop_id = ?", shopID).First(&sub).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "No active subscription found"})
-			return
-		}
-		RespondError(c, http.StatusInternalServerError, "Database error", err)
-		return
-	}
-
-	if err := initializers.DB.Delete(&sub).Error; err != nil {
-		RespondError(c, http.StatusInternalServerError, "Failed to cancel subscription", err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Subscription cancelled successfully"})
 }

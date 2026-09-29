@@ -19,7 +19,20 @@ func DetectStaffOrder(c *gin.Context) {
 	accessTokenString, err := c.Cookie("AccessToken")
 	if err == nil && shopID != "" {
 		if _, claims, err := utils.ParseJWT(accessTokenString); err == nil {
+			// A revoked or globally-invalidated token (logout, password
+			// change, RevokeAllSessions) must never grant the staff-order
+			// exemption from the anti-spam guards below — same checks
+			// RequireAuthentication itself applies. See important.todo
+			// LAUNCH BLOCKER 5.
+			if utils.IsTokenRevoked(claims) {
+				c.Next()
+				return
+			}
 			if sub, ok := claims["sub"].(string); ok {
+				if utils.IsTokenBeforeRevokeAll(sub, claims) {
+					c.Next()
+					return
+				}
 				if userID, err := uuid.Parse(sub); err == nil {
 					if _, ok := GetShopMembership(userID, shopID); ok {
 						c.Set(staffOrderContextKey, true)

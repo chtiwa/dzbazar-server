@@ -78,3 +78,13 @@ After a successful order creation, a goroutine fires email notification (Resend)
 `DB_URI`, `JWT_SECRET`, `APP_ENV`, `B2_BUCKET_NAME`, `B2_REGION`, `B2_PUBLIC_BASE_URL`, `B2_KEY_ID`, `B2_APP_KEY`, `B2_ENDPOINT`, `REDIS_URL`, `RESEND_API_KEY`, `FACEBOOK_TEST_CODE` (dev only)
 
 Carrier credentials (Osen Express, Leopard Express, ZR Express, Anderson/Ecotrack) are per-shop `DeliveryCompany` rows, with a per-shop `IsActive` toggle (migration 00039) that pauses a carrier as a ship target without deleting its stored token.
+
+### Post-deploy: flush stale orders:list cache (one-time, after the User JSON-tag fix)
+`models.User.Password`/`EmailOTP`/`EmailOTPExpiresAt` used to be serialized into
+JSON (no `json:"-"`), and `orders:list:default:<shopID>` Redis entries
+(`ordersListCacheKey`, 15min TTL) embed the full preloaded
+`AssignedMember.User`. After deploying the `json:"-"` fix, any cache entry
+written before the deploy still has the old plaintext fields baked in until
+it naturally expires (worst case 15 minutes post-deploy). If that's not
+acceptable, run once against prod Redis: `redis-cli --scan --pattern
+"orders:list:*" | xargs redis-cli del`.

@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
@@ -14,24 +15,19 @@ import (
 // has hit its plan's cap for a resource. Controllers map it to a 403 response.
 var ErrPlanLimitReached = errors.New("plan limit reached")
 
-// unsubscribedPlan caps a shop with no ShopSubscription row (pre-billing shops,
-// or a cancelled subscription) at the Basic tier's limits.
-var unsubscribedPlan = models.Plan{
-	MaxShops: 1, MaxProducts: 30, MaxOrders: 500, MaxLandingPages: 3,
-	MaxUsers: 2, MaxFacebookPixels: 1, MaxTikTokPixels: 1,
-	CreditsPerMonth: 0,
-}
-
 // expiredPlan locks a shop out entirely once its trial or paid period has
-// lapsed (ExpiresAt in the past) — every cap is 0 until they renew via an
-// approved invoice, which resets StartedAt/ExpiresAt.
+// lapsed (ExpiresAt in the past), or once it has no ShopSubscription row at
+// all (there is no more merchant-facing way to end up with no row — see
+// migration 00048 — so ErrRecordNotFound is treated the same as expired
+// rather than given its own generous free tier). Every cap is 0 until the
+// shop renews via an approved invoice, which resets StartedAt/ExpiresAt.
 var expiredPlan = models.Plan{}
 
 func shopSubscription(shopID uuid.UUID) (models.ShopSubscription, error) {
 	var sub models.ShopSubscription
 	err := initializers.DB.Preload("Plan").Where("shop_id = ?", shopID).First(&sub).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return models.ShopSubscription{Plan: unsubscribedPlan}, nil
+		return models.ShopSubscription{Plan: expiredPlan}, nil
 	}
 	if err != nil {
 		return sub, err
@@ -264,4 +260,22 @@ func CheckShopLimit(ownerID uuid.UUID) error {
 	}
 
 	return checkCap(maxAllowed, int64(len(shopIDs)))
+}
+
+// HasOrderCapacity is CheckOrderLimit for display paths only (storefront /
+// landing page "acceptingOrders" flag), cached 60s in Redis so every ad
+// visit doesn't run a COUNT over orders. Order creation must keep calling
+// CheckOrderLimit directly — this can be up to 60s stale.
+func HasOrderCapacity(shopID uuid.UUID) bool {
+	key := fmt.Sprintf("shop:order_capacity:%s", shopID)
+	if cached, err := initializers.RClient.Get(initializers.Ctx, key).Result(); err == nil {
+		return cached == "1"
+	}
+	ok := CheckOrderLimit(shopID) == nil
+	val := "0"
+	if ok {
+		val = "1"
+	}
+	_ = initializers.RClient.Set(initializers.Ctx, key, val, 60*time.Second).Err()
+	return ok
 }

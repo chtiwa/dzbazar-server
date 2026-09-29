@@ -42,7 +42,10 @@ type UpdateShopInput struct {
 	FacebookURL  *string `form:"facebookUrl"`
 	InstagramURL *string `form:"instagramUrl"`
 	TiktokURL    *string `form:"tiktokUrl"`
-	IsActive     *bool   `form:"isActive"`
+	// IsActive intentionally not accepted here — it's the same column
+	// super-admin suspension writes (services.UpdateShopStatus); a merchant
+	// accepting it from settings.edit would let a suspended shop
+	// un-suspend itself. See important.todo LAUNCH BLOCKER 6.
 
 	BanIncognitoEnabled  *bool `form:"banIncognitoEnabled"`
 	BanVpnEnabled        *bool `form:"banVpnEnabled"`
@@ -162,14 +165,31 @@ func IndexShopBySlug(c *gin.Context) {
 		return
 	}
 
+	// A suspended shop must 404 like it doesn't exist, not just be filtered
+	// out of the product list — this is the storefront's own entry point.
+	if !shop.IsActive {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Shop not found",
+		})
+		return
+	}
+
+	// LAUNCH BLOCKER 12: tells the client whether the checkout form should
+	// even render — shop.IsActive is already known true above (the 404
+	// branch caught the false case); the only other reason a shop can't take
+	// orders right now is its own plan's order cap.
+	acceptingOrders := services.HasOrderCapacity(shop.ID)
+
 	response := dto.PublicShopResponse{
-		ID:           shop.ID.String(),
-		Slug:         shop.Slug,
-		Name:         shop.Name,
-		Description:  shop.Description,
-		FacebookURL:  shop.FacebookURL,
-		InstagramURL: shop.InstagramURL,
-		TiktokURL:    shop.TiktokURL,
+		ID:              shop.ID.String(),
+		Slug:            shop.Slug,
+		Name:            shop.Name,
+		Description:     shop.Description,
+		FacebookURL:     shop.FacebookURL,
+		InstagramURL:    shop.InstagramURL,
+		TiktokURL:       shop.TiktokURL,
+		AcceptingOrders: acceptingOrders,
 	}
 	if shop.LogoImage != nil {
 		response.LogoImage = &dto.ProductImageResponse{ID: shop.LogoImage.ID.String(), URL: shop.LogoImage.URL}
@@ -572,10 +592,6 @@ func UpdateShop(c *gin.Context) {
 			}
 		}
 		updateData[f.column] = trimmed
-	}
-
-	if input.IsActive != nil {
-		updateData["is_active"] = *input.IsActive
 	}
 
 	if input.BanIncognitoEnabled != nil {

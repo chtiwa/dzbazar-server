@@ -364,9 +364,17 @@ func CreateOrderByShopID(c *gin.Context) {
 		return
 	}
 
-	parsedShopID, err := uuid.Parse(body.ShopID)
+	// The shop is always the path segment — never body.ShopID. Without this,
+	// staff of shop A could POST {"shopId":"B",...} to /shops/A/orders and
+	// inject an order into shop B (wrong fraud screening, wrong quota, fires
+	// B's CAPI Purchase event). See important.todo LAUNCH BLOCKER 5.
+	parsedShopID, err := uuid.Parse(c.Param("shopId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid Shop ID payload format"})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid Shop ID format"})
+		return
+	}
+	if body.ShopID != "" && body.ShopID != parsedShopID.String() {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Shop ID mismatch"})
 		return
 	}
 
@@ -377,6 +385,19 @@ func CreateOrderByShopID(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "Order received successfully",
+		})
+		return
+	}
+
+	// A suspended shop's storefront/landing pages must stop accepting orders
+	// too, not just stop rendering — a customer who already has the checkout
+	// page open (or hits this endpoint directly) could otherwise still order
+	// from a suspended shop. See important.todo LAUNCH BLOCKER 6.
+	if active, err := services.IsShopActive(parsedShopID); err != nil || !active {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "This store is not currently accepting orders.",
+			"code":    "SHOP_UNAVAILABLE",
 		})
 		return
 	}
@@ -612,7 +633,12 @@ func CreateOrderByShopID(c *gin.Context) {
 			// DecrementOrderItemsStock), where a merchant reviews before
 			// committing. This just stops an obviously-oversold cart at
 			// order time instead of silently accepting it.
-			if int(item.Quantity) > combo.Quantity {
+			//
+			// LAUNCH BLOCKER 13, OWNER DECIDED 2026-09-28: skipped entirely
+			// for a product that doesn't track stock — Variant.Quantity
+			// defaults to 0 and most dropshippers never set it, so enforcing
+			// this unconditionally would reject every order from those shops.
+			if combo.Product.TrackStock && int(item.Quantity) > combo.Quantity {
 				return fmt.Errorf("%w: %s", errInsufficientStock, combo.ID)
 			}
 
@@ -768,7 +794,11 @@ func CreateOrderByShopID(c *gin.Context) {
 
 	if err != nil {
 		if errors.Is(err, errInsufficientStock) {
-			RespondError(c, http.StatusConflict, "One or more items no longer have enough stock available", err)
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"message": "One or more items no longer have enough stock available",
+				"code":    "INSUFFICIENT_STOCK",
+			})
 			return
 		}
 		RespondError(c, http.StatusInternalServerError, "Failed saving records inside database transactions securely", err)
@@ -926,7 +956,7 @@ func UpdateOrderByShopID(c *gin.Context) {
 		var order models.Order
 		if err := tx.
 			Preload("Client").
-			Preload("Items").
+			Preload("Items.Product"). // DecrementOrderItemsStock reads Product.TrackStock
 			First(&order, "id = ? AND shop_id = ?", orderID, shopID).Error; err != nil {
 			return err
 		}
@@ -1514,7 +1544,7 @@ func UnshipOrder(c *gin.Context) {
 
 	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
 		var order models.Order
-		if err := tx.Preload("Items").
+		if err := tx.Preload("Items.Product").
 			Where("id = ? AND shop_id = ?", orderID, shopID).
 			First(&order).Error; err != nil {
 			return err

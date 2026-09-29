@@ -44,6 +44,7 @@ type ProductResponse struct {
 	Description  string                 `json:"description"`
 	Price        float64                `json:"price"`
 	OldPrice     float64                `json:"oldPrice"`
+	TrackStock   bool                   `json:"trackStock"`
 	Images       []ProductImageResponse `json:"images"`
 	Variants     []VariantResponse      `json:"variants"`
 	Tags         []string               `json:"tags"`
@@ -91,11 +92,18 @@ type CombinationResponse struct {
 // page — deliberately drops Owner, fraud toggles (Ban*Enabled), SuspendReason,
 // OwnerID, Phone, Email, Address: none of that belongs on an unauthenticated
 // public page.
+//
+// AcceptingOrders (LAUNCH BLOCKER 12) must always be computed fresh at
+// response time, never baked into the 10-minute landing-page cache blob —
+// see IndexLandingPage in landingPagesController.go, which recomputes it on
+// both the cache-hit and cache-miss paths the same way it already
+// re-checks IsShopActive there.
 type PublicLandingPageShop struct {
-	ID        string                `json:"id"`
-	Slug      string                `json:"slug"`
-	Name      string                `json:"name"`
-	LogoImage *ProductImageResponse `json:"logoImage,omitempty"`
+	ID              string                `json:"id"`
+	Slug            string                `json:"slug"`
+	Name            string                `json:"name"`
+	LogoImage       *ProductImageResponse `json:"logoImage,omitempty"`
+	AcceptingOrders bool                  `json:"acceptingOrders"`
 }
 
 // PublicLandingPageVariantItem/Variant mirror models.VariantItem/Variant
@@ -134,6 +142,7 @@ type PublicLandingPageProduct struct {
 	Description  string                         `json:"description"`
 	Price        float64                        `json:"price"`
 	OldPrice     *float64                       `json:"oldPrice"`
+	TrackStock   bool                           `json:"trackStock"`
 	Images       []ProductImageResponse         `json:"images"`
 	Variants     []PublicLandingPageVariant     `json:"variants"`
 	Combinations []PublicLandingPageCombination `json:"combinations"`
@@ -146,15 +155,19 @@ type PublicLandingPageProduct struct {
 // public page. FacebookURL/InstagramURL/TiktokURL are kept: they're public
 // social links actively rendered by client/src/components/Footer.tsx off
 // this same response.
+// AcceptingOrders (LAUNCH BLOCKER 12) is shop.IsActive && CheckOrderLimit==nil,
+// computed fresh on every request — IndexShopBySlug isn't cached, so no
+// staleness concern here (contrast PublicLandingPageShop, which is).
 type PublicShopResponse struct {
-	ID           string                `json:"id"`
-	Slug         string                `json:"slug"`
-	Name         string                `json:"name"`
-	Description  string                `json:"description"`
-	LogoImage    *ProductImageResponse `json:"logoImage,omitempty"`
-	FacebookURL  string                `json:"facebookUrl,omitempty"`
-	InstagramURL string                `json:"instagramUrl,omitempty"`
-	TiktokURL    string                `json:"tiktokUrl,omitempty"`
+	ID              string                `json:"id"`
+	Slug            string                `json:"slug"`
+	Name            string                `json:"name"`
+	Description     string                `json:"description"`
+	LogoImage       *ProductImageResponse `json:"logoImage,omitempty"`
+	FacebookURL     string                `json:"facebookUrl,omitempty"`
+	InstagramURL    string                `json:"instagramUrl,omitempty"`
+	TiktokURL       string                `json:"tiktokUrl,omitempty"`
+	AcceptingOrders bool                  `json:"acceptingOrders"`
 }
 
 // PublicLandingPageResponse is the DTO for the public, unauthenticated

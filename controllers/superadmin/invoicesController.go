@@ -80,8 +80,23 @@ func ListInvoices(c *gin.Context) {
 
 // ApproveInvoice applies the invoice's plan to the shop's subscription —
 // same upsert-by-shop-id logic as ApprovePlanSwitchRequest — then marks the
-// invoice approved. A fresh 30-day period starts now, same rule paid plan
-// switches already use.
+// invoice approved.
+//
+// Blocker 8 fix: a same-plan renewal now extends the period from
+// max(now, sub.ExpiresAt) + 30d instead of always resetting to now+30d,
+// which used to discard any days the merchant had already paid for and not
+// used yet. An upgrade (different, pricier plan) keeps the existing
+// ExpiresAt — the merchant already paid full price up to that date via
+// CreateInvoice's same-plan/expired-sub full-price billing, so the upgrade
+// only buys the higher tier's caps, not extra time. A brand new
+// subscription (no row yet) still gets a fresh 30-day period from now.
+//
+// The pending -> approved transition is now a conditional
+// `UPDATE ... WHERE status = 'pending'` run inside the same transaction as
+// the subscription write, so a double-click (two concurrent approvals of
+// the same invoice) can't both succeed: the second UPDATE affects 0 rows
+// and the whole transaction is aborted with 409 before either one touches
+// the subscription.
 func ApproveInvoice(c *gin.Context) {
 	invoiceID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -110,10 +125,25 @@ func ApproveInvoice(c *gin.Context) {
 		return
 	}
 
-	start := time.Now()
-	expires := start.AddDate(0, 0, 30)
+	now := time.Now()
+	alreadyReviewed := false
 
 	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&models.Invoice{}).
+			Where("id = ? AND status = 'pending'", invoiceID).
+			Updates(map[string]any{
+				"status":      "approved",
+				"reviewed_by": actorUser.ID,
+				"reviewed_at": now,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			alreadyReviewed = true
+			return nil
+		}
+
 		var sub models.ShopSubscription
 		existing := tx.Where("shop_id = ?", invoice.ShopID).First(&sub)
 		if existing.Error != nil && existing.Error != gorm.ErrRecordNotFound {
@@ -121,24 +151,17 @@ func ApproveInvoice(c *gin.Context) {
 		}
 
 		if existing.Error == gorm.ErrRecordNotFound {
-			sub = models.ShopSubscription{ShopID: invoice.ShopID, PlanID: invoice.PlanID, StartedAt: start, ExpiresAt: &expires}
-			if err := tx.Create(&sub).Error; err != nil {
-				return err
-			}
-		} else if err := tx.Model(&sub).Updates(map[string]any{
-			"plan_id":                 invoice.PlanID,
-			"started_at":              start,
-			"expires_at":              expires,
-			"expiry_reminder_sent_at": nil,
-		}).Error; err != nil {
-			return err
+			expires := now.AddDate(0, 0, 30)
+			sub = models.ShopSubscription{ShopID: invoice.ShopID, PlanID: invoice.PlanID, StartedAt: now, ExpiresAt: &expires}
+			return tx.Create(&sub).Error
 		}
 
-		now := time.Now()
-		return tx.Model(&invoice).Updates(map[string]any{
-			"status":      "approved",
-			"reviewed_by": actorUser.ID,
-			"reviewed_at": now,
+		expires := renewedExpiry(sub.PlanID, invoice.PlanID, sub.ExpiresAt, now)
+		return tx.Model(&sub).Updates(map[string]any{
+			"plan_id":                 invoice.PlanID,
+			"started_at":              now,
+			"expires_at":              expires,
+			"expiry_reminder_sent_at": nil,
 		}).Error
 	})
 
@@ -146,11 +169,39 @@ func ApproveInvoice(c *gin.Context) {
 		RespondError(c, http.StatusInternalServerError, "Failed to approve invoice", err)
 		return
 	}
+	if alreadyReviewed {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Invoice already reviewed"})
+		return
+	}
 
 	utils.LogAudit(c, "invoice.approve", "Invoice", &invoice.ID, gin.H{"shopId": invoice.ShopID, "planId": invoice.PlanID})
 
 	initializers.DB.Preload("Plan").First(&invoice, "id = ?", invoiceID)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Invoice approved", "data": invoice})
+}
+
+// renewedExpiry is the pure piece of blocker 8's ApproveInvoice fix: a
+// same-plan renewal extends from whichever is later, now or the current
+// ExpiresAt, so a merchant who renews early keeps the days they already
+// paid for instead of losing them to a flat now+30d reset. An upgrade to a
+// different plan keeps the existing ExpiresAt untouched — see ApproveInvoice
+// doc comment for why. currentExpiresAt == nil (no-expiry subscription,
+// shouldn't happen for a paid plan in practice) is treated as "not later
+// than now" so a renewal still produces a normal 30-day period rather than
+// staying permanently nil.
+func renewedExpiry(currentPlanID, targetPlanID uuid.UUID, currentExpiresAt *time.Time, now time.Time) time.Time {
+	if targetPlanID != currentPlanID {
+		if currentExpiresAt != nil {
+			return *currentExpiresAt
+		}
+		return now.AddDate(0, 0, 30)
+	}
+
+	base := now
+	if currentExpiresAt != nil && currentExpiresAt.After(now) {
+		base = *currentExpiresAt
+	}
+	return base.AddDate(0, 0, 30)
 }
 
 // RejectInvoice (denied) leaves the shop's current subscription untouched.

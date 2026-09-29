@@ -394,6 +394,9 @@ func CreateProductByShop(c *gin.Context) {
 	price := strings.TrimSpace(c.PostForm("price"))
 	oldPrice := strings.TrimSpace(c.PostForm("oldPrice"))
 	description := strings.TrimSpace(c.PostForm("description"))
+	// Defaults false when the field is absent/unparsable — matches the
+	// migration 00049 column default. See LAUNCH BLOCKER 13.
+	trackStock, _ := strconv.ParseBool(c.PostForm("trackStock"))
 
 	if title == "" || price == "" || description == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "missing required fields"})
@@ -452,6 +455,7 @@ func CreateProductByShop(c *gin.Context) {
 		Description: description,
 		Price:       parsedPrice,
 		OldPrice:    parsedOldPrice,
+		TrackStock:  trackStock,
 	}
 
 	if err := tx.Create(&product).Error; err != nil {
@@ -951,7 +955,10 @@ func GetActiveProductsBySlug(c *gin.Context) {
 		Where("products.shop_id = ?", shop.ID).
 		Where("products.active = ?", true).
 		Where("products.hidden_by_platform_at IS NULL").
-		Preload("Images")
+		Preload("Images").
+		// Needed so the storefront grid can show a sold-out overlay
+		// (LAUNCH BLOCKER 13) without a second request per product.
+		Preload("Combinations", "retired = ?", false)
 
 	if hasMinPrice {
 		db = db.Where("products.price >= ?", minPrice)
@@ -1068,7 +1075,15 @@ func IndexProductBySlug(c *gin.Context) {
 	slug := c.Param("slug")
 
 	var shop models.Shop
-	if err := initializers.DB.Select("id").Where("slug = ?", slug).First(&shop).Error; err != nil {
+	if err := initializers.DB.Select("id", "is_active").Where("slug = ?", slug).First(&shop).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "shop not found"})
+		return
+	}
+
+	// A suspended shop's product pages must 404, checked before the cache
+	// read so a stale cached response never bypasses this. See
+	// important.todo LAUNCH BLOCKER 6.
+	if !shop.IsActive {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "shop not found"})
 		return
 	}
@@ -1131,6 +1146,7 @@ func toProductResponse(product models.Product) dto.ProductResponse {
 		Title:        product.Title,
 		Description:  product.Description,
 		Price:        product.Price,
+		TrackStock:   product.TrackStock,
 		Images:       []dto.ProductImageResponse{},
 		Variants:     []dto.VariantResponse{},
 		Combinations: []dto.CombinationResponse{},
@@ -1258,6 +1274,7 @@ func UpdateProductByShop(c *gin.Context) {
 		Price        *float64           `json:"price"`
 		OldPrice     *float64           `json:"oldPrice"`
 		Active       *bool              `json:"active"`
+		TrackStock   *bool              `json:"trackStock"`
 		Variants     []VariantInput     `json:"variants"`
 		Combinations []CombinationInput `json:"combinations"`
 	}
@@ -1302,6 +1319,14 @@ func UpdateProductByShop(c *gin.Context) {
 				return
 			}
 			body.Active = &parsed
+		}
+		if trackStock := c.PostForm("trackStock"); trackStock != "" {
+			parsed, err := strconv.ParseBool(trackStock)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid trackStock flag"})
+				return
+			}
+			body.TrackStock = &parsed
 		}
 		if variantsJSON := c.PostForm("variants"); variantsJSON != "" {
 			if err := json.Unmarshal([]byte(variantsJSON), &body.Variants); err != nil {
@@ -1378,6 +1403,10 @@ func UpdateProductByShop(c *gin.Context) {
 
 	if body.Active != nil {
 		updates["active"] = *body.Active
+	}
+
+	if body.TrackStock != nil {
+		updates["track_stock"] = *body.TrackStock
 	}
 
 	if len(body.Variants) > 3 {

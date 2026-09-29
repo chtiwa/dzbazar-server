@@ -25,3 +25,25 @@ func TestCheckCap(t *testing.T) {
 		})
 	}
 }
+
+// TestExpiredPlanBlocksEverything guards blocker 7: shopSubscription() falls
+// back to expiredPlan (not the old, generous unsubscribedPlan) whenever a
+// shop has no shop_subscriptions row or a lapsed one. Every zero-valued cap
+// must actually block via checkCap, or a shop with no row/an expired row
+// would get free access again.
+func TestExpiredPlanBlocksEverything(t *testing.T) {
+	caps := map[string]int{
+		"MaxProducts":       expiredPlan.MaxProducts,
+		"MaxOrders":         expiredPlan.MaxOrders,
+		"MaxLandingPages":   expiredPlan.MaxLandingPages,
+		"MaxUsers":          expiredPlan.MaxUsers,
+		"MaxFacebookPixels": expiredPlan.MaxFacebookPixels,
+		"MaxTikTokPixels":   expiredPlan.MaxTikTokPixels,
+		"CreditsPerMonth":   expiredPlan.CreditsPerMonth,
+	}
+	for name, max := range caps {
+		if err := checkCap(max, 0); err == nil {
+			t.Errorf("expiredPlan.%s = %d, checkCap(%d, 0) = nil, want ErrPlanLimitReached", name, max, max)
+		}
+	}
+}

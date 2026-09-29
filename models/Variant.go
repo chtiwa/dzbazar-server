@@ -23,6 +23,10 @@ type VariantItem struct {
 type ProductVariantCombination struct {
 	BaseModel
 	ProductID uuid.UUID `gorm:"not null;index" json:"productId"`
+	// Product is only used server-side (e.g. to read Product.TrackStock for
+	// the order-time stock check) — never serialized, since every caller that
+	// sends this model to a client already projects through a DTO instead.
+	Product Product `gorm:"foreignKey:ProductID;references:ID" json:"-"`
 	// ShopID is denormalized from Product.ShopID so SKU uniqueness can be
 	// enforced per-shop at the DB level (uniqueIndex below is composite,
 	// not on SKU alone) — two shops may reuse the same SKU, one shop may not.

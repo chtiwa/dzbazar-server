@@ -51,6 +51,7 @@ type CreateProductInput struct {
 	Description string         `json:"description"`
 	Price       float64        `json:"price"`
 	CategoryID  string         `json:"categoryId"`
+	TrackStock  bool           `json:"trackStock"`
 	Variants    []VariantInput `json:"variants"`
 	Tags        []string       `json:"tags"`
 }

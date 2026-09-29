@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -55,9 +58,68 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
+// configureTrustedClientIP makes c.ClientIP() resolve to the real caller
+// instead of an attacker-controlled header. gin.New()'s defaults trust every
+// proxy (0.0.0.0/0), so a client can set X-Forwarded-For itself and forge
+// any IP — this breaks every IP-keyed rate limit, fraud check and CAPI
+// client-IP field (see important.todo LAUNCH BLOCKER 4).
+//
+//   - TRUSTED_PROXIES set (comma-separated CIDRs): SetTrustedProxies to that
+//     list, so ClientIP() walks X-Forwarded-For from the right-most trusted
+//     hop backwards to the first untrusted (real client) hop.
+//   - TRUSTED_PROXIES unset in production: SetTrustedProxies(nil) (trust no
+//     proxy hop) and set TrustedPlatform to the header Railway's own edge
+//     sets with the real client IP (CLIENT_IP_HEADER, default "X-Real-IP")
+//     — Railway's edge is the only hop that can reach this process directly,
+//     so a client-supplied header can't reach it under that name.
+//   - dev (APP_ENV != production) with no TRUSTED_PROXIES: leave Gin's
+//     default alone so local requests keep working unchanged.
+//
+// Verify on Railway after deploy: temporarily log c.ClientIP() next to
+// c.Request.Header for a few live requests and confirm ClientIP() matches
+// the real caller, not something the request itself could set.
+func configureTrustedClientIP(router *gin.Engine) {
+	isProduction := os.Getenv("APP_ENV") == "production"
+	trustedProxies := os.Getenv("TRUSTED_PROXIES")
+
+	if trustedProxies != "" {
+		cidrs := strings.Split(trustedProxies, ",")
+		for i := range cidrs {
+			cidrs[i] = strings.TrimSpace(cidrs[i])
+		}
+		if err := router.SetTrustedProxies(cidrs); err != nil {
+			log.Fatalf("invalid TRUSTED_PROXIES: %v", err)
+		}
+		return
+	}
+
+	if isProduction {
+		if err := router.SetTrustedProxies(nil); err != nil {
+			log.Fatalf("failed to clear trusted proxies: %v", err)
+		}
+		header := envOr("CLIENT_IP_HEADER", "X-Real-IP")
+		router.TrustedPlatform = header
+		// If the edge doesn't actually send this header, ClientIP() silently
+		// falls back to the proxy's IP and EVERY customer shares one rate-limit
+		// bucket (orders get dropped platform-wide). Shout once so it's caught
+		// on the first request after deploy, not as lost orders.
+		var warnOnce sync.Once
+		router.Use(func(c *gin.Context) {
+			if c.GetHeader(header) == "" {
+				warnOnce.Do(func() {
+					log.Printf("WARNING: CLIENT_IP_HEADER %q missing on incoming request — all clients will share the proxy IP for rate limits. Fix CLIENT_IP_HEADER/TRUSTED_PROXIES.", header)
+				})
+			}
+			c.Next()
+		})
+	}
+}
+
 func main() {
 	router := gin.New()
 	router.Use(gin.Recovery(), middleware.RequestID(), middleware.RequestLogger())
+
+	configureTrustedClientIP(router)
 
 	router.Use(middleware.CORSMiddleware())
 
@@ -100,19 +162,22 @@ func main() {
 	// Order side-effects (email/pixel/broadcast) run on a bounded worker
 	// pool — must start before any order can be created.
 	controllers.StartOrderEventWorkers(4)
-	go controllers.StartMetaPurchaseRetrySweep()
-	go controllers.StartSheetsExportRetrySweep()
+	go supervise("meta-purchase-sweep", controllers.StartMetaPurchaseRetrySweep)
+	go supervise("sheets-export-sweep", controllers.StartSheetsExportRetrySweep)
 
-	go realtime.StartHub()
-	go realtime.StartSubscriber()
-	go controllers.StartOsenStatusSync()
-	go controllers.StartZrStatusSync()
-	go controllers.StartAndersonStatusSync()
-	go controllers.StartSubscriptionExpiryReminders()
+	go supervise("ws-hub", realtime.StartHub)
+	go supervise("ws-subscriber", realtime.StartSubscriber)
+	go supervise("osen-sync", controllers.StartOsenStatusSync)
+	go supervise("zr-sync", controllers.StartZrStatusSync)
+	go supervise("anderson-sync", controllers.StartAndersonStatusSync)
+	go supervise("subscription-reminders", controllers.StartSubscriptionExpiryReminders)
 
 	srv := &http.Server{
 		Addr:    ":" + envOr("PORT", "8080"),
 		Handler: router,
+		// Slowloris guard. No WriteTimeout on purpose: WS + AI-generation
+		// handlers legitimately hold the response open for a long time.
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	go func() {
@@ -141,4 +206,23 @@ func main() {
 
 	controllers.DrainOrderEvents(10 * time.Second)
 	fmt.Println("Shutdown complete.")
+}
+
+// supervise runs a long-lived background loop and restarts it if it panics
+// or returns. gin.Recovery only covers HTTP handlers — an unrecovered panic in
+// a bare goroutine (e.g. a carrier sync choking on a malformed API response)
+// kills the whole process, taking every shop's storefront down with it.
+func supervise(name string, fn func()) {
+	for {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("background %s panicked: %v\n%s", name, r, debug.Stack())
+				}
+			}()
+			fn()
+		}()
+		log.Printf("background %s exited, restarting in 5s", name)
+		time.Sleep(5 * time.Second)
+	}
 }

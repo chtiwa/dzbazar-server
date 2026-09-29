@@ -18,7 +18,7 @@ type User struct {
 	LastName    string `gorm:"not null" json:"lastName"`
 	PhoneNumber string `gorm:"not null" json:"phoneNumber"`
 	Email       string `gorm:"unique;not null" json:"email"`
-	Password    string `json:"password"`
+	Password    string `json:"-"`
 	Role        string `gorm:"default:'moderator'" json:"role"`
 	IsVerified  bool   `gorm:"default:false" json:"isVerified"`
 	IsSuspended bool   `gorm:"default:false" json:"isSuspended"`
@@ -28,8 +28,8 @@ type User struct {
 	// Values: "" (regular user), "support", "super_admin".
 	PlatformRole string `gorm:"default:''" json:"platformRole"`
 
-	EmailOTP          string     `json:"emailOtp"`
-	EmailOTPExpiresAt *time.Time `json:"emailOtpExpiresAt"`
+	EmailOTP          string     `json:"-"`
+	EmailOTPExpiresAt *time.Time `json:"-"`
 
 	// Relationships
 	Memberships []ShopMember `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"memberships,omitempty"`
