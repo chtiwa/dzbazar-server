@@ -198,6 +198,8 @@ type OrderResponse struct {
 
 	ClientID uuid.UUID     `json:"clientId"`
 	Client   models.Client `json:"client"`
+	// Platform-wide delivery record of the client's phone; nil = no finished orders.
+	ReturnMeter *ClientTrackRecord `json:"returnMeter,omitempty"`
 
 	ShippingMethod string  `json:"shippingMethod"`
 	ShippingPrice  float64 `json:"shippingPrice"`
@@ -354,4 +356,11 @@ func ToClientResponses(clients []models.Client) []ClientResponse {
 		out = append(out, ToClientResponse(cl))
 	}
 	return out
+}
+
+// ClientTrackRecord is a phone's delivery outcomes across ALL shops —
+// aggregate counts only, never another shop's ids/names/orders.
+type ClientTrackRecord struct {
+	Delivered int64 `json:"delivered"`
+	Returned  int64 `json:"returned"`
 }

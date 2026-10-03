@@ -306,10 +306,28 @@ func GetOrdersByShopID(c *gin.Context) {
 	pagination := utils.GetPaginationData(page, totalPages, "/orders")
 	pagination.TotalRows = totalRows
 
+	resp := dto.ToOrderResponses(orders)
+	phones := make([]string, 0, len(orders))
+	for _, o := range orders {
+		phones = append(phones, o.Client.PhoneNumber)
+	}
+	// Meter is advisory: on error, log and serve the list without it.
+	// Attached before the default-view cache write, so cached bodies carry it
+	// (it can lag up to ordersListCacheTTL).
+	if records, err := services.TrackRecordsByPhones(phones); err != nil {
+		fmt.Println("GetOrdersByShopID: track records:", err)
+	} else {
+		for i := range resp {
+			if r, ok := records[resp[i].Client.PhoneNumber]; ok {
+				resp[i].ReturnMeter = &r
+			}
+		}
+	}
+
 	body, err := json.Marshal(gin.H{
 		"success":    true,
 		"message":    "Orders were retrieved successfully",
-		"data":       dto.ToOrderResponses(orders),
+		"data":       resp,
 		"pagination": pagination,
 	})
 	if err != nil {
