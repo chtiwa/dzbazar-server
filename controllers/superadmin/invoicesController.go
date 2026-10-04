@@ -145,7 +145,7 @@ func ApproveInvoice(c *gin.Context) {
 		}
 
 		var sub models.ShopSubscription
-		existing := tx.Where("shop_id = ?", invoice.ShopID).First(&sub)
+		existing := tx.Preload("Plan").Where("shop_id = ?", invoice.ShopID).First(&sub)
 		if existing.Error != nil && existing.Error != gorm.ErrRecordNotFound {
 			return existing.Error
 		}
@@ -156,8 +156,8 @@ func ApproveInvoice(c *gin.Context) {
 			return tx.Create(&sub).Error
 		}
 
-		expires := renewedExpiry(sub.PlanID, invoice.PlanID, sub.ExpiresAt, now)
-		return tx.Model(&sub).Updates(map[string]any{
+		expires := renewedExpiry(sub.PlanID, invoice.PlanID, sub.Plan.Price, sub.ExpiresAt, now)
+		return tx.Model(&models.ShopSubscription{}).Where("id = ?", sub.ID).Updates(map[string]any{
 			"plan_id":                 invoice.PlanID,
 			"started_at":              now,
 			"expires_at":              expires,
@@ -183,22 +183,18 @@ func ApproveInvoice(c *gin.Context) {
 // renewedExpiry is the pure piece of blocker 8's ApproveInvoice fix: a
 // same-plan renewal extends from whichever is later, now or the current
 // ExpiresAt, so a merchant who renews early keeps the days they already
-// paid for instead of losing them to a flat now+30d reset. An upgrade to a
-// different plan keeps the existing ExpiresAt untouched — see ApproveInvoice
-// doc comment for why. currentExpiresAt == nil (no-expiry subscription,
-// shouldn't happen for a paid plan in practice) is treated as "not later
-// than now" so a renewal still produces a normal 30-day period rather than
-// staying permanently nil.
-func renewedExpiry(currentPlanID, targetPlanID uuid.UUID, currentExpiresAt *time.Time, now time.Time) time.Time {
-	if targetPlanID != currentPlanID {
-		if currentExpiresAt != nil {
-			return *currentExpiresAt
-		}
-		return now.AddDate(0, 0, 30)
+// paid for instead of losing them to a flat now+30d reset. A prorated upgrade
+// (different plan, current plan paid and still active) keeps the existing
+// ExpiresAt untouched — mirrors billedPlanAmount's prorated branch. A free
+// (Trial) or expired current plan was billed full price, so it gets a fresh
+// now+30d. currentExpiresAt == nil is treated as "not later than now".
+func renewedExpiry(currentPlanID, targetPlanID uuid.UUID, currentPlanPrice float64, currentExpiresAt *time.Time, now time.Time) time.Time {
+	if targetPlanID != currentPlanID && currentPlanPrice > 0 && currentExpiresAt != nil && currentExpiresAt.After(now) {
+		return *currentExpiresAt
 	}
 
 	base := now
-	if currentExpiresAt != nil && currentExpiresAt.After(now) {
+	if targetPlanID == currentPlanID && currentExpiresAt != nil && currentExpiresAt.After(now) {
 		base = *currentExpiresAt
 	}
 	return base.AddDate(0, 0, 30)

@@ -28,7 +28,7 @@ import (
 // uploadVariantItemImage uploads a variant item's image file to B2, mirroring the
 // inline upload block used for product images (see CreateProductByShop/UpdateProductImagesByShop).
 func uploadVariantItemImage(file *multipart.FileHeader) (string, error) {
-	src, err := file.Open()
+	src, contentType, err := openImageUpload(file, maxImageUploadBytes)
 	if err != nil {
 		return "", err
 	}
@@ -41,7 +41,7 @@ func uploadVariantItemImage(file *multipart.FileHeader) (string, error) {
 		Bucket:      aws.String(bucketName),
 		Key:         aws.String(key),
 		Body:        src,
-		ContentType: aws.String(file.Header.Get("Content-Type")),
+		ContentType: aws.String(contentType),
 	})
 	if err != nil {
 		return "", err
@@ -481,8 +481,11 @@ func CreateProductByShop(c *gin.Context) {
 
 	var productImages []models.ProductImage
 	for _, file := range files {
-		src, err := file.Open()
+		src, contentType, err := openImageUpload(file, maxImageUploadBytes)
 		if err != nil {
+			if respondIfInvalidImage(c, err) {
+				return
+			}
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "failed to open file"})
 			return
 		}
@@ -494,7 +497,7 @@ func CreateProductByShop(c *gin.Context) {
 			Bucket:      aws.String(bucketName),
 			Key:         aws.String(key),
 			Body:        src,
-			ContentType: aws.String(file.Header.Get("Content-Type")),
+			ContentType: aws.String(contentType),
 		})
 		src.Close()
 
@@ -558,6 +561,9 @@ func CreateProductByShop(c *gin.Context) {
 				if imgFiles := form.File[imgKey]; len(imgFiles) > 0 {
 					url, err := uploadVariantItemImage(imgFiles[0])
 					if err != nil {
+						if respondIfInvalidImage(c, err) {
+							return
+						}
 						c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to upload variant image"})
 						return
 					}
@@ -1589,6 +1595,9 @@ func UpdateProductByShop(c *gin.Context) {
 						url, err := uploadVariantItemImage(imgFiles[0])
 						if err != nil {
 							tx.Rollback()
+							if respondIfInvalidImage(c, err) {
+								return
+							}
 							c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to upload variant image"})
 							return
 						}
@@ -1916,9 +1925,12 @@ func UpdateProductImagesByShop(c *gin.Context) {
 	region := os.Getenv("B2_REGION")
 
 	for _, file := range files {
-		src, err := file.Open()
+		src, contentType, err := openImageUpload(file, maxImageUploadBytes)
 		if err != nil {
 			tx.Rollback()
+			if respondIfInvalidImage(c, err) {
+				return
+			}
 			RespondError(c, http.StatusBadRequest, "Failed to open uploaded file", err)
 			return
 		}
@@ -1929,7 +1941,7 @@ func UpdateProductImagesByShop(c *gin.Context) {
 			Bucket:      aws.String(bucketName),
 			Key:         aws.String(key),
 			Body:        src,
-			ContentType: aws.String(file.Header.Get("Content-Type")),
+			ContentType: aws.String(contentType),
 		})
 		src.Close()
 

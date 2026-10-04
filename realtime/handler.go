@@ -3,6 +3,7 @@ package realtime
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/chtiwa/dzbazar-server/models"
@@ -47,6 +48,11 @@ func WebSocketHandler(c *gin.Context) {
 		return
 	}
 
+	const readWait = 60 * time.Second
+	conn.SetReadDeadline(time.Now().Add(readWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(readWait))
+	})
 	RegisterClient(conn, shopID)
 
 	// Dashboards are receive-only; this loop exists solely to detect

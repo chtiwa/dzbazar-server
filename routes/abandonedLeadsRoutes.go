@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"time"
+
 	"github.com/chtiwa/dzbazar-server/controllers"
 	"github.com/chtiwa/dzbazar-server/middleware"
 	"github.com/gin-gonic/gin"
@@ -9,7 +11,7 @@ import (
 func AbandonedLeadsRoutes(router *gin.Engine) {
 	leads := router.Group("/v1/shops/:shopId/abandoned-leads")
 	{
-		leads.POST("", middleware.OrderIPRateLimit(), controllers.CreateAbandonedLead)
+		leads.POST("", middleware.RateLimitByIP("abandoned-lead", 30, time.Hour), controllers.CreateAbandonedLead)
 		leads.GET("", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), controllers.GetAbandonedLeadsByShopID)
 		leads.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess("owner"), controllers.DeleteAbandonedLead)
 	}

@@ -512,7 +512,7 @@ func CreateOrderByShopID(c *gin.Context) {
 	// any other fraud signal below, so the merchant can review and unhide it.
 	phoneKey := phoneOrderKey(parsedShopID, body.Client.PhoneNumber)
 	set, redisErr := initializers.RClient.SetNX(initializers.Ctx, phoneKey, 1, phoneOrderWindow).Result()
-	rateLimited := !isStaffOrder && redisErr == nil && !set
+	rateLimited := !isStaffOrder && ((redisErr == nil && !set) || c.GetBool(middleware.CtxIPRateLimited))
 
 	var order models.Order
 	clientUserAgent := c.Request.UserAgent()

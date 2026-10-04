@@ -123,6 +123,14 @@ func main() {
 
 	router.Use(middleware.CORSMiddleware())
 
+	// cap non-multipart bodies (multipart uploads are bounded by their handlers)
+	router.Use(func(c *gin.Context) {
+		if !strings.HasPrefix(c.ContentType(), "multipart/") {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2<<20)
+		}
+		c.Next()
+	})
+
 	// setting a lower memory limit for multipart forms
 	router.MaxMultipartMemory = 20 << 20 //20 MiB
 	// routes

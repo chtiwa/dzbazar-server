@@ -27,7 +27,6 @@ import (
 )
 
 const maxLandingPageImages = 10
-const maxLandingPageImageSize = 10 * 1024 * 1024 // 10 MB
 
 // landingPageCacheKeyByID, landingPagesCacheKeyByShop, invalidateLandingPageCaches
 // live in services (LandingPageCacheKeyByID / LandingPagesCacheKeyByShop /
@@ -60,15 +59,7 @@ func uploadLandingPageFiles(shopID uuid.UUID, files []*multipart.FileHeader) ([]
 	var images []models.LandingPageImage
 
 	for index, file := range files {
-		if !strings.HasPrefix(file.Header.Get("Content-Type"), "image/") {
-			return nil, uploadedKeys, fmt.Errorf("only image files are allowed")
-		}
-
-		if file.Size > maxLandingPageImageSize {
-			return nil, uploadedKeys, fmt.Errorf("image %q exceeds the 10 MB size limit", file.Filename)
-		}
-
-		src, err := file.Open()
+		src, contentType, err := openImageUpload(file, maxImageUploadBytes)
 		if err != nil {
 			return nil, uploadedKeys, err
 		}
@@ -85,7 +76,7 @@ func uploadLandingPageFiles(shopID uuid.UUID, files []*multipart.FileHeader) ([]
 			Key:         aws.String(key),
 			Body:        src,
 			ACL:         types.ObjectCannedACLPublicRead,
-			ContentType: aws.String(file.Header.Get("Content-Type")),
+			ContentType: aws.String(contentType),
 		})
 		src.Close()
 
@@ -216,6 +207,9 @@ func CreateLandingPageByShop(c *gin.Context) {
 	if err != nil {
 		tx.Rollback()
 		cleanupUploadedKeys(uploadedKeys)
+		if respondIfInvalidImage(c, err) {
+			return
+		}
 		RespondError(c, http.StatusInternalServerError, "Failed to upload landing page images", err)
 		return
 	}
@@ -796,6 +790,9 @@ func UpdateLandingPageByShop(c *gin.Context) {
 	if err != nil {
 		tx.Rollback()
 		cleanupUploadedKeys(uploadedKeys)
+		if respondIfInvalidImage(c, err) {
+			return
+		}
 		RespondError(c, http.StatusInternalServerError, "Failed to upload new images", err)
 		return
 	}

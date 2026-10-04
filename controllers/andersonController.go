@@ -270,6 +270,11 @@ func CreateAndersonOrder(c *gin.Context) {
 		return
 	}
 
+	if !utils.TryAcquireTickLock(shipLockKey(order.ID), shipLockTTL) {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Expédition déjà en cours pour cette commande"})
+		return
+	}
+
 	integration, err := findAndersonIntegration(shopID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Anderson n'est pas connecté à cette boutique"})
@@ -349,6 +354,11 @@ func BulkCreateAndersonOrders(c *gin.Context) {
 
 		if order.IsShipped {
 			results = append(results, bulkAndersonShipResult{OrderID: idStr, Success: false, Message: "Déjà expédiée"})
+			continue
+		}
+
+		if !utils.TryAcquireTickLock(shipLockKey(order.ID), shipLockTTL) {
+			results = append(results, bulkAndersonShipResult{OrderID: idStr, Success: false, Message: "Expédition déjà en cours pour cette commande"})
 			continue
 		}
 

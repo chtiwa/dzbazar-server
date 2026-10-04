@@ -21,6 +21,6 @@ func ShopsRoutes(router *gin.Engine) {
 
 	store := router.Group("/v1/store")
 	{
-		store.GET("/:slug", middleware.RateLimitByIP("store-lookup", 60, time.Minute), controllers.IndexShopBySlug)
+		store.GET("/:slug", middleware.RateLimitByIP("store-lookup", 600, time.Minute), controllers.IndexShopBySlug)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/gorilla/websocket"
@@ -18,25 +19,72 @@ type Message struct {
 }
 
 var (
-	clients   = make(map[*websocket.Conn]string) // conn -> shopID it's scoped to
-	clientMu  sync.Mutex
+	clients  = make(map[*websocket.Conn]*client)
+	clientMu sync.Mutex
 	// Buffered so a burst of order events doesn't block senders on StartHub
 	// keeping up; callers still guard the send with a timeout (see
 	// controllers.processOrderEvent) in case the hub is stalled entirely.
 	Broadcast = make(chan Message, 256)
 )
 
+const (
+	writeWait  = 10 * time.Second
+	pingPeriod = 30 * time.Second
+	sendBuffer = 64
+)
+
+// client owns a single writer goroutine (writePump) — the only code that
+// writes to conn. send is closed only by unregisterLocked, and only sent to
+// under clientMu while still in the map, so no send-on-closed race.
+type client struct {
+	shopID string
+	send   chan Message
+}
+
 func RegisterClient(conn *websocket.Conn, shopID string) {
+	c := &client{shopID: shopID, send: make(chan Message, sendBuffer)}
 	clientMu.Lock()
-	defer clientMu.Unlock()
-	clients[conn] = shopID
+	clients[conn] = c
+	clientMu.Unlock()
+	go c.writePump(conn)
 }
 
 func UnregisterClient(conn *websocket.Conn) {
 	clientMu.Lock()
-	defer clientMu.Unlock()
-	delete(clients, conn)
+	unregisterLocked(conn)
+	clientMu.Unlock()
+}
+
+// unregisterLocked is idempotent: close(send) happens once, while in the map.
+func unregisterLocked(conn *websocket.Conn) {
+	if c, ok := clients[conn]; ok {
+		delete(clients, conn)
+		close(c.send)
+	}
 	conn.Close()
+}
+
+func (c *client) writePump(conn *websocket.Conn) {
+	ticker := time.NewTicker(pingPeriod)
+	defer ticker.Stop()
+	defer UnregisterClient(conn)
+	for {
+		select {
+		case msg, ok := <-c.send:
+			if !ok {
+				return
+			}
+			conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := conn.WriteJSON(msg); err != nil {
+				return
+			}
+		case <-ticker.C:
+			conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
 }
 
 // StartHub drains the in-process Broadcast channel and republishes each
@@ -77,13 +125,14 @@ func StartSubscriber() {
 		}
 
 		clientMu.Lock()
-		for conn, shopID := range clients {
-			if shopID != msg.ShopID {
+		for conn, c := range clients {
+			if c.shopID != msg.ShopID {
 				continue
 			}
-			if err := conn.WriteJSON(msg); err != nil {
-				conn.Close()
-				delete(clients, conn)
+			select {
+			case c.send <- msg:
+			default: // slow client: drop it rather than block everyone
+				unregisterLocked(conn)
 			}
 		}
 		clientMu.Unlock()

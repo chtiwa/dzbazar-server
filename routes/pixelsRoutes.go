@@ -12,7 +12,7 @@ func PixelsRoutes(router *gin.Engine) {
 	// Public route for marketplace / storefront usage
 	router.GET(
 		"/v1/shops/:shopId/pixels/active",
-		middleware.RateLimitByIP("pixels-active", 60, time.Minute),
+		middleware.RateLimitByIP("pixels-active", 600, time.Minute),
 		controllers.IndexActivePixelByShop,
 	)
 

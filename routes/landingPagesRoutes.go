@@ -24,6 +24,6 @@ func LandingPagesRoutes(router *gin.Engine) {
 
 	publicLandingPages := adminShop.Group("/landing-pages")
 	{
-		publicLandingPages.GET("/:id", middleware.RateLimitByIP("landing-page-public", 60, time.Minute), controllers.IndexLandingPage)
+		publicLandingPages.GET("/:id", middleware.RateLimitByIP("landing-page-public", 600, time.Minute), controllers.IndexLandingPage)
 	}
 }

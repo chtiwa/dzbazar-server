@@ -2,20 +2,22 @@ package middleware
 
 import (
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/gin-gonic/gin"
 )
 
+// CtxIPRateLimited marks a request over the per-IP cap; the order controller stores it hidden instead of dropping it.
+const CtxIPRateLimited = "ipRateLimited"
+
 const (
 	ipOrderWindow = time.Hour
-	ipOrderMax    = 10
+	ipOrderMax    = 30
 )
 
-// OrderIPRateLimit silently drops order creation requests from IPs that have
-// exceeded ipOrderMax submissions within the past hour.
+// OrderIPRateLimit flags (never drops) order requests from IPs that exceeded
+// ipOrderMax submissions per shop within the past hour.
 func OrderIPRateLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if IsStaffOrder(c) {
@@ -24,7 +26,7 @@ func OrderIPRateLimit() gin.HandlerFunc {
 		}
 
 		ip := c.ClientIP()
-		key := fmt.Sprintf("ratelimit:order:ip:%s", ip)
+		key := fmt.Sprintf("ratelimit:order:ip:%s:%s", c.Param("shopId"), ip)
 
 		count, err := initializers.RClient.Incr(initializers.Ctx, key).Result()
 		if err != nil {
@@ -39,12 +41,7 @@ func OrderIPRateLimit() gin.HandlerFunc {
 		}
 
 		if count > ipOrderMax {
-			// Silent drop: respond as if the order was accepted.
-			c.AbortWithStatusJSON(http.StatusOK, gin.H{
-				"success": true,
-				"message": "Order received successfully",
-			})
-			return
+			c.Set(CtxIPRateLimited, true)
 		}
 
 		c.Next()
