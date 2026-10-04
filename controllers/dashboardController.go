@@ -242,22 +242,24 @@ func GetOrdersDashboard(c *gin.Context) {
 		revQ = revQ.Where("shipped_via_id = ?", deliveryCompanyID)
 	}
 
-	// Money is order-level shop-wide (COD cash at the door, shipping included), but
-	// line-level when scoped to one product: a multi-item order's total_price would
-	// credit this product with other products' cash. Shipping is order-level and
-	// therefore not attributable to a line, so product-scoped delivered revenue is
-	// net by construction (delivered == deliveredNet below).
+	// Money is always order-level (total_price: COD cash at the door, shipping,
+	// coupon and overrides included). When scoped to one product it is split by that
+	// product's share of the order's items, so a single-product shop sees identical
+	// numbers with and without the filter.
 	deliveredExpr := "total_price"
 	netExpr := "total_price - COALESCE(shipping_price, 0)"
 	if hasProduct {
 		// productID is a parsed uuid.UUID — .String() can only ever emit hex and
 		// dashes, so interpolating it as a literal cannot inject. Done as a literal
 		// rather than a bind arg to avoid GORM's Select-vs-Where placeholder ordering.
-		lineSum := fmt.Sprintf(
-			"(SELECT COALESCE(SUM(oi.price * oi.quantity), 0) FROM order_items oi WHERE oi.order_id = orders.id AND oi.deleted_at IS NULL AND oi.product_id = '%s')",
+		share := fmt.Sprintf(
+			"COALESCE((SELECT SUM(oi.price*oi.quantity) FROM order_items oi WHERE oi.order_id = orders.id AND oi.deleted_at IS NULL AND oi.product_id = '%s')"+
+				" / NULLIF((SELECT SUM(oi.price*oi.quantity) FROM order_items oi WHERE oi.order_id = orders.id AND oi.deleted_at IS NULL), 0), 1)",
 			productID.String(),
 		)
-		deliveredExpr, netExpr = lineSum, lineSum
+		// ponytail: an all-free-items multi-product order credits its full total to each product (share=1); use a per-line count ratio if it ever matters.
+		deliveredExpr = "total_price * " + share
+		netExpr = "(total_price - COALESCE(shipping_price, 0)) * " + share
 	}
 
 	// "was ever confirmed" per the order.status_changed audit trail — same
