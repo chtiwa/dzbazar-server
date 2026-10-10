@@ -51,6 +51,7 @@ type UpdateShopInput struct {
 	BanVpnEnabled        *bool `form:"banVpnEnabled"`
 	BanDatacenterEnabled *bool `form:"banDatacenterEnabled"`
 	FreeDeliveryEnabled  *bool `form:"freeDeliveryEnabled"`
+	AutoAssignEnabled    *bool `form:"autoAssignEnabled"`
 }
 
 type MyShopResponse struct {
@@ -605,6 +606,9 @@ func UpdateShop(c *gin.Context) {
 	}
 	if input.FreeDeliveryEnabled != nil {
 		updateData["free_delivery_enabled"] = *input.FreeDeliveryEnabled
+	}
+	if input.AutoAssignEnabled != nil {
+		updateData["auto_assign_enabled"] = *input.AutoAssignEnabled
 	}
 
 	if input.Slug != nil {

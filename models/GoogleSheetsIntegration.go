@@ -6,20 +6,28 @@ import (
 	"github.com/google/uuid"
 )
 
-// GoogleSheetsIntegration holds one shop's connection to a Google Sheet that
-// every new order gets appended to as a row. One per shop (ShopID unique).
-// ServiceAccountJSON is the raw Google service-account key the merchant
-// pasted — stored as plaintext, matching the existing DeliveryCompany.Token /
-// Pixel.AccessToken convention in this codebase, gated by shop-scoped auth
-// middleware rather than encrypted at rest.
+// SheetColumn is one exported column: Key picks the value, Header is the
+// merchant-editable title written to row 1.
+type SheetColumn struct {
+	Key    string `json:"key"`
+	Header string `json:"header"`
+}
+
+// GoogleSheetsIntegration is one shop's connection to a Google Sheet, one per
+// (shop, kind): "orders" gets a row per new order, "abandoned" a row per
+// abandoned lead. ServiceAccountJSON is a LEGACY per-shop key (v1); empty
+// means the platform service account (GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON) is
+// used. LastError holds a short error code, never a raw Google error.
 type GoogleSheetsIntegration struct {
 	BaseModel
-	ShopID uuid.UUID `gorm:"not null;uniqueIndex" json:"shopId"`
-	Shop   Shop      `gorm:"foreignKey:ShopID;references:ID" json:"shop,omitempty"`
+	ShopID uuid.UUID `gorm:"not null;uniqueIndex:idx_google_sheets_integrations_shop_kind" json:"shopId"`
+	Shop   Shop      `gorm:"foreignKey:ShopID;references:ID" json:"-"`
+	Kind   string    `gorm:"not null;default:orders;uniqueIndex:idx_google_sheets_integrations_shop_kind" json:"kind"`
 
-	ServiceAccountJSON string `gorm:"not null" json:"-"`
-	SpreadsheetID      string `gorm:"not null" json:"spreadsheetId"`
-	SheetName          string `gorm:"not null;default:Orders" json:"sheetName"`
+	ServiceAccountJSON string        `gorm:"not null" json:"-"`
+	SpreadsheetID      string        `gorm:"not null" json:"spreadsheetId"`
+	SheetName          string        `gorm:"not null;default:Orders" json:"sheetName"`
+	Columns            []SheetColumn `gorm:"serializer:json" json:"columns"`
 
 	IsActive bool `gorm:"not null;default:true" json:"isActive"`
 

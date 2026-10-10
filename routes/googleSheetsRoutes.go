@@ -10,10 +10,9 @@ func GoogleSheetsRoutes(router *gin.Engine) {
 	sheets := router.Group("/v1/shops/:shopId/sheets")
 	sheets.Use(middleware.RequireAuthentication)
 	{
-		sheets.GET("", middleware.RequireShopAccess(), middleware.RequireShopPermission("sheets.view"), controllers.GetGoogleSheetsStatus)
-		sheets.POST("", middleware.RequireShopAccess("owner", "moderator"), controllers.ConnectGoogleSheets)
-		sheets.PATCH("", middleware.RequireShopAccess(), middleware.RequireShopPermission("sheets.edit"), controllers.UpdateGoogleSheetsCredentials)
-		sheets.DELETE("", middleware.RequireShopAccess(), middleware.RequireShopPermission("sheets.edit"), controllers.DisconnectGoogleSheets)
-		sheets.POST("/test", middleware.RequireShopAccess(), middleware.RequireShopPermission("sheets.edit"), controllers.TestGoogleSheetsConnection)
+		sheets.GET("", middleware.RequireShopAccess(), middleware.RequireShopPermission("sheets.view"), controllers.GetGoogleSheets)
+		sheets.PUT("/:kind", middleware.RequireShopAccess(), middleware.RequireShopPermission("sheets.edit"), controllers.SaveGoogleSheet)
+		sheets.DELETE("/:kind", middleware.RequireShopAccess(), middleware.RequireShopPermission("sheets.edit"), controllers.DisconnectGoogleSheet)
+		sheets.POST("/:kind/test", middleware.RequireShopAccess(), middleware.RequireShopPermission("sheets.edit"), controllers.TestGoogleSheet)
 	}
 }

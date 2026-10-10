@@ -89,6 +89,7 @@ func CreateAbandonedLead(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to save lead"})
 		return
 	}
+	enqueueEvent(orderEventPayload{OrderID: lead.ID, Kind: "lead"})
 
 	clientName := lead.FullName
 	if clientName == "" {
@@ -176,6 +177,24 @@ func GetAbandonedLeadsByShopID(c *gin.Context) {
 		"data":       leads,
 		"pagination": pagination,
 	})
+}
+
+func ExportAbandonedLeadsExcel(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	data, err := services.ExportAbandonedLeadsExcel(initializers.DB, shopID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to generate the excel file"})
+		return
+	}
+
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Disposition", "attachment; filename=abandoned-leads.xlsx")
+	c.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", data)
 }
 
 func DeleteAbandonedLead(c *gin.Context) {

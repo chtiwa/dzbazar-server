@@ -208,10 +208,17 @@ func CreateUserByShop(c *gin.Context) {
 	// create a brand-new account for a brand-new email.
 	if lookupErr == nil {
 		tx.Rollback()
-		c.JSON(http.StatusConflict, gin.H{
-			"success": false,
-			"message": "This email already has an account",
-		})
+		// The shop may only learn about its own members. For an account that
+		// lives elsewhere, answer generically so this endpoint can't be used
+		// to probe which emails exist platform-wide.
+		var inShop int64
+		initializers.DB.Model(&models.ShopMember{}).
+			Where("shop_id = ? AND user_id = ?", shopID, existingUser.ID).Count(&inShop)
+		msg := "This email can't be used"
+		if inShop > 0 {
+			msg = "This user is already a member of your shop"
+		}
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": msg})
 		return
 	}
 

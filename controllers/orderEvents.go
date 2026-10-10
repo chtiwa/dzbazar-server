@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -37,8 +38,9 @@ const (
 // pool. IsStaffOrder rides along because processOrderEvent runs with no
 // *gin.Context — it can't re-derive middleware.IsStaffOrder(c) itself.
 type orderEventPayload struct {
-	OrderID      uuid.UUID
+	OrderID      uuid.UUID // subject ID: the order, or the abandoned lead when Kind == "lead"
 	IsStaffOrder bool
+	Kind         string // "" = order created, "lead" = abandoned lead, "status" = order status changed
 }
 
 // Order side-effects (confirmation email, Meta CAPI purchase event, live
@@ -52,7 +54,7 @@ var (
 )
 
 // StartOrderEventWorkers must be called once at boot, before any order can
-// be created, otherwise enqueueOrderEvent has nothing to send to.
+// be created, otherwise enqueueEvent has nothing to send to.
 func StartOrderEventWorkers(n int) {
 	orderEvents = make(chan orderEventPayload, 256)
 	for i := 0; i < n; i++ {
@@ -73,20 +75,27 @@ func runOrderEvent(evt orderEventPayload) {
 			fmt.Printf("Recovered from panic inside order event worker: %v\n", r)
 		}
 	}()
-	processOrderEvent(evt.OrderID, evt.IsStaffOrder)
+	switch evt.Kind {
+	case "lead":
+		sendLeadToSheetIfEligible(evt.OrderID)
+	case "status":
+		syncSheetStatusIfEligible(evt.OrderID)
+	default:
+		processOrderEvent(evt.OrderID, evt.IsStaffOrder)
+	}
 }
 
-// enqueueOrderEvent hands an order off to the worker pool. If the queue is
+// enqueueEvent hands an event off to the worker pool. If the queue is
 // full (a sustained spike outrunning the workers), the event is dropped
 // rather than blocking the checkout request — checkout must stay fast even
 // if that means an occasional missed pixel/email under extreme load.
-func enqueueOrderEvent(orderID uuid.UUID, isStaffOrder bool) {
+func enqueueEvent(p orderEventPayload) {
 	orderEventWG.Add(1)
 	select {
-	case orderEvents <- orderEventPayload{OrderID: orderID, IsStaffOrder: isStaffOrder}:
+	case orderEvents <- p:
 	default:
 		orderEventWG.Done()
-		log.Printf("order events: queue full, dropping side-effects order=%s", orderID)
+		log.Printf("order events: queue full, dropping side-effects kind=%q id=%s", p.Kind, p.OrderID)
 	}
 }
 
@@ -319,52 +328,22 @@ func sendMetaPurchaseIfEligible(order *models.Order) {
 // shape as sendMetaPurchaseIfEligible: SheetsExportSentAt is the claim.
 func sendSheetsExportIfEligible(order *models.Order) {
 	var integ models.GoogleSheetsIntegration
-	integErr := initializers.DB.
-		Where("shop_id = ? AND is_active = ?", order.ShopID, true).
-		First(&integ).Error
-
-	if integErr != nil {
+	if initializers.DB.
+		Where("shop_id = ? AND kind = ? AND is_active = ?", order.ShopID, services.SheetKindOrders, true).
+		First(&integ).Error != nil {
 		return
 	}
 
 	initializers.DB.Model(&models.Order{}).Where("id = ?", order.ID).
 		UpdateColumn("sheets_export_attempts", gorm.Expr("sheets_export_attempts + 1"))
 
-	products := make([]string, 0, len(order.Items))
-	for _, item := range order.Items {
-		name := item.Product.Title
-		if name == "" {
-			name = "Produit"
-		}
-		combo := item.ProductVariantCombination.CombinationString
-		if combo != "" {
-			products = append(products, fmt.Sprintf("%s (%s) x%d", name, combo, item.Quantity))
-		} else {
-			products = append(products, fmt.Sprintf("%s x%d", name, item.Quantity))
-		}
-	}
-
-	row := []interface{}{
-		order.ID.String(),
-		order.CreatedAt.Format("2006-01-02 15:04:05"),
-		order.Client.FullName,
-		order.Client.PhoneNumber,
-		order.Client.State,
-		order.Client.City,
-		order.Client.StopdeskPoint,
-		strings.Join(products, "; "),
-		order.TotalPrice,
-		order.Status,
-	}
-
-	svc, err := services.NewSheetsClient(integ.ServiceAccountJSON)
+	svc, err := services.SheetsClientFor(&integ)
 	if err == nil {
-		err = services.AppendOrderRow(svc, integ.SpreadsheetID, integ.SheetName, row)
+		err = services.AppendSheetRow(svc, integ.SpreadsheetID, integ.SheetName, services.OrderRow(integ.Columns, order))
 	}
-
 	if err != nil {
 		log.Printf("sheets export: append failed order=%s shop=%s: %v", order.ID, order.ShopID, err)
-		integ.LastError = err.Error()
+		integ.LastError = services.SheetsErrorCode(err)
 		initializers.DB.Save(&integ)
 		return
 	}
@@ -378,6 +357,66 @@ func sendSheetsExportIfEligible(order *models.Order) {
 	integ.LastSyncedAt = &now
 	integ.LastError = ""
 	initializers.DB.Save(&integ)
+}
+
+// sendLeadToSheetIfEligible appends one abandoned lead to the shop's
+// "abandoned" sheet, if connected and active.
+// ponytail: no retry sweep for leads; add abandoned_leads.sheets_sent_at + sweep if merchants report gaps
+func sendLeadToSheetIfEligible(leadID uuid.UUID) {
+	var lead models.AbandonedLead
+	if initializers.DB.First(&lead, "id = ?", leadID).Error != nil {
+		return
+	}
+	var integ models.GoogleSheetsIntegration
+	if initializers.DB.
+		Where("shop_id = ? AND kind = ? AND is_active = ?", lead.ShopID, services.SheetKindAbandoned, true).
+		First(&integ).Error != nil {
+		return
+	}
+	svc, err := services.SheetsClientFor(&integ)
+	if err == nil {
+		err = services.AppendSheetRow(svc, integ.SpreadsheetID, integ.SheetName, services.LeadRow(integ.Columns, &lead))
+	}
+	if err != nil {
+		log.Printf("sheets export: lead append failed lead=%s shop=%s: %v", lead.ID, lead.ShopID, err)
+		integ.LastError = services.SheetsErrorCode(err)
+		initializers.DB.Save(&integ)
+		return
+	}
+	now := time.Now()
+	integ.LastSyncedAt = &now
+	integ.LastError = ""
+	initializers.DB.Save(&integ)
+}
+
+// syncSheetStatusIfEligible rewrites only the Statut cell of an order's row.
+// Silent no-op if the order isn't in the sheet or id/status columns aren't
+// selected; errors are recorded but never deactivate the integration.
+func syncSheetStatusIfEligible(orderID uuid.UUID) {
+	var order models.Order
+	if initializers.DB.Select("id", "shop_id", "status").First(&order, "id = ?", orderID).Error != nil {
+		return
+	}
+	var integ models.GoogleSheetsIntegration
+	if initializers.DB.
+		Where("shop_id = ? AND kind = ? AND is_active = ?", order.ShopID, services.SheetKindOrders, true).
+		First(&integ).Error != nil {
+		return
+	}
+	idCol := slices.IndexFunc(integ.Columns, func(c models.SheetColumn) bool { return c.Key == "id" })
+	statusCol := slices.IndexFunc(integ.Columns, func(c models.SheetColumn) bool { return c.Key == "status" })
+	if idCol < 0 || statusCol < 0 {
+		return
+	}
+	svc, err := services.SheetsClientFor(&integ)
+	if err == nil {
+		_, err = services.UpdateSheetCellByKey(svc, integ.SpreadsheetID, integ.SheetName, idCol, statusCol, order.ID.String(), order.Status)
+	}
+	if err != nil {
+		log.Printf("sheets export: status sync failed order=%s shop=%s: %v", order.ID, order.ShopID, err)
+		integ.LastError = services.SheetsErrorCode(err)
+		initializers.DB.Save(&integ)
+	}
 }
 
 // StartSheetsExportRetrySweep periodically retries the Google Sheets export
@@ -408,7 +447,7 @@ func retryPendingSheetsExports() {
 
 	eligibleShops := initializers.DB.Model(&models.GoogleSheetsIntegration{}).
 		Select("shop_id").
-		Where("is_active = ?", true)
+		Where("is_active = ? AND kind = ?", true, services.SheetKindOrders)
 
 	err := initializers.DB.
 		Preload("Client").
@@ -436,13 +475,15 @@ func retryPendingSheetsExports() {
 	// their attempts without a single success — prevents infinite retry
 	// against a permanently-broken credential (revoked key, unshared sheet).
 	initializers.DB.Exec(`
-		UPDATE google_sheets_integrations
+		UPDATE google_sheets_integrations g
 		SET is_active = false
-		WHERE is_active = true
-		AND shop_id IN (
-			SELECT shop_id FROM orders
-			WHERE sheets_export_sent_at IS NULL
-			AND sheets_export_attempts >= ?
+		WHERE g.is_active AND g.kind = 'orders'
+		AND EXISTS (
+			SELECT 1 FROM orders o
+			WHERE o.shop_id = g.shop_id
+			AND o.sheets_export_sent_at IS NULL
+			AND o.sheets_export_attempts >= ?
+			AND o.created_at > g.updated_at
 		)
 	`, sheetsExportMaxAttempts)
 }

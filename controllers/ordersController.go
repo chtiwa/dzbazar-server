@@ -825,7 +825,7 @@ func CreateOrderByShopID(c *gin.Context) {
 
 	// 3. Async side-effects (email, Meta CAPI, live broadcast) run on the
 	// bounded order-event worker pool — see controllers/orderEvents.go.
-	enqueueOrderEvent(order.ID, isStaffOrder)
+	enqueueEvent(orderEventPayload{OrderID: order.ID, IsStaffOrder: isStaffOrder})
 
 	InvalidateDashboardCache(parsedShopID)
 	InvalidateProductCaches(uuid.Nil, parsedShopID)
@@ -1191,6 +1191,7 @@ func UpdateOrderByShopID(c *gin.Context) {
 			"from": oldStatus,
 			"to":   body.Status,
 		})
+		enqueueEvent(orderEventPayload{OrderID: orderID, Kind: "status"})
 	}
 
 	var updatedOrder models.Order
@@ -1378,6 +1379,7 @@ func BulkUpdateOrderStatusByShopID(c *gin.Context) {
 				"from": order.Status,
 				"to":   body.Status,
 			})
+			enqueueEvent(orderEventPayload{OrderID: orderID, Kind: "status"})
 		}
 	}
 

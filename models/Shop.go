@@ -25,6 +25,9 @@ type Shop struct {
 
 	// Round-robin cursor for confirmatrice auto-assignment (services.AutoAssignOrder).
 	ConfirmatriceCursor int64 `gorm:"not null;default:0" json:"-"`
+	// Off = new orders stay unassigned for manual assignment. Defaults on to
+	// preserve the behaviour shops had before this toggle existed.
+	AutoAssignEnabled bool `gorm:"not null;default:true" json:"autoAssignEnabled"`
 
 	// Per-shop fraud-signal toggles (services.FraudHiddenReason). Each defaults
 	// off — these are best-effort heuristics that shadow-ban real orders when

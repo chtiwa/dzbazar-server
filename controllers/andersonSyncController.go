@@ -131,6 +131,7 @@ func syncShopAndersonOrders(shopID uuid.UUID, carrier string) {
 				"to":   newStatus,
 			})
 			invalidateOrdersListCache(shopID)
+			syncSheetStatusIfEligible(order.ID)
 			select {
 			case realtime.Broadcast <- realtime.Message{
 				Event:  "order_status_synced",

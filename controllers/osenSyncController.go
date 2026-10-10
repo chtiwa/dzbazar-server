@@ -150,6 +150,7 @@ func syncShopOsenOrders(shopID uuid.UUID) {
 						"to":   newStatus,
 					})
 					invalidateOrdersListCache(shopID)
+					syncSheetStatusIfEligible(order.ID)
 					select {
 					case realtime.Broadcast <- realtime.Message{
 						Event:  "order_status_synced",

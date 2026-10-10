@@ -39,6 +39,11 @@ func EligibleConfirmatrices(tx *gorm.DB, shopID uuid.UUID, productIDs []uuid.UUI
 // eligible set; upgrade to per-product cursors only if rotation skew is
 // actually reported.
 func AutoAssignOrder(tx *gorm.DB, shopID uuid.UUID, order *models.Order) error {
+	var enabled bool
+	if err := tx.Model(&models.Shop{}).Where("id = ?", shopID).Select("auto_assign_enabled").Scan(&enabled).Error; err != nil || !enabled {
+		return err
+	}
+
 	productIDs := make([]uuid.UUID, 0, len(order.Items))
 	seen := make(map[uuid.UUID]bool, len(order.Items))
 	for _, item := range order.Items {
