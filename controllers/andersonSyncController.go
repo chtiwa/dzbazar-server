@@ -59,7 +59,9 @@ func syncAndersonOrderStatuses() {
 	}
 
 	for _, shopID := range shopIDs {
-		syncShopAndersonOrders(shopID)
+		for k := range ecotrackBaseURLs {
+			syncShopAndersonOrders(shopID, k)
+		}
 	}
 }
 
@@ -77,8 +79,8 @@ func mapAndersonStatusToLocal(status string) string {
 	}
 }
 
-func syncShopAndersonOrders(shopID uuid.UUID) {
-	integration, err := findAndersonIntegration(shopID)
+func syncShopAndersonOrders(shopID uuid.UUID, carrier string) {
+	integration, err := findAndersonIntegration(shopID, carrier)
 	if err != nil {
 		return
 	}
@@ -96,7 +98,7 @@ func syncShopAndersonOrders(shopID uuid.UUID) {
 		order := &orders[i]
 
 		reqURL := fmt.Sprintf("%s/api/v1/get/orders?api_token=%s&tracking=%s",
-			andersonBaseURL, url.QueryEscape(integration.Token), url.QueryEscape(order.TrackingNumber))
+			ecotrackBase(integration.AvailableDeliveryCompany.Name), url.QueryEscape(integration.Token), url.QueryEscape(order.TrackingNumber))
 
 		resp, err := httpClient.Get(reqURL)
 		if err != nil {

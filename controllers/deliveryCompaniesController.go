@@ -400,12 +400,12 @@ func ConnectDeliveryCompany(c *gin.Context) {
 			return
 		}
 	}
-	if strings.Contains(strings.ToLower(strings.TrimSpace(available.Name)), "anderson") {
-		valid, errMsg := validateAndersonToken(body.Token)
+	if ecotrackKey(available.Name) != "" {
+		valid, errMsg := validateAndersonToken(ecotrackBase(available.Name), body.Token)
 		if !valid {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"message": fmt.Sprintf("Token Anderson invalide: %s", errMsg),
+				"message": fmt.Sprintf("Token %s invalide: %s", available.Name, errMsg),
 			})
 			return
 		}

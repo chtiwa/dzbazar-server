@@ -7,11 +7,14 @@ import (
 )
 
 func AndersonRoutes(router *gin.Engine) {
-	g := router.Group("/v1/shops/:shopId/anderson")
-	g.Use(middleware.RequireAuthentication)
-	{
-		g.GET("/orders", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.track"), controllers.GetAndersonOrders)
-		g.POST("/orders", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ship"), controllers.CreateAndersonOrder)
-		g.POST("/orders/bulk", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ship"), controllers.BulkCreateAndersonOrders)
+	// Anderson and Navex are both Ecotrack: same handlers, carrier picked per group.
+	for _, carrier := range []string{"anderson", "navex"} {
+		g := router.Group("/v1/shops/:shopId/"+carrier, controllers.SetEcotrackCarrier(carrier))
+		g.Use(middleware.RequireAuthentication)
+		{
+			g.GET("/orders", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.track"), controllers.GetAndersonOrders)
+			g.POST("/orders", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ship"), controllers.CreateAndersonOrder)
+			g.POST("/orders/bulk", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ship"), controllers.BulkCreateAndersonOrders)
+		}
 	}
 }

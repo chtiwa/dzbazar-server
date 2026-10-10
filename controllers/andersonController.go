@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
@@ -26,13 +27,43 @@ const andersonOrdersCacheTTL = 2 * time.Minute
 // Anderson delivery (ECOTRACK platform). Auth is a bare api_token query param
 // on every call — no bearer header, no request body on the single-order
 // endpoint (it's all query params too).
-const andersonBaseURL = "https://anderson-ecommerce.ecotrack.dz"
+// Navex runs the identical platform on its own host. ponytail: Navex host is
+// assumed (navex.ecotrack.dz) — correct here if the real subdomain differs.
+var ecotrackBaseURLs = map[string]string{
+	"anderson": "https://anderson-ecommerce.ecotrack.dz",
+	"navex":    "https://navex.ecotrack.dz",
+}
+
+// ecotrackKey returns the Ecotrack carrier key a company name belongs to, or "".
+func ecotrackKey(name string) string {
+	n := strings.ToLower(name)
+	for k := range ecotrackBaseURLs {
+		if strings.Contains(n, k) {
+			return k
+		}
+	}
+	return ""
+}
+
+func ecotrackBase(name string) string { return ecotrackBaseURLs[ecotrackKey(name)] }
+
+// SetEcotrackCarrier tags a route group so the shared handlers know which carrier it serves.
+func SetEcotrackCarrier(key string) gin.HandlerFunc {
+	return func(c *gin.Context) { c.Set("ecotrackCarrier", key); c.Next() }
+}
+
+func ecotrackCarrier(c *gin.Context) string {
+	if v := c.GetString("ecotrackCarrier"); v != "" {
+		return v
+	}
+	return "anderson"
+}
 
 // ── Token validation ─────────────────────────────────────────────────────────
 
-func validateAndersonToken(token string) (bool, string) {
+func validateAndersonToken(baseURL, token string) (bool, string) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	reqURL := fmt.Sprintf("%s/api/v1/validate/token?api_token=%s", andersonBaseURL, url.QueryEscape(token))
+	reqURL := fmt.Sprintf("%s/api/v1/validate/token?api_token=%s", baseURL, url.QueryEscape(token))
 	resp, err := client.Get(reqURL)
 	if err != nil {
 		return false, "Impossible de joindre Anderson. Vérifiez votre connexion."
@@ -49,12 +80,12 @@ func validateAndersonToken(token string) (bool, string) {
 
 // ── Integration lookup ───────────────────────────────────────────────────────
 
-func findAndersonIntegration(shopID uuid.UUID) (*models.DeliveryCompany, error) {
+func findAndersonIntegration(shopID uuid.UUID, carrier string) (*models.DeliveryCompany, error) {
 	var integration models.DeliveryCompany
 	err := initializers.DB.
 		Preload("AvailableDeliveryCompany").
 		Joins("JOIN available_delivery_companies adc ON adc.id = delivery_companies.available_delivery_company_id").
-		Where("delivery_companies.shop_id = ? AND LOWER(adc.name) LIKE ?", shopID, "%anderson%").
+		Where("delivery_companies.shop_id = ? AND LOWER(adc.name) LIKE ?", shopID, "%"+carrier+"%").
 		First(&integration).Error
 	if err != nil {
 		return nil, err
@@ -104,7 +135,7 @@ func shipOrderToAnderson(c *gin.Context, order *models.Order, integration *model
 		params.Set("fragile", "1")
 	}
 
-	reqURL := fmt.Sprintf("%s/api/v1/create/order?%s", andersonBaseURL, params.Encode())
+	reqURL := fmt.Sprintf("%s/api/v1/create/order?%s", ecotrackBase(integration.AvailableDeliveryCompany.Name), params.Encode())
 	httpClient := &http.Client{Timeout: 15 * time.Second}
 	resp, err := httpClient.Post(reqURL, "application/json", nil)
 	if err != nil {
@@ -177,7 +208,7 @@ func GetAndersonOrders(c *gin.Context) {
 		return
 	}
 
-	integration, err := findAndersonIntegration(shopID)
+	integration, err := findAndersonIntegration(shopID, ecotrackCarrier(c))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Anderson n'est pas connecté à cette boutique"})
 		return
@@ -188,7 +219,7 @@ func GetAndersonOrders(c *gin.Context) {
 		page = 1
 	}
 
-	cacheKey := fmt.Sprintf("anderson:orders:%s:%d", shopID, page)
+	cacheKey := fmt.Sprintf("%s:orders:%s:%d", ecotrackCarrier(c), shopID, page)
 	if cached, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result(); err == nil {
 		var cachedResp map[string]any
 		if json.Unmarshal([]byte(cached), &cachedResp) == nil {
@@ -198,7 +229,7 @@ func GetAndersonOrders(c *gin.Context) {
 	}
 
 	reqURL := fmt.Sprintf("%s/api/v1/get/orders?api_token=%s&page=%d",
-		andersonBaseURL, url.QueryEscape(integration.Token), page)
+		ecotrackBase(integration.AvailableDeliveryCompany.Name), url.QueryEscape(integration.Token), page)
 
 	httpClient := &http.Client{Timeout: 15 * time.Second}
 	resp, err := httpClient.Get(reqURL)
@@ -275,7 +306,7 @@ func CreateAndersonOrder(c *gin.Context) {
 		return
 	}
 
-	integration, err := findAndersonIntegration(shopID)
+	integration, err := findAndersonIntegration(shopID, ecotrackCarrier(c))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Anderson n'est pas connecté à cette boutique"})
 		return
@@ -326,7 +357,7 @@ func BulkCreateAndersonOrders(c *gin.Context) {
 		return
 	}
 
-	integration, err := findAndersonIntegration(shopID)
+	integration, err := findAndersonIntegration(shopID, ecotrackCarrier(c))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Anderson n'est pas connecté à cette boutique"})
 		return

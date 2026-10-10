@@ -26,7 +26,7 @@ type CreateAbandonedLeadInput struct {
 	City             string  `json:"city"`
 	ShippingMethod   string  `json:"shippingMethod"`
 	Quantity         int     `json:"quantity"`
-	FullName         string  `json:"fullName" binding:"required"`
+	FullName         string  `json:"fullName"`
 	PhoneNumber      string  `json:"phoneNumber" binding:"required"`
 	FBclid           string  `json:"fbclid"`
 	FBp              string  `json:"fbp"`
@@ -90,9 +90,13 @@ func CreateAbandonedLead(c *gin.Context) {
 		return
 	}
 
+	clientName := lead.FullName
+	if clientName == "" {
+		clientName = lead.PhoneNumber
+	}
 	notificationPayload := map[string]any{
 		"leadId":      lead.ID.String(),
-		"clientName":  lead.FullName,
+		"clientName":  clientName,
 		"productName": lead.ProductTitle,
 	}
 	services.CreateNotificationsForShop(lead.ShopID, "abandoned_lead_created", lead.ID, notificationPayload)
