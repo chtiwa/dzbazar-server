@@ -92,6 +92,17 @@ type OrderItemInput struct {
 	OfferID *string `json:"offerId"`
 }
 
+// validOrderStatuses mirrors admin/src/pages/orders/statusConfig.ts
+// STATUS_OPTIONS. The dashboard maths filter on these exact strings, so an
+// arbitrary value written through the order endpoints would silently corrupt
+// the KPIs.
+var validOrderStatuses = map[string]bool{
+	"En attente": true, "Confirmé": true, "Livré": true, "Annulé": true,
+	"Retour": true, "Expedié": true, "Reporté": true,
+	"Ne répond pas 1": true, "Ne répond pas 2": true, "Ne répond pas 3": true,
+	"Abandonné": true,
+}
+
 type UpdateOrderInput struct {
 	ShippingMethod *string           `json:"shippingMethod"`
 	ShippingPrice  *float64          `json:"shippingPrice"`
@@ -968,6 +979,10 @@ func UpdateOrderByShopID(c *gin.Context) {
 		RespondError(c, http.StatusBadRequest, "Error while binding JSON request context", err)
 		return
 	}
+	if s := strings.TrimSpace(body.Status); s != "" && !validOrderStatuses[s] {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid order status"})
+		return
+	}
 
 	var oldStatus string
 
@@ -1345,6 +1360,10 @@ func BulkUpdateOrderStatusByShopID(c *gin.Context) {
 	var body BulkUpdateOrderStatusInput
 	if err := c.ShouldBindJSON(&body); err != nil {
 		RespondError(c, http.StatusBadRequest, "Error while binding JSON request context", err)
+		return
+	}
+	if !validOrderStatuses[body.Status] {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid order status"})
 		return
 	}
 

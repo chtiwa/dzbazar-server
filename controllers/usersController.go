@@ -164,6 +164,14 @@ func CreateUserByShop(c *gin.Context) {
 		}
 	}
 
+	// Same rule memberUpdateDecision enforces for updates: only an owner may
+	// mint another owner. Moderators hold users.create, so without this check
+	// they could create one.
+	if callerRole, _ := c.Get("userShopRole"); body.Role == "owner" && callerRole != "owner" {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Only an owner can create another owner"})
+		return
+	}
+
 	if err := services.CheckUserLimit(shopID); err != nil {
 		if errors.Is(err, services.ErrPlanLimitReached) {
 			c.JSON(http.StatusForbidden, gin.H{

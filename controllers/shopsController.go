@@ -134,6 +134,8 @@ func GetMyShops(c *gin.Context) {
 		"success": true,
 		"message": "User shops fetched successfully",
 		"data":    response,
+		// ponytail: same check createShop enforces, so UI and server can't disagree
+		"canCreateShop": services.CheckShopLimit(userData) == nil,
 	})
 }
 
@@ -222,12 +224,20 @@ func CreateShop(c *gin.Context) {
 		return
 	}
 
-	if err := services.CheckShopLimit(userData.ID); err != nil {
+	if err := services.CheckShopLimit(userData); err != nil {
 		if errors.Is(err, services.ErrPlanLimitReached) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"success": false,
 				"message": "You have reached the maximum number of shops allowed on your current plan.",
 				"code":    "PLAN_LIMIT_REACHED",
+			})
+			return
+		}
+		if errors.Is(err, services.ErrShopContactTaken) {
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"message": "This email or phone number is already linked to a shop on the free plan. Upgrade to create another shop.",
+				"code":    "SHOP_CONTACT_TAKEN",
 			})
 			return
 		}

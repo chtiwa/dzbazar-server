@@ -15,6 +15,9 @@ import (
 // has hit its plan's cap for a resource. Controllers map it to a 403 response.
 var ErrPlanLimitReached = errors.New("plan limit reached")
 
+// ErrShopContactTaken: a free owner's email/phone is already tied to another account's shop.
+var ErrShopContactTaken = errors.New("shop contact already used")
+
 // expiredPlan locks a shop out entirely once its trial or paid period has
 // lapsed (ExpiresAt in the past), or once it has no ShopSubscription row at
 // all (there is no more merchant-facing way to end up with no row — see
@@ -313,30 +316,64 @@ func CheckPixelLimit(shopID uuid.UUID, platform string) error {
 		Where("shop_id = ? AND platform = ?", shopID, platform), max)
 }
 
-// CheckShopLimit caps how many shops one owner can hold. A user's first shop
-// is always free; from the second shop on, the cap is the highest MaxShops
-// among plans already subscribed to on their existing shops.
-func CheckShopLimit(ownerID uuid.UUID) error {
-	var shopIDs []uuid.UUID
+// CheckShopLimit caps how many shops one owner can hold. An owner with an
+// active paid plan may hold up to the highest MaxShops among those plans. A
+// free owner (no active paid plan) may hold exactly one shop, and a free owner
+// with none yet is refused if another account's owner shares their email or
+// phone (last 9 digits) — blocks multi-accounting for extra free shops.
+// ponytail: MAX(max_shops) breaks if a plan uses -1 (unlimited) next to a finite one; no plan does today
+func CheckShopLimit(owner models.User) error {
+	var owned int64
 	if err := initializers.DB.Model(&models.Shop{}).
-		Where("owner_id = ? AND deleted_at IS NULL", ownerID).Pluck("id", &shopIDs).Error; err != nil {
+		Where("owner_id = ?", owner.ID).Count(&owned).Error; err != nil {
 		return err
 	}
-	if len(shopIDs) == 0 {
-		return nil
-	}
 
-	var maxAllowed int
+	var maxPaid int
 	if err := initializers.DB.Model(&models.ShopSubscription{}).
 		Joins("JOIN plans ON plans.id = shop_subscriptions.plan_id").
-		Where("shop_subscriptions.shop_id IN ?", shopIDs).
-		Where("shop_subscriptions.expires_at IS NULL OR shop_subscriptions.expires_at > now()").
-		Select("COALESCE(MAX(plans.max_shops), 1)").
-		Scan(&maxAllowed).Error; err != nil {
+		Joins("JOIN shops ON shops.id = shop_subscriptions.shop_id").
+		Where("shops.deleted_at IS NULL AND shops.owner_id = ?", owner.ID).
+		Where("plans.price > 0 AND (shop_subscriptions.expires_at IS NULL OR shop_subscriptions.expires_at > now())").
+		Select("COALESCE(MAX(plans.max_shops), 0)").
+		Scan(&maxPaid).Error; err != nil {
+		return err
+	}
+	if maxPaid != 0 {
+		return checkCap(maxPaid, owned)
+	}
+	if err := checkCap(1, owned); err != nil {
 		return err
 	}
 
-	return checkCap(maxAllowed, int64(len(shopIDs)))
+	key := phoneKey(owner.PhoneNumber)
+	var taken int64
+	if err := initializers.DB.Model(&models.Shop{}).
+		Joins("JOIN users ON users.id = shops.owner_id").
+		Where("shops.owner_id <> ?", owner.ID).
+		Where("lower(users.email) = lower(?) OR (? <> '' AND right(regexp_replace(users.phone_number, '[^0-9]', '', 'g'), 9) = ?)",
+			owner.Email, key, key).
+		Count(&taken).Error; err != nil {
+		return err
+	}
+	if taken > 0 {
+		return ErrShopContactTaken
+	}
+	return nil
+}
+
+// phoneKey normalises a phone to its last 9 digits ("" if fewer than 9).
+func phoneKey(p string) string {
+	var d []rune
+	for _, r := range p {
+		if r >= '0' && r <= '9' {
+			d = append(d, r)
+		}
+	}
+	if len(d) < 9 {
+		return ""
+	}
+	return string(d[len(d)-9:])
 }
 
 // HasOrderCapacity is CheckOrderLimit for display paths only (storefront /
