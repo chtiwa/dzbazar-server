@@ -152,9 +152,6 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		dailyQ = dailyQ.Where(orderContainsProductSQL, productID)
 	}
-	if hasDeliveryCompany {
-		dailyQ = dailyQ.Where("shipped_via_id = ?", deliveryCompanyID)
-	}
 	if err := dailyQ.Select("DATE(created_at)::text AS label, COUNT(*) AS count").
 		Group("DATE(created_at)").Order("DATE(created_at) ASC").Scan(&daily).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error fetching daily stats", err)
@@ -170,9 +167,6 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 	if hasProduct {
 		weeklyQ = weeklyQ.Where(orderContainsProductSQL, productID)
-	}
-	if hasDeliveryCompany {
-		weeklyQ = weeklyQ.Where("shipped_via_id = ?", deliveryCompanyID)
 	}
 	if err := weeklyQ.Select("TO_CHAR(DATE_TRUNC('week', created_at), 'IYYY-IW') AS label, COUNT(*) AS count").
 		Group("DATE_TRUNC('week', created_at)").Order("DATE_TRUNC('week', created_at) ASC").Scan(&weekly).Error; err != nil {
@@ -190,9 +184,6 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		monthlyQ = monthlyQ.Where(orderContainsProductSQL, productID)
 	}
-	if hasDeliveryCompany {
-		monthlyQ = monthlyQ.Where("shipped_via_id = ?", deliveryCompanyID)
-	}
 	if err := monthlyQ.Select("TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS label, COUNT(*) AS count").
 		Group("DATE_TRUNC('month', created_at)").Order("DATE_TRUNC('month', created_at) ASC").Scan(&monthly).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error fetching monthly stats", err)
@@ -206,9 +197,6 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 	if hasProduct {
 		totalQ = totalQ.Where(orderContainsProductSQL, productID)
-	}
-	if hasDeliveryCompany {
-		totalQ = totalQ.Where("shipped_via_id = ?", deliveryCompanyID)
 	}
 	if err := totalQ.Count(&totalOrders).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error counting total orders", err)
@@ -238,14 +226,17 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		revQ = revQ.Where(orderContainsProductSQL, productID)
 	}
-	if hasDeliveryCompany {
-		revQ = revQ.Where("shipped_via_id = ?", deliveryCompanyID)
-	}
 
 	// Money is always order-level (total_price: COD cash at the door, shipping,
 	// coupon and overrides included). When scoped to one product it is split by that
 	// product's share of the order's items, so a single-product shop sees identical
 	// numbers with and without the filter.
+	// Carrier filter scopes only the delivery KPIs (a shop-wide count like
+	// total/confirmation/status can't be attributed to a carrier). uuid literal is safe.
+	carrier := ""
+	if hasDeliveryCompany {
+		carrier = fmt.Sprintf(" AND shipped_via_id = '%s'", deliveryCompanyID.String())
+	}
 	deliveredExpr := "total_price"
 	netExpr := "total_price - COALESCE(shipping_price, 0)"
 	if hasProduct {
@@ -277,20 +268,22 @@ func GetOrdersDashboard(c *gin.Context) {
 			)
 		)`
 
+	// %[1]s..: carrier is ANDed into every delivery-side filter, never into the
+	// confirmation/pending ones.
 	revSelect := fmt.Sprintf(`
-			COALESCE(SUM(CASE WHEN status = 'Livré' THEN %s END), 0) AS delivered_revenue,
-			COALESCE(SUM(CASE WHEN status = 'Livré' THEN %s END), 0) AS delivered_net_revenue,
-			COALESCE(SUM(CASE WHEN status NOT IN ('Livré', 'Annulé', 'Retour', 'Abandonné') THEN %s END), 0) AS pending_revenue,
-			COUNT(*) FILTER (WHERE status = 'Livré') AS delivered_orders,
-			COUNT(*) FILTER (WHERE is_shipped = true) AS shipped_orders,
-			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s') AS matured_shipped,
-			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s' AND status = 'Livré') AS matured_delivered,
-			COUNT(*) FILTER (WHERE is_shipped = true AND shipped_at <= now() - interval '%s' AND status IN ('Livré', 'Retour')) AS matured_resolved,
-			COUNT(*) FILTER (WHERE is_shipped = true AND status IN ('Livré', 'Retour')) AS resolved_shipped,
-			COUNT(*) FILTER (WHERE is_shipped = true AND status = 'Livré') AS resolved_delivered,
-			COUNT(*) FILTER (WHERE %s) AS confirmed_orders,
-			COUNT(*) FILTER (WHERE status <> 'En attente') AS resolved_orders
-		`, deliveredExpr, netExpr, deliveredExpr, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, deliveryRateMaturityBuffer, wasEverConfirmed)
+			COALESCE(SUM(CASE WHEN status = 'Livré'%[5]s THEN %[1]s END), 0) AS delivered_revenue,
+			COALESCE(SUM(CASE WHEN status = 'Livré'%[5]s THEN %[2]s END), 0) AS delivered_net_revenue,
+			COALESCE(SUM(CASE WHEN status NOT IN ('Livré', 'Annulé', 'Retour', 'Abandonné') THEN %[1]s END), 0) AS pending_revenue,
+			COUNT(*) FILTER (WHERE status = 'Livré'%[5]s) AS delivered_orders,
+			COUNT(*) FILTER (WHERE is_shipped = true%[5]s) AS shipped_orders,
+			COUNT(*) FILTER (WHERE ((is_shipped = true AND shipped_at <= now() - interval '%[3]s') OR status IN ('Livré', 'Retour'))%[5]s) AS matured_shipped,
+			COUNT(*) FILTER (WHERE status = 'Livré'%[5]s) AS matured_delivered,
+			COUNT(*) FILTER (WHERE status IN ('Livré', 'Retour')%[5]s) AS matured_resolved,
+			COUNT(*) FILTER (WHERE status IN ('Livré', 'Retour')%[5]s) AS resolved_shipped,
+			COUNT(*) FILTER (WHERE status = 'Livré'%[5]s) AS resolved_delivered,
+			COUNT(*) FILTER (WHERE %[4]s) AS confirmed_orders,
+			COUNT(*) FILTER (WHERE status <> 'En attente' OR %[4]s) AS resolved_orders
+		`, deliveredExpr, netExpr, deliveryRateMaturityBuffer, wasEverConfirmed, carrier)
 
 	if err := revQ.Select(revSelect).Scan(&rev).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error fetching revenue stats", err)
@@ -353,9 +346,6 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		statusQ = statusQ.Where(orderContainsProductSQL, productID)
 	}
-	if hasDeliveryCompany {
-		statusQ = statusQ.Where("shipped_via_id = ?", deliveryCompanyID)
-	}
 	if err := statusQ.Select("status, COUNT(*) AS count").Group("status").Scan(&statusStats).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error fetching status stats", err)
 		return
@@ -368,19 +358,15 @@ func GetOrdersDashboard(c *gin.Context) {
 
 	wilayaStats := []WilayaStat{}
 	wilayaQ := db.Table("orders").
-		Joins("JOIN clients c ON c.id = orders.client_id").
-		Where("orders.shop_id = ? AND orders.deleted_at IS NULL AND orders.is_hidden = false AND orders.status <> 'Abandonné' AND c.state != ''", shopID)
+		Where("orders.shop_id = ? AND orders.deleted_at IS NULL AND orders.is_hidden = false AND orders.status <> 'Abandonné' AND orders.state != ''", shopID)
 	if hasDateFilter {
 		wilayaQ = wilayaQ.Where("orders.created_at >= ? AND orders.created_at < ?", fromTime, toTime)
 	}
 	if hasProduct {
 		wilayaQ = wilayaQ.Where(orderContainsProductSQL, productID)
 	}
-	if hasDeliveryCompany {
-		wilayaQ = wilayaQ.Where("orders.shipped_via_id = ?", deliveryCompanyID)
-	}
-	if err := wilayaQ.Select("c.state AS wilaya, COUNT(*) AS count").
-		Group("c.state").Order("count DESC").Scan(&wilayaStats).Error; err != nil {
+	if err := wilayaQ.Select("orders.state AS wilaya, COUNT(*) AS count").
+		Group("orders.state").Order("count DESC").Scan(&wilayaStats).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error fetching wilaya stats", err)
 		return
 	}
@@ -562,15 +548,6 @@ func GetOrdersByHour(c *gin.Context) {
 	}
 	hasProduct := productID != uuid.Nil
 
-	var deliveryCompanyID uuid.UUID
-	if v := c.Query("deliveryCompanyId"); v != "" {
-		deliveryCompanyID, err = uuid.Parse(v)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid delivery company ID"})
-			return
-		}
-	}
-	hasDeliveryCompany := deliveryCompanyID != uuid.Nil
 
 	byHour := []HourCount{}
 	q := initializers.DB.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
@@ -579,9 +556,6 @@ func GetOrdersByHour(c *gin.Context) {
 	}
 	if hasProduct {
 		q = q.Where(orderContainsProductSQL, productID)
-	}
-	if hasDeliveryCompany {
-		q = q.Where("shipped_via_id = ?", deliveryCompanyID)
 	}
 	if err := q.Select("EXTRACT(HOUR FROM created_at)::int AS hour, COUNT(*) AS count").
 		Group("EXTRACT(HOUR FROM created_at)").Order("hour ASC").Scan(&byHour).Error; err != nil {
@@ -651,8 +625,7 @@ func GetWilayaDeliveryRates(c *gin.Context) {
 
 	rows := []WilayaDeliveryRateStat{}
 	q := initializers.DB.Table("orders").
-		Joins("JOIN clients c ON c.id = orders.client_id").
-		Where("orders.shop_id = ? AND orders.deleted_at IS NULL AND orders.is_hidden = false AND orders.status <> 'Abandonné' AND c.state != '' AND orders.is_shipped = true", shopID)
+		Where("orders.shop_id = ? AND orders.deleted_at IS NULL AND orders.is_hidden = false AND orders.status <> 'Abandonné' AND orders.state != '' AND (orders.is_shipped = true OR orders.status IN ('Livré','Retour'))", shopID)
 	if hasDateFilter {
 		q = q.Where("orders.created_at >= ? AND orders.created_at < ?", fromTime, toTime)
 	}
@@ -663,10 +636,10 @@ func GetWilayaDeliveryRates(c *gin.Context) {
 		q = q.Where("orders.shipped_via_id = ?", deliveryCompanyID)
 	}
 	if err := q.Select(`
-			c.state AS wilaya,
+			orders.state AS wilaya,
 			COUNT(*) FILTER (WHERE orders.status IN ('Livré','Retour')) AS resolved_shipped,
 			COUNT(*) FILTER (WHERE orders.status = 'Livré') AS resolved_delivered
-		`).Group("c.state").Order("resolved_shipped DESC").Scan(&rows).Error; err != nil {
+		`).Group("orders.state").Order("resolved_shipped DESC").Scan(&rows).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error fetching wilaya delivery rates", err)
 		return
 	}

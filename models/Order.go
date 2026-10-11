@@ -104,6 +104,9 @@ type Order struct {
 	// Carrier the order was actually handed to, and when — set once at
 	// shipping time, independent of any later edits to the order (unlike
 	// UpdatedAt, which bumps on every unrelated change).
+	// Wilaya at order time (clients.state is overwritten by repeat orders).
+	State string `gorm:"not null;default:''" json:"-"`
+
 	ShippedAt    *time.Time                `json:"shippedAt"`
 	ShippedViaID *uuid.UUID                `gorm:"type:uuid" json:"shippedViaId"`
 	ShippedVia   *AvailableDeliveryCompany `gorm:"foreignKey:ShippedViaID;references:ID" json:"shippedVia"`

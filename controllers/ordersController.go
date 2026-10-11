@@ -754,6 +754,7 @@ func CreateOrderByShopID(c *gin.Context) {
 		order = models.Order{
 			ShopID:         parsedShopID,
 			ClientID:       client.ID,
+			State:          client.State,
 			ShippingMethod: body.ShippingMethod,
 			ShippingPrice:  shippingPrice,
 			TotalPrice:     calculatedTotalPrice,
@@ -991,6 +992,9 @@ func UpdateOrderByShopID(c *gin.Context) {
 					"city":           body.Client.City,
 					"stopdesk_point": body.Client.StopdeskPoint,
 				}).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&models.Order{}).Where("id = ?", order.ID).Update("state", body.Client.State).Error; err != nil {
 				return err
 			}
 		}
