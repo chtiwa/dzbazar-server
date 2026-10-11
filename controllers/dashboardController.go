@@ -464,7 +464,7 @@ func GetPagePerformance(c *gin.Context) {
 		ordersQ := initializers.DB.Table("order_items").
 			Joins("JOIN orders ON orders.id = order_items.order_id").
 			Joins("JOIN products ON products.id = order_items.product_id").
-			Where("order_items.product_id = ? AND products.shop_id = ? AND orders.deleted_at IS NULL AND orders.landing_page_id IS NULL", entityID, shopID)
+			Where("order_items.product_id = ? AND products.shop_id = ? AND orders.deleted_at IS NULL AND orders.landing_page_id IS NULL AND "+directOrdersSinceTracking, entityID, shopID)
 		if hasDateFilter {
 			ordersQ = ordersQ.Where("orders.created_at >= ? AND orders.created_at < ?", fromTime, toTime)
 		}

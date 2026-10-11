@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/xuri/excelize/v2"
@@ -103,6 +104,7 @@ func GenerateExcel(orders []models.Order) ([]byte, error) {
 		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), volumeMetrics)
 	}
 
+	StyleSheet(f, sheetName)
 	f.SetActiveSheet(index)
 
 	buffer, err := f.WriteToBuffer()
@@ -111,4 +113,49 @@ func GenerateExcel(orders []models.Order) ([]byte, error) {
 	}
 
 	return buffer.Bytes(), nil
+}
+
+// StyleSheet makes an export readable: bold header, frozen header row, autofilter,
+// column widths fitted to content (clamped), wrapped top-aligned cells.
+func StyleSheet(f *excelize.File, sheet string) error {
+	rows, err := f.GetRows(sheet)
+	if err != nil || len(rows) == 0 {
+		return err
+	}
+	ncols := len(rows[0])
+
+	head, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Color: "FFFFFF"},
+		Fill:      excelize.Fill{Type: "pattern", Color: []string{"3B3B4F"}, Pattern: 1},
+		Alignment: &excelize.Alignment{Vertical: "center", Horizontal: "center", WrapText: true},
+	})
+	body, _ := f.NewStyle(&excelize.Style{
+		Alignment: &excelize.Alignment{Vertical: "top", WrapText: true},
+	})
+
+	for c := 1; c <= ncols; c++ {
+		width := 10
+		for _, r := range rows {
+			if c <= len(r) {
+				if n := utf8.RuneCountInString(r[c-1]) + 2; n > width {
+					width = n
+				}
+			}
+		}
+		if width > 50 {
+			width = 50
+		}
+		col, _ := excelize.ColumnNumberToName(c)
+		f.SetColWidth(sheet, col, col, float64(width))
+	}
+
+	last, _ := excelize.CoordinatesToCellName(ncols, len(rows))
+	endHead, _ := excelize.CoordinatesToCellName(ncols, 1)
+	f.SetCellStyle(sheet, "A1", endHead, head)
+	if len(rows) > 1 {
+		f.SetCellStyle(sheet, "A2", last, body)
+	}
+	f.SetRowHeight(sheet, 1, 30)
+	f.AutoFilter(sheet, "A1:"+endHead, nil)
+	return f.SetPanes(sheet, &excelize.Panes{Freeze: true, YSplit: 1, TopLeftCell: "A2", ActivePane: "bottomLeft"})
 }

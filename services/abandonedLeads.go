@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/chtiwa/dzbazar-server/models"
+	"github.com/chtiwa/dzbazar-server/utils"
 	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
@@ -36,6 +37,7 @@ func ExportAbandonedLeadsExcel(db *gorm.DB, shopID uuid.UUID) ([]byte, error) {
 		}
 	}
 
+	utils.StyleSheet(f, sheetName)
 	f.SetActiveSheet(index)
 	buf, err := f.WriteToBuffer()
 	if err != nil {

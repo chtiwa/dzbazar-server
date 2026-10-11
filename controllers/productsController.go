@@ -136,6 +136,10 @@ func countOrdersByLandingPageIDs(landingPageIDs []uuid.UUID) (map[uuid.UUID]int6
 // through a landing page. Conversion rate needs this instead of countOrdersByProductIDs:
 // mixing landing-page-attributed orders into a product-page-views denominator produces a
 // bogus rate (e.g. >100%) since those orders' views were counted against the landing page.
+//
+// Also only counts orders from the product's first recorded page view onward
+// (directOrdersSinceTracking): orders placed before view tracking existed have no matching views
+// in the denominator, which is what produced rates like 230%.
 func countDirectProductOrdersByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]int64, error) {
 	counts := make(map[uuid.UUID]int64, len(productIDs))
 	if len(productIDs) == 0 {
@@ -150,7 +154,7 @@ func countDirectProductOrdersByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID
 	err := initializers.DB.
 		Table("order_items").
 		Joins("JOIN orders ON orders.id = order_items.order_id").
-		Where("order_items.product_id IN ? AND orders.deleted_at IS NULL AND orders.landing_page_id IS NULL", productIDs).
+		Where("order_items.product_id IN ? AND orders.deleted_at IS NULL AND orders.landing_page_id IS NULL AND "+directOrdersSinceTracking, productIDs).
 		Select("order_items.product_id AS product_id, COUNT(DISTINCT order_items.order_id) AS count").
 		Group("order_items.product_id").
 		Scan(&rows).Error
@@ -244,6 +248,10 @@ func viewsByEntityIDs(pageType string, entityIDs []uuid.UUID) (map[uuid.UUID]int
 	}
 	return views, nil
 }
+
+// directOrdersSinceTracking restricts an order_items+orders query to orders created on/after the
+// product's first page_visits day. No visits yet → NULL → no orders (rate stays nil).
+const directOrdersSinceTracking = `orders.created_at >= (SELECT MIN(pv.day) FROM page_visits pv WHERE pv.page_type = 'product' AND pv.entity_id = order_items.product_id)`
 
 // conversionRate computes orders% of unique views. Nil means no views recorded yet
 // (distinct from a real 0%, which means views happened but nothing converted).
