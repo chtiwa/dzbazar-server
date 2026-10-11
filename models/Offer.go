@@ -9,7 +9,7 @@ import (
 // OfferConditions is the rule set stored as JSON text on the offer row.
 // An empty Predicates slice means "always match".
 type OfferConditions struct {
-	Match      string           `json:"match"`      // "all"
+	Match      string           `json:"match"` // "all"
 	Predicates []OfferPredicate `json:"predicates"`
 }
 
@@ -41,7 +41,7 @@ type Offer struct {
 	ShopID       uuid.UUID `gorm:"not null;index"           json:"shopId"`
 	InternalName string    `gorm:"not null"                 json:"internalName"`
 	Status       string    `gorm:"not null;default:'draft'" json:"status"` // draft|published|archived
-	Action       string    `gorm:"not null"                 json:"action"`  // replace|append|mutate_qty — the cart mechanic. See OfferType for the merchant-facing business label.
+	Action       string    `gorm:"not null"                 json:"action"` // replace|append|mutate_qty — the cart mechanic. See OfferType for the merchant-facing business label.
 
 	// OfferType is the merchant-facing business label (quantity_upsell|variant_upsell|cross_sell).
 	// Nil on offers created before this field existed — Action alone still fully
@@ -71,7 +71,7 @@ type Offer struct {
 	// alongside their parent offer, never queried independently.
 	QuantityPackages []OfferQuantityPackage `gorm:"type:text;serializer:json" json:"quantityPackages"`
 
-	DiscountType  string  `gorm:"not null;default:'percent'" json:"discountType"`  // percent|fixed|override_price
+	DiscountType  string  `gorm:"not null;default:'percent'" json:"discountType"` // percent|fixed|override_price
 	DiscountValue float64 `gorm:"not null;default:0"         json:"discountValue"`
 
 	Headline    string `gorm:"not null"                         json:"headline"`
@@ -94,10 +94,10 @@ type Offer struct {
 // Nil override fields mean "use the base offer value".
 type OfferPageOverride struct {
 	BaseModel
-	ShopID        uuid.UUID `gorm:"not null;index"                           json:"shopId"`
-	OfferID       uuid.UUID `gorm:"not null;uniqueIndex:idx_override_offer_lp" json:"offerId"`
-	Offer         Offer     `gorm:"foreignKey:OfferID;references:ID;constraint:OnDelete:CASCADE" json:"-"`
-	LandingPageID uuid.UUID `gorm:"not null;uniqueIndex:idx_override_offer_lp" json:"landingPageId"`
+	ShopID        uuid.UUID   `gorm:"not null;index"                           json:"shopId"`
+	OfferID       uuid.UUID   `gorm:"not null;uniqueIndex:idx_override_offer_lp" json:"offerId"`
+	Offer         Offer       `gorm:"foreignKey:OfferID;references:ID;constraint:OnDelete:CASCADE" json:"-"`
+	LandingPageID uuid.UUID   `gorm:"not null;uniqueIndex:idx_override_offer_lp" json:"landingPageId"`
 	LandingPage   LandingPage `gorm:"foreignKey:LandingPageID;references:ID;constraint:OnDelete:CASCADE" json:"-"`
 
 	Enabled        bool       `gorm:"not null;default:true" json:"enabled"`

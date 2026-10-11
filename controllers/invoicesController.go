@@ -142,7 +142,14 @@ func CreateInvoice(c *gin.Context) {
 
 	billedAmount, err := billedPlanAmount(plan, sub.Plan, hasActiveSub, remainingDays)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Downgrading plans isn't supported here — contact support"})
+		// Downgrade = don't renew. The paid plan runs to ExpiresAt; once it
+		// lapses, billedPlanAmount bills the cheaper plan at full price.
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success":   false,
+			"message":   "Your current plan stays active until it expires. Pick the cheaper plan after that date.",
+			"code":      "DOWNGRADE_AFTER_EXPIRY",
+			"expiresAt": sub.ExpiresAt,
+		})
 		return
 	}
 	billedAmount += billedAmount * transferFeeRate

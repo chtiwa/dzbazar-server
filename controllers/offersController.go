@@ -73,29 +73,29 @@ func validateOfferTypeConsistency(offer *models.Offer) error {
 // ─── Admin: CRUD ─────────────────────────────────────────────────────────────
 
 type offerBody struct {
-	InternalName      *string                  `json:"internalName"`
-	Status            *string                  `json:"status"`
-	Action            *string                  `json:"action"`
-	OfferType         *string                  `json:"offerType"` // quantity_upsell|variant_upsell|cross_sell — derives Action when present
+	InternalName      *string                        `json:"internalName"`
+	Status            *string                        `json:"status"`
+	Action            *string                        `json:"action"`
+	OfferType         *string                        `json:"offerType"` // quantity_upsell|variant_upsell|cross_sell — derives Action when present
 	QuantityPackages  *[]models.OfferQuantityPackage `json:"quantityPackages"`
-	TriggerProductID  *string                  `json:"triggerProductId"`
-	LandingPageID     *string                  `json:"landingPageId"` // omit or null = base offer
-	OfferProductID    *string                  `json:"offerProductId"`
-	OfferVariantIDs   []string                 `json:"offerVariantIds"`
-	QuantityRule      *int                     `json:"quantityRule"`
-	DiscountType      *string                  `json:"discountType"`
-	DiscountValue     *float64                 `json:"discountValue"`
-	Headline          *string                  `json:"headline"`
-	Subheadline       *string                  `json:"subheadline"`
-	ButtonText        *string                  `json:"buttonText"`
-	MediaURL          *string                  `json:"mediaUrl"`
-	Placement         *string                  `json:"placement"`
-	Priority          *int                     `json:"priority"`
-	Conditions        *models.OfferConditions  `json:"conditions"`
-	InventoryBehavior *string                  `json:"inventoryBehavior"`
-	AnalyticsTag      *string                  `json:"analyticsTag"`
-	StartAt           *time.Time               `json:"startAt"`
-	EndAt             *time.Time               `json:"endAt"`
+	TriggerProductID  *string                        `json:"triggerProductId"`
+	LandingPageID     *string                        `json:"landingPageId"` // omit or null = base offer
+	OfferProductID    *string                        `json:"offerProductId"`
+	OfferVariantIDs   []string                       `json:"offerVariantIds"`
+	QuantityRule      *int                           `json:"quantityRule"`
+	DiscountType      *string                        `json:"discountType"`
+	DiscountValue     *float64                       `json:"discountValue"`
+	Headline          *string                        `json:"headline"`
+	Subheadline       *string                        `json:"subheadline"`
+	ButtonText        *string                        `json:"buttonText"`
+	MediaURL          *string                        `json:"mediaUrl"`
+	Placement         *string                        `json:"placement"`
+	Priority          *int                           `json:"priority"`
+	Conditions        *models.OfferConditions        `json:"conditions"`
+	InventoryBehavior *string                        `json:"inventoryBehavior"`
+	AnalyticsTag      *string                        `json:"analyticsTag"`
+	StartAt           *time.Time                     `json:"startAt"`
+	EndAt             *time.Time                     `json:"endAt"`
 }
 
 func CreateOffer(c *gin.Context) {
@@ -175,21 +175,21 @@ func CreateOffer(c *gin.Context) {
 	}
 
 	offer := models.Offer{
-		ShopID:           shopID,
-		InternalName:     *body.InternalName,
-		Status:           "draft",
-		Action:           *body.Action,
-		TriggerProductID: triggerProductID,
-		OfferProductID:   offerProductID,
-		OfferVariantIDs:  variantIDs,
-		Headline:         *body.Headline,
-		Placement:        *body.Placement,
-		Conditions:       models.OfferConditions{Match: "all", Predicates: []models.OfferPredicate{}},
-		ButtonText:       "Add to my order",
-		DiscountType:     "percent",
-		Priority:         100,
+		ShopID:            shopID,
+		InternalName:      *body.InternalName,
+		Status:            "draft",
+		Action:            *body.Action,
+		TriggerProductID:  triggerProductID,
+		OfferProductID:    offerProductID,
+		OfferVariantIDs:   variantIDs,
+		Headline:          *body.Headline,
+		Placement:         *body.Placement,
+		Conditions:        models.OfferConditions{Match: "all", Predicates: []models.OfferPredicate{}},
+		ButtonText:        "Add to my order",
+		DiscountType:      "percent",
+		Priority:          100,
 		InventoryBehavior: "skip_when_oos",
-		QuantityRule:     1,
+		QuantityRule:      1,
 	}
 
 	applyOfferBodyFields(&offer, body)
@@ -509,7 +509,7 @@ func DeleteOfferOverride(c *gin.Context) {
 // ─── Public: Evaluate ─────────────────────────────────────────────────────────
 
 type EvaluateOffersRequest struct {
-	PageType         string   `json:"pageType"`         // "product"|"landing_page"
+	PageType         string   `json:"pageType"` // "product"|"landing_page"
 	ProductID        string   `json:"productId"`
 	LandingPageID    *string  `json:"landingPageId"`
 	SelectedVariants []string `json:"selectedVariants"` // ProductVariantCombination IDs
@@ -965,12 +965,12 @@ func applyOfferBodyFields(offer *models.Offer, body offerBody) {
 // ─── Public: Track Events ─────────────────────────────────────────────────────
 
 type offerEventBody struct {
-	OfferID   string     `json:"offerId"   binding:"required"`
-	Event     string     `json:"event"     binding:"required"` // impression|click|accept|revenue
-	OrderID   *string    `json:"orderId"`
-	VariantID *string    `json:"variantId"`
-	Wilaya    *int       `json:"wilaya"`
-	Amount    float64    `json:"amount"`
+	OfferID   string  `json:"offerId"   binding:"required"`
+	Event     string  `json:"event"     binding:"required"` // impression|click|accept|revenue
+	OrderID   *string `json:"orderId"`
+	VariantID *string `json:"variantId"`
+	Wilaya    *int    `json:"wilaya"`
+	Amount    float64 `json:"amount"`
 }
 
 func TrackOfferEventPublic(c *gin.Context) {

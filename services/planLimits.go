@@ -23,7 +23,54 @@ var ErrPlanLimitReached = errors.New("plan limit reached")
 // shop renews via an approved invoice, which resets StartedAt/ExpiresAt.
 var expiredPlan = models.Plan{}
 
+// shopSubscription resolves the plan a shop is effectively on. A shop with its
+// own active paid plan uses it; otherwise (Trial, lapsed, no row) it inherits
+// the owner's best active paid plan from another shop, as long as the shop is
+// within that plan's MaxShops (oldest shops first). So a Pro owner's extra
+// shops need no invoice of their own, and when Pro lapses or drops to a plan
+// with fewer shops, the overflow shops fall back to expired/locked.
 func shopSubscription(shopID uuid.UUID) (models.ShopSubscription, error) {
+	sub, err := ownSubscription(shopID)
+	if err != nil || sub.Plan.Price > 0 {
+		return sub, err
+	}
+	inherited, ok, err := inheritedSubscription(shopID)
+	if err != nil {
+		return sub, err
+	}
+	if ok {
+		return inherited, nil
+	}
+	return sub, nil
+}
+
+func inheritedSubscription(shopID uuid.UUID) (models.ShopSubscription, bool, error) {
+	var sub models.ShopSubscription
+	err := initializers.DB.Preload("Plan").
+		Select("shop_subscriptions.*").
+		Joins("JOIN plans ON plans.id = shop_subscriptions.plan_id").
+		Joins("JOIN shops ON shops.id = shop_subscriptions.shop_id").
+		Where("shops.deleted_at IS NULL AND shops.owner_id = (SELECT owner_id FROM shops WHERE id = ?)", shopID).
+		Where("plans.price > 0 AND (shop_subscriptions.expires_at IS NULL OR shop_subscriptions.expires_at > now())").
+		Order("plans.price DESC").First(&sub).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return sub, false, nil
+	}
+	if err != nil {
+		return sub, false, err
+	}
+
+	var older int64
+	if err := initializers.DB.Model(&models.Shop{}).
+		Where("deleted_at IS NULL AND owner_id = (SELECT owner_id FROM shops WHERE id = ?)", shopID).
+		Where("(created_at, id) < (SELECT created_at, id FROM shops WHERE id = ?)", shopID).
+		Count(&older).Error; err != nil {
+		return sub, false, err
+	}
+	return sub, checkCap(sub.Plan.MaxShops, older) == nil, nil
+}
+
+func ownSubscription(shopID uuid.UUID) (models.ShopSubscription, error) {
 	var sub models.ShopSubscription
 	err := initializers.DB.Preload("Plan").Where("shop_id = ?", shopID).First(&sub).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -47,6 +94,16 @@ func IsFreeTier(shopID uuid.UUID) (bool, error) {
 		return false, err
 	}
 	return sub.Plan.Price == 0, nil
+}
+
+// HasAssistantActions reports whether the shop's plan lets the help chat read
+// live shop data (Pro tier). Without it the chat is guide-only.
+func HasAssistantActions(shopID uuid.UUID) (bool, error) {
+	sub, err := shopSubscription(shopID)
+	if err != nil {
+		return false, err
+	}
+	return sub.Plan.HasAssistantActions, nil
 }
 
 // HasOrderHourlyStats reports whether the shop's plan includes the
@@ -115,8 +172,8 @@ func CheckLandingPageLimit(shopID uuid.UUID) error {
 		Where("shop_id = ? AND deleted_at IS NULL", shopID), sub.Plan.MaxLandingPages)
 }
 
-func periodScopedCount(shopID uuid.UUID, sub models.ShopSubscription, model any) (int64, error) {
-	query := initializers.DB.Model(model).Where("shop_id = ?", shopID)
+func periodScopedCount(shopIDs []uuid.UUID, sub models.ShopSubscription, model any) (int64, error) {
+	query := initializers.DB.Model(model).Where("shop_id IN ?", shopIDs)
 	if !sub.StartedAt.IsZero() {
 		query = query.Where("created_at >= ?", sub.StartedAt)
 	}
@@ -129,6 +186,10 @@ func periodScopedCount(shopID uuid.UUID, sub models.ShopSubscription, model any)
 // length tiers, so one flat rate; image generation cost varies by the model
 // the merchant picked (see AIImageModelCredits).
 const CreditCostDescription = 5
+
+// CreditCostChat is billed per help-chat model call (a tool-using question is
+// 2+ calls). Kept small: it's a text completion, not an image.
+const CreditCostChat = 1
 
 // creditCostForModel bills an unrecognized/empty model (e.g. usage rows from
 // before per-model billing existed) at the priciest known tier — fails
@@ -151,13 +212,28 @@ func creditCostForModel(model string) int {
 // used for descriptions, plus each image row billed at its own model's cost.
 // Computed on the fly rather than stored, so renewal/upgrade (which rewrites
 // StartedAt) is the only reset needed — same rule as CheckOrderLimit.
+//
+// Credits are pooled across all of the owner's shops (one plan, one budget),
+// including deleted ones so deleting a shop doesn't refund its spend.
 func creditsUsed(shopID uuid.UUID, sub models.ShopSubscription) (int64, error) {
-	descriptions, err := periodScopedCount(shopID, sub, &models.AiDescriptionUsage{})
+	var shopIDs []uuid.UUID
+	if err := initializers.DB.Model(&models.Shop{}).Unscoped().
+		Where("owner_id = (SELECT owner_id FROM shops WHERE id = ?)", shopID).
+		Pluck("id", &shopIDs).Error; err != nil {
+		return 0, err
+	}
+
+	descriptions, err := periodScopedCount(shopIDs, sub, &models.AiDescriptionUsage{})
 	if err != nil {
 		return 0, err
 	}
 
-	query := initializers.DB.Model(&models.AiImageToolUsage{}).Where("shop_id = ?", shopID)
+	chats, err := periodScopedCount(shopIDs, sub, &models.AiChatUsage{})
+	if err != nil {
+		return 0, err
+	}
+
+	query := initializers.DB.Model(&models.AiImageToolUsage{}).Where("shop_id IN ?", shopIDs)
 	if !sub.StartedAt.IsZero() {
 		query = query.Where("created_at >= ?", sub.StartedAt)
 	}
@@ -170,7 +246,7 @@ func creditsUsed(shopID uuid.UUID, sub models.ShopSubscription) (int64, error) {
 		imagesCost += int64(creditCostForModel(m))
 	}
 
-	return descriptions*CreditCostDescription + imagesCost, nil
+	return descriptions*CreditCostDescription + chats*CreditCostChat + imagesCost, nil
 }
 
 // CheckCreditBudget requires `need` credits to still be available this
@@ -254,6 +330,7 @@ func CheckShopLimit(ownerID uuid.UUID) error {
 	if err := initializers.DB.Model(&models.ShopSubscription{}).
 		Joins("JOIN plans ON plans.id = shop_subscriptions.plan_id").
 		Where("shop_subscriptions.shop_id IN ?", shopIDs).
+		Where("shop_subscriptions.expires_at IS NULL OR shop_subscriptions.expires_at > now()").
 		Select("COALESCE(MAX(plans.max_shops), 1)").
 		Scan(&maxAllowed).Error; err != nil {
 		return err

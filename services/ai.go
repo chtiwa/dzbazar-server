@@ -80,6 +80,20 @@ type aiChatMessage struct {
 	// or a []aiContentPart when the message carries image input alongside
 	// text — encoding/json marshals either shape as-is via interface{}.
 	Content interface{} `json:"content"`
+	// Tool-calling fields (help-chat agent); omitempty keeps every other
+	// caller's payload unchanged.
+	ToolCalls  []AiToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string       `json:"tool_call_id,omitempty"`
+}
+
+// AiToolCall is an OpenAI-style function call requested by the model.
+type AiToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"` // JSON-encoded string
+	} `json:"function"`
 }
 
 // aiContentPart is one block of an OpenAI/OpenRouter-style vision message.

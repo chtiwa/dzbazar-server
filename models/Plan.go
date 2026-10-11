@@ -36,6 +36,9 @@ type Plan struct {
 	HasOrderTracking      bool `gorm:"default:false" json:"hasOrderTracking"` // suivi
 	HasOrderHourlyStats   bool `gorm:"default:false" json:"hasOrderHourlyStats"`
 
+	// Help chat can read live shop data (KPIs, orders) via tools — Pro tier.
+	HasAssistantActions bool `gorm:"default:false" json:"hasAssistantActions"`
+
 	// ---- Client features ----
 	// Saves clients on order + tracks delivery status — paid tiers only
 	HasClientTracking bool `gorm:"default:false" json:"hasClientTracking"`

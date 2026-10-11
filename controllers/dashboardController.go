@@ -51,7 +51,7 @@ type DashboardData struct {
 	// Resolved = left "En attente" limbo (same definition as confirmatrices.go).
 	// Narrows the denominator to orders that were actually worked, so it isn't
 	// dragged down by orders nobody has called yet.
-	ResolvedOrders          int64   `json:"resolvedOrders"`
+	ResolvedOrders           int64   `json:"resolvedOrders"`
 	ResolvedConfirmationRate float64 `json:"resolvedConfirmationRate"`
 	// ResolvedShipped/ResolvedDelivered = shipments that reached a terminal
 	// state (Livré/Retour), no maturity wait — an order is resolved the
@@ -372,29 +372,29 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 
 	data := DashboardData{
-		Daily:                daily,
-		Weekly:               weekly,
-		Monthly:              monthly,
-		StatusStats:          statusStats,
-		TotalOrders:          totalOrders,
-		WilayaStats:          wilayaStats,
-		DeliveredRevenue:     rev.DeliveredRevenue,
-		PendingRevenue:       rev.PendingRevenue,
-		DeliveredOrders:      rev.DeliveredOrders,
-		AvgOrderValue:        avgOrderValue,
-		ShippedOrders:        rev.ShippedOrders,
-		DeliveryRate:         deliveryRate,
-		MaturedShipped:       rev.MaturedShipped,
-		MaturedDelivered:     rev.MaturedDelivered,
-		MaturingOrders:       maturingOrders,
-		ConfirmedOrders:      rev.ConfirmedOrders,
-		ConfirmationRate:     confirmationRate,
+		Daily:                    daily,
+		Weekly:                   weekly,
+		Monthly:                  monthly,
+		StatusStats:              statusStats,
+		TotalOrders:              totalOrders,
+		WilayaStats:              wilayaStats,
+		DeliveredRevenue:         rev.DeliveredRevenue,
+		PendingRevenue:           rev.PendingRevenue,
+		DeliveredOrders:          rev.DeliveredOrders,
+		AvgOrderValue:            avgOrderValue,
+		ShippedOrders:            rev.ShippedOrders,
+		DeliveryRate:             deliveryRate,
+		MaturedShipped:           rev.MaturedShipped,
+		MaturedDelivered:         rev.MaturedDelivered,
+		MaturingOrders:           maturingOrders,
+		ConfirmedOrders:          rev.ConfirmedOrders,
+		ConfirmationRate:         confirmationRate,
 		ResolvedOrders:           rev.ResolvedOrders,
 		ResolvedConfirmationRate: resolvedConfirmationRate,
-		ResolvedShipped:      rev.ResolvedShipped,
-		ResolvedDelivered:    rev.ResolvedDelivered,
-		StuckInTransit:       stuckInTransit,
-		ResolvedDeliveryRate: resolvedDeliveryRate,
+		ResolvedShipped:          rev.ResolvedShipped,
+		ResolvedDelivered:        rev.ResolvedDelivered,
+		StuckInTransit:           stuckInTransit,
+		ResolvedDeliveryRate:     resolvedDeliveryRate,
 	}
 
 	// Store in cache — failure is non-fatal; skip for date-filtered or product/carrier-scoped requests
@@ -547,7 +547,6 @@ func GetOrdersByHour(c *gin.Context) {
 		}
 	}
 	hasProduct := productID != uuid.Nil
-
 
 	byHour := []HourCount{}
 	q := initializers.DB.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)

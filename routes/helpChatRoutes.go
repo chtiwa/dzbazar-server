@@ -12,7 +12,7 @@ func HelpChatRoutes(router *gin.Engine) {
 	router.POST(
 		"/v1/shops/:shopId/help-chat",
 		middleware.RequireAuthentication,
-		middleware.RequireShopAccess("owner", "moderator", "confirmation"),
+		middleware.RequireShopAccess("owner", "moderator"),
 		middleware.RateLimitByShop("help-chat", 20, time.Minute),
 		controllers.AskHelpChat,
 	)

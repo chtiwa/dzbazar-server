@@ -39,6 +39,7 @@ type CreatePlanInput struct {
 	HasOrderTracking      *bool `json:"hasOrderTracking"`
 	HasClientTracking     *bool `json:"hasClientTracking"`
 	HasOrderHourlyStats   *bool `json:"hasOrderHourlyStats"`
+	HasAssistantActions   *bool `json:"hasAssistantActions"`
 }
 
 type UpdatePlanInput struct {
@@ -60,6 +61,7 @@ type UpdatePlanInput struct {
 	HasOrderTracking      *bool `json:"hasOrderTracking"`
 	HasClientTracking     *bool `json:"hasClientTracking"`
 	HasOrderHourlyStats   *bool `json:"hasOrderHourlyStats"`
+	HasAssistantActions   *bool `json:"hasAssistantActions"`
 }
 
 func GetPlans(c *gin.Context) {
@@ -127,6 +129,7 @@ func CreatePlan(c *gin.Context) {
 		HasOrderTracking:      derefBool(body.HasOrderTracking, false),
 		HasClientTracking:     derefBool(body.HasClientTracking, false),
 		HasOrderHourlyStats:   derefBool(body.HasOrderHourlyStats, false),
+		HasAssistantActions:   derefBool(body.HasAssistantActions, false),
 	}
 
 	if err := initializers.DB.Create(&plan).Error; err != nil {
@@ -210,6 +213,9 @@ func UpdatePlan(c *gin.Context) {
 	}
 	if body.HasOrderHourlyStats != nil {
 		updates["has_order_hourly_stats"] = *body.HasOrderHourlyStats
+	}
+	if body.HasAssistantActions != nil {
+		updates["has_assistant_actions"] = *body.HasAssistantActions
 	}
 
 	if len(updates) == 0 {
