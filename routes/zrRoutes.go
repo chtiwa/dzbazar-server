@@ -14,6 +14,5 @@ func ZrRoutes(router *gin.Engine) {
 		g.POST("/orders", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ship"), controllers.CreateZrOrder)
 		g.POST("/orders/bulk", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ship"), controllers.BulkCreateZrOrders)
 		g.POST("/geo/refresh", middleware.RequireShopAccess("owner", "moderator"), controllers.RefreshZrGeo)
-		g.GET("/geo/debug", middleware.RequireShopAccess("owner", "moderator", "confirmation"), controllers.DebugZrGeo)
 	}
 }

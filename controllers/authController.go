@@ -94,6 +94,16 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
+		middleware.RecordFailedLogin(body.Email, failedLoginWindow)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "Invalid email or password",
+		})
+		return
+	}
+
+	// state is only revealed to someone who proved the password
 	if !user.IsVerified {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
@@ -107,15 +117,6 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"success": false,
 			"message": "This account has been suspended",
-		})
-		return
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
-		middleware.RecordFailedLogin(body.Email, failedLoginWindow)
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": "Invalid email or password",
 		})
 		return
 	}
@@ -254,9 +255,9 @@ func VerifyUser(c *gin.Context) {
 	err := initializers.DB.Where("email = ?", body.Email).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{
+			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
-				"message": "User not found",
+				"message": "Invalid or expired code",
 			})
 			return
 		}
@@ -507,7 +508,8 @@ func ResetPassword(c *gin.Context) {
 	var user models.User
 	if err := initializers.DB.Where("email = ?", body.Email).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Compte introuvable"})
+			middleware.RecordOTPAttempt("reset", body.Email, otpAttemptWindow)
+			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Code OTP invalide"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Erreur base de données"})

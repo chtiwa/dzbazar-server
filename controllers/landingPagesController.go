@@ -72,11 +72,12 @@ func uploadLandingPageFiles(shopID uuid.UUID, files []*multipart.FileHeader) ([]
 		)
 
 		_, err = initializers.S3Client.PutObject(context.Background(), &s3.PutObjectInput{
-			Bucket:      aws.String(bucketName),
-			Key:         aws.String(key),
-			Body:        src,
-			ACL:         types.ObjectCannedACLPublicRead,
-			ContentType: aws.String(contentType),
+			Bucket:       aws.String(bucketName),
+			Key:          aws.String(key),
+			Body:         src,
+			ACL:          types.ObjectCannedACLPublicRead,
+			ContentType:  aws.String(contentType),
+			CacheControl: aws.String("public, max-age=31536000, immutable"),
 		})
 		src.Close()
 

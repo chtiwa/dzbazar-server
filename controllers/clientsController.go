@@ -396,6 +396,17 @@ func DeleteClientByShopID(c *gin.Context) {
 		return
 	}
 
+	// Unscoped: soft-deleted orders still hold the FK. Never cascade-wipe order history.
+	var orderCount int64
+	initializers.DB.Unscoped().Model(&models.Order{}).Where("client_id = ?", client.ID).Count(&orderCount)
+	if orderCount > 0 {
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false,
+			"message": "Client has orders and cannot be deleted",
+		})
+		return
+	}
+
 	if err := initializers.DB.Delete(&client).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Failed to delete client", err)
 		return
@@ -406,6 +417,8 @@ func DeleteClientByShopID(c *gin.Context) {
 		"message": "Client deleted successfully",
 	})
 }
+
+const maxExcelImportBytes = 5 << 20
 
 func UploadExcelClients(c *gin.Context) {
 	shopID, err := uuid.Parse(c.Param("shopId"))
@@ -423,6 +436,11 @@ func UploadExcelClients(c *gin.Context) {
 		return
 	}
 
+	if fileHeader.Size > maxExcelImportBytes {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"success": false, "message": "Excel file too large"})
+		return
+	}
+
 	file, err := fileHeader.Open()
 	if err != nil {
 		RespondError(c, http.StatusInternalServerError, "Failed to open uploaded file", err)
@@ -430,7 +448,7 @@ func UploadExcelClients(c *gin.Context) {
 	}
 	defer file.Close()
 
-	xl, err := excelize.OpenReader(file)
+	xl, err := excelize.OpenReader(file, excelize.Options{UnzipSizeLimit: 50 << 20, UnzipXMLSizeLimit: 16 << 20})
 	if err != nil {
 		RespondError(c, http.StatusBadRequest, "Failed to parse Excel file", err)
 		return

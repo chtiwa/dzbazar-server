@@ -107,3 +107,20 @@ func DeleteMemberPermission(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Permission override cleared"})
 }
+
+// GetMyPermissions returns the caller's resolved permission map for the shop,
+// so the UI gates on actions (incl. per-member overrides) instead of roles.
+func GetMyPermissions(c *gin.Context) {
+	role, _ := c.Get("userShopRole")
+	var memberID *uuid.UUID
+	if v, ok := c.Get("shopMemberID"); ok {
+		id := v.(uuid.UUID)
+		memberID = &id
+	}
+	perms, err := services.ResolvedPermissions(memberID, role.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error while retrieving permissions"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": perms})
+}

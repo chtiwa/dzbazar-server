@@ -180,7 +180,7 @@ func LeadRow(cols []models.SheetColumn, l *models.AbandonedLead) []any {
 func SheetsEmailFor(integ *models.GoogleSheetsIntegration) string {
 	raw := os.Getenv("GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON")
 	if integ != nil && integ.ServiceAccountJSON != "" {
-		raw = integ.ServiceAccountJSON
+		raw = storedServiceAccountJSON(integ)
 	}
 	var k struct {
 		ClientEmail string `json:"client_email"`
@@ -189,6 +189,15 @@ func SheetsEmailFor(integ *models.GoogleSheetsIntegration) string {
 		return ""
 	}
 	return k.ClientEmail
+}
+
+// storedServiceAccountJSON decrypts the per-shop key; rows written before
+// encryption (plain JSON, never valid base64) pass through unchanged.
+func storedServiceAccountJSON(integ *models.GoogleSheetsIntegration) string {
+	if plain, err := DecryptField(integ.ServiceAccountJSON); err == nil {
+		return plain
+	}
+	return integ.ServiceAccountJSON
 }
 
 func newSheetsClient(serviceAccountJSON string) (*sheets.Service, error) {
@@ -212,7 +221,7 @@ var platformClient = sync.OnceValues(func() (*sheets.Service, error) {
 // else the cached platform client.
 func SheetsClientFor(integ *models.GoogleSheetsIntegration) (*sheets.Service, error) {
 	if integ.ServiceAccountJSON != "" {
-		return newSheetsClient(integ.ServiceAccountJSON)
+		return newSheetsClient(storedServiceAccountJSON(integ))
 	}
 	return platformClient()
 }
@@ -384,7 +393,11 @@ func SaveSheetIntegration(shopID uuid.UUID, kind string, in SheetIntegrationInpu
 	tab := strings.TrimSpace(in.SheetName)
 
 	if key := strings.TrimSpace(in.ServiceAccountJSON); key != "" {
-		integ.ServiceAccountJSON = key
+		enc, encErr := EncryptField(key)
+		if encErr != nil {
+			return integ, encErr
+		}
+		integ.ServiceAccountJSON = enc
 	}
 	svc, err := SheetsClientFor(&integ)
 	if err != nil {

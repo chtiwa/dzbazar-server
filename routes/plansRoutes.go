@@ -37,5 +37,6 @@ func PlansRoutes(router *gin.Engine) {
 		invoices.GET("", controllers.ListMyInvoices)
 		invoices.POST("", middleware.RateLimitByShop("invoice-create", 3, time.Hour), controllers.CreateInvoice)
 		invoices.POST("/:id/proof", controllers.UploadInvoiceProof)
+		invoices.DELETE("/:id", controllers.CancelInvoice)
 	}
 }

@@ -42,6 +42,40 @@ func MemberCan(memberID *uuid.UUID, role, action string) bool {
 	return ov.Allow
 }
 
+// ResolvedPermissions returns every action → allowed for a member, in two
+// queries (role defaults + overrides) instead of one MemberCan per action.
+func ResolvedPermissions(memberID *uuid.UUID, role string) (map[string]bool, error) {
+	var actions []models.PermissionAction
+	if err := initializers.DB.Find(&actions).Error; err != nil {
+		return nil, err
+	}
+	var defaults []models.RoleActionDefault
+	if err := initializers.DB.Where("role = ?", role).Find(&defaults).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(actions))
+	for _, a := range actions {
+		out[a.Name] = false
+	}
+	for _, d := range defaults {
+		if _, ok := out[d.Action]; ok {
+			out[d.Action] = d.Allow
+		}
+	}
+	if memberID != nil {
+		overrides, err := ListOverrides(*memberID)
+		if err != nil {
+			return nil, err
+		}
+		for _, o := range overrides {
+			if _, ok := out[o.Action]; ok {
+				out[o.Action] = o.Allow
+			}
+		}
+	}
+	return out, nil
+}
+
 func validAction(action string) bool {
 	var n int64
 	initializers.DB.Model(&models.PermissionAction{}).Where("name = ?", action).Count(&n)

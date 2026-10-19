@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"sort"
 	"time"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // offerTypeToAction is the fixed, one-way mapping from the merchant-facing
@@ -629,7 +631,7 @@ func resolveOffers(shopID, productID uuid.UUID, req EvaluateOffersRequest) ([]Of
 	comboMap := map[uuid.UUID]models.ProductVariantCombination{}
 	if len(allVariantIDs) > 0 {
 		var combos []models.ProductVariantCombination
-		initializers.DB.Select("id, quantity, price, combination_string, product_id").Where("id IN ?", allVariantIDs).Find(&combos)
+		initializers.DB.Select("id, quantity, price, combination_string, product_id").Preload("Product", func(db *gorm.DB) *gorm.DB { return db.Select("id, track_stock") }).Where("id IN ?", allVariantIDs).Find(&combos)
 		for _, c := range combos {
 			comboMap[c.ID] = c
 		}
@@ -673,7 +675,7 @@ func resolveOffers(shopID, productID uuid.UUID, req EvaluateOffersRequest) ([]Of
 			// that single combo's stock instead of a merchant-picked list.
 			if len(selectedVariantIDs) > 0 {
 				combo, found := comboMap[selectedVariantIDs[0]]
-				available := found && combo.Quantity > 0
+				available := found && (!combo.Product.TrackStock || combo.Quantity > 0)
 				if !available && offer.InventoryBehavior == "skip_when_oos" {
 					continue
 				}
@@ -831,7 +833,7 @@ func buildOfferedVariants(
 			continue
 		}
 		combo, found := comboMap[vid]
-		available := found && combo.Quantity > 0
+		available := found && (!combo.Product.TrackStock || combo.Quantity > 0)
 		if !available && offer.InventoryBehavior == "skip_when_oos" {
 			continue
 		}
@@ -993,6 +995,25 @@ func TrackOfferEventPublic(c *gin.Context) {
 		return
 	}
 
+	switch body.Event {
+	case "impression", "click", "accept", "revenue":
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid event"})
+		return
+	}
+	if body.Amount < 0 || body.Amount > 10_000_000 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid amount"})
+		return
+	}
+
+	// the offer must belong to this shop, else anyone could pollute any shop's analytics
+	var owned int64
+	initializers.DB.Model(&models.Offer{}).Where("id = ? AND shop_id = ?", offerID, shop.ID).Count(&owned)
+	if owned == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Offer not found"})
+		return
+	}
+
 	event := models.OfferEvent{
 		ShopID:  shop.ID,
 		OfferID: offerID,
@@ -1013,11 +1034,10 @@ func TrackOfferEventPublic(c *gin.Context) {
 		}
 	}
 
-	// Fire-and-forget — same pattern as post-order async tasks.
-	go func() {
-		defer func() { recover() }()
-		initializers.DB.Create(&event)
-	}()
+	// One small insert: sync keeps goroutines bounded by the request pool.
+	if err := initializers.DB.Create(&event).Error; err != nil {
+		log.Printf("offer event insert failed: %v", err)
+	}
 
 	c.Status(http.StatusNoContent)
 }

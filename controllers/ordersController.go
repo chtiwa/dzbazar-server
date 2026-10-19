@@ -144,42 +144,23 @@ func invalidateOrdersListCache(shopID uuid.UUID) {
 // matches a product it no longer contains.
 const orderContainsProductSQL = `EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id AND oi.deleted_at IS NULL AND oi.product_id = ?)`
 
+// scopeToAssignee limits a `confirmation`-role member to orders assigned to
+// them; every other role (incl. an impersonating super-admin) is unscoped.
+func scopeToAssignee(c *gin.Context, q *gorm.DB) *gorm.DB {
+	if role, _ := c.Get("userShopRole"); role == "confirmation" {
+		memberID, _ := c.Get("shopMemberID")
+		return q.Where("orders.assigned_member_id = ?", memberID)
+	}
+	return q
+}
+
 func GetOrdersByShopID(c *gin.Context) {
-	user, ok := c.Get("user")
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to retrieve authenticated session user",
-		})
-		return
-	}
-
-	userData, ok := user.(models.User)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Invalid session user structure context",
-		})
-		return
-	}
-
 	shopIDStr := c.Param("shopId")
 	shopID, err := uuid.Parse(shopIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"message": "Invalid or missing Shop ID",
-		})
-		return
-	}
-
-	var membership models.ShopMember
-	if err := initializers.DB.
-		Where("shop_id = ? AND user_id = ?", shopID, userData.ID).
-		First(&membership).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{
-			"success": false,
-			"message": "You do not have access to this shop",
 		})
 		return
 	}
@@ -195,7 +176,7 @@ func GetOrdersByShopID(c *gin.Context) {
 
 	if perPageString := c.Query("perPage"); perPageString != "" {
 		if parsedPerPage, err := strconv.Atoi(perPageString); err == nil && parsedPerPage > 0 {
-			perPage = parsedPerPage
+			perPage = min(parsedPerPage, 100)
 		}
 	}
 
@@ -210,7 +191,8 @@ func GetOrdersByShopID(c *gin.Context) {
 
 	// A confirmatrice only ever sees orders assigned to her — never the
 	// shop's shared default-view cache, which isn't scoped per-member.
-	isConfirmatrice := membership.Role == "confirmation"
+	role, _ := c.Get("userShopRole")
+	isConfirmatrice := role == "confirmation"
 
 	isDefaultView := !isConfirmatrice && page == 1 && perPage == 10 && (status == "" || status == "Tous") &&
 		search == "" && dateFrom == "" && dateTo == "" && !flaggedOnly && productID == "" && platform == "" &&
@@ -225,9 +207,7 @@ func GetOrdersByShopID(c *gin.Context) {
 
 	baseQuery := initializers.DB.Model(&models.Order{}).Where("orders.shop_id = ? AND orders.is_hidden = ?", shopID, flaggedOnly)
 
-	if isConfirmatrice {
-		baseQuery = baseQuery.Where("orders.assigned_member_id = ?", membership.ID)
-	}
+	baseQuery = scopeToAssignee(c, baseQuery)
 
 	if status != "" && status != "Tous" {
 		baseQuery = baseQuery.Where("status = ?", status)
@@ -369,7 +349,23 @@ func orderCooldownCookie(shopID uuid.UUID) string {
 // (HTTP call + local status update) is allowed to hold shipLockKey — used by
 // osenController.go/zrController.go/leopardController.go to close the
 // double-ship race between reading order.IsShipped and writing it back true.
-const shipLockTTL = 30 * time.Second
+const shipLockTTL = 60 * time.Second
+
+// tryShipLock takes the per-order ship lock, then re-reads is_shipped under it:
+// the caller's earlier read may predate a concurrent ship that just finished.
+// Not released on success (is_shipped now blocks re-ship); on failure it expires.
+// ponytail: 60s must outlast the slowest carrier flow (several 10-15s calls).
+func tryShipLock(orderID uuid.UUID) bool {
+	if !utils.TryAcquireTickLock(shipLockKey(orderID), shipLockTTL) {
+		return false
+	}
+	var shipped bool
+	if err := initializers.DB.Model(&models.Order{}).Select("is_shipped").Where("id = ?", orderID).Scan(&shipped).Error; err != nil || shipped {
+		initializers.RClient.Del(initializers.Ctx, shipLockKey(orderID))
+		return false
+	}
+	return true
+}
 
 func shipLockKey(orderID uuid.UUID) string {
 	return "ship-lock:" + orderID.String()
@@ -701,7 +697,14 @@ func CreateOrderByShopID(c *gin.Context) {
 				for i, oi := range orderItems {
 					productIDs[i] = oi.ProductID
 				}
-				if discount, matched := couponDiscount(coupon, productIDs, calculatedTotalPrice); matched {
+				// discount only the lines the coupon is scoped to, not the whole cart
+				eligible := 0.0
+				for _, oi := range orderItems {
+					if couponScopeMatches(coupon, []uuid.UUID{oi.ProductID}) {
+						eligible += oi.Price * float64(oi.Quantity)
+					}
+				}
+				if discount, matched := couponDiscount(coupon, productIDs, eligible); matched {
 					discountAmount = discount
 					couponID = &coupon.ID
 					calculatedTotalPrice -= discountAmount
@@ -823,6 +826,10 @@ func CreateOrderByShopID(c *gin.Context) {
 	})
 
 	if err != nil {
+		// failed checkout must not burn the 30-min phone window: the fixed retry would be shadow-hidden
+		if set {
+			initializers.RClient.Del(initializers.Ctx, phoneKey)
+		}
 		if errors.Is(err, errInsufficientStock) {
 			c.JSON(http.StatusConflict, gin.H{
 				"success": false,
@@ -878,9 +885,9 @@ func IndexOrderByShopID(c *gin.Context) {
 
 	var order models.Order
 
-	err = initializers.DB.
+	err = scopeToAssignee(c, initializers.DB.
 		Model(&models.Order{}).
-		Where("id = ? AND shop_id = ?", orderID, shopID).
+		Where("id = ? AND shop_id = ?", orderID, shopID)).
 		Preload("Client").
 		Preload("Items").
 		Preload("Items.Product").
@@ -983,15 +990,20 @@ func UpdateOrderByShopID(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid order status"})
 		return
 	}
+	if role, _ := c.Get("userShopRole"); role == "confirmation" && (body.OverrideTotalPrice != nil || body.IsShipped != nil) {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Not allowed for your role"})
+		return
+	}
 
 	var oldStatus string
 
 	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
 		var order models.Order
-		if err := tx.
+		if err := scopeToAssignee(c, tx.
 			Preload("Client").
 			Preload("Items.Product"). // DecrementOrderItemsStock reads Product.TrackStock
-			First(&order, "id = ? AND shop_id = ?", orderID, shopID).Error; err != nil {
+			Where("id = ? AND shop_id = ?", orderID, shopID)).
+			First(&order).Error; err != nil {
 			return err
 		}
 		oldStatus = order.Status
@@ -1046,6 +1058,9 @@ func UpdateOrderByShopID(c *gin.Context) {
 			}
 			shippingPrice = resolved
 		}
+		// A status-only (or note/flag-only) PATCH must not touch the stored total
+		// (coupon, staff override, offer pricing would be lost).
+		repriced := len(body.Items) > 0 || body.ShippingPrice != nil || body.ShippingMethod != nil
 		calculatedTotalPrice := shippingPrice
 		newOrderItems := make([]models.OrderItem, 0)
 
@@ -1116,6 +1131,10 @@ func UpdateOrderByShopID(c *gin.Context) {
 			if err := tx.Create(&newOrderItems).Error; err != nil {
 				return err
 			}
+			// stock ops below must see the new lines, not the pre-edit ones
+			if err := tx.Preload("Product").Where("order_id = ?", order.ID).Find(&order.Items).Error; err != nil {
+				return err
+			}
 		} else {
 			var existingItems []models.OrderItem
 			if err := tx.Where("order_id = ?", order.ID).Find(&existingItems).Error; err != nil {
@@ -1127,13 +1146,15 @@ func UpdateOrderByShopID(c *gin.Context) {
 			}
 		}
 
-		if body.OverrideTotalPrice != nil {
-			calculatedTotalPrice = *body.OverrideTotalPrice
+		updates := map[string]any{}
+		switch {
+		case body.OverrideTotalPrice != nil:
+			updates["total_price"] = *body.OverrideTotalPrice
+		case repriced:
+			updates["total_price"] = max(calculatedTotalPrice-order.DiscountAmount, 0)
 		}
-
-		updates := map[string]any{
-			"shipping_price": shippingPrice,
-			"total_price":    calculatedTotalPrice,
+		if repriced {
+			updates["shipping_price"] = shippingPrice
 		}
 
 		if body.ShippingMethod != nil {
@@ -1180,6 +1201,11 @@ func UpdateOrderByShopID(c *gin.Context) {
 						updates["shipped_via_id"] = shippedViaID
 					}
 				}
+			} else if !*body.IsShipped && order.IsShipped {
+				// ponytail: mirror of the ship branch, else true->false->true double-decrements
+				if err := services.RestoreOrderItemsStock(tx, order.Items); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -1198,6 +1224,11 @@ func UpdateOrderByShopID(c *gin.Context) {
 				"success": false,
 				"message": "Order not found or does not belong to this shop",
 			})
+			return
+		}
+
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
+			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Another client already uses this phone number"})
 			return
 		}
 
@@ -1378,16 +1409,20 @@ func BulkUpdateOrderStatusByShopID(c *gin.Context) {
 	}
 
 	var orders []models.Order
-	if err := initializers.DB.
-		Where("id IN ? AND shop_id = ?", orderIDs, shopID).
+	if err := scopeToAssignee(c, initializers.DB.Where("id IN ? AND shop_id = ?", orderIDs, shopID)).
 		Find(&orders).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Failed to load orders", err)
 		return
 	}
 
 	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
+		// only the orders the scoped Find above returned (confirmation role = assigned only)
+		ids := make([]uuid.UUID, len(orders))
+		for i, o := range orders {
+			ids[i] = o.ID
+		}
 		return tx.Model(&models.Order{}).
-			Where("id IN ? AND shop_id = ?", orderIDs, shopID).
+			Where("id IN ? AND shop_id = ?", ids, shopID).
 			Update("status", body.Status).Error
 	})
 	if err != nil {

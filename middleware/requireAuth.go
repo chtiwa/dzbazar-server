@@ -12,6 +12,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// Must match controllers.refreshTokenTTLSeconds (7d).
+const refreshTTLSeconds = 60 * 60 * 24 * 7
+
 func RequireAuthentication(c *gin.Context) {
 	accessTokenString, accessErr := c.Cookie("AccessToken")
 	refreshTokenString, refreshErr := c.Cookie("RefreshToken")
@@ -108,6 +111,13 @@ func RequireAuthentication(c *gin.Context) {
 						// Set new access token as a cookie (Secure flag updated)
 						c.SetSameSite(http.SameSiteLaxMode)
 						c.SetCookie("AccessToken", newAccessTokenString, 60*15, "/", "", isProduction, true)
+
+						// Sliding window: a fresh 7d refresh token on every rotation, so an
+						// active user's session doesn't hard-expire 7 days after login.
+						// ponytail: old refresh jti isn't denylisted, add if reuse detection matters.
+						if newRefresh, err := utils.GenerateToken(user.ID, refreshTTLSeconds, user.Role).SignedString([]byte(os.Getenv("JWT_SECRET"))); err == nil {
+							c.SetCookie("RefreshToken", newRefresh, refreshTTLSeconds, "/", "", isProduction, true)
+						}
 
 						c.Set("user", user)
 						c.Set("role", user.Role)

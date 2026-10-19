@@ -11,9 +11,9 @@ import (
 func ProductsRoutes(router *gin.Engine) {
 	adminProducts := router.Group("/v1/shops/:shopId/products")
 	{
-		adminProducts.GET("", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), controllers.GetProductsByShopAdmin)
+		adminProducts.GET("", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("products.view"), controllers.GetProductsByShopAdmin)
 		adminProducts.POST("", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("products.create"), controllers.CreateProductByShop)
-		adminProducts.GET("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), controllers.GetProductByIDAdmin)
+		adminProducts.GET("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("products.view"), controllers.GetProductByIDAdmin)
 		adminProducts.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("products.edit"), controllers.UpdateProductByShop)
 		adminProducts.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("products.delete"), controllers.DeleteProductByShop)
 		adminProducts.PATCH("/:id/images", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("products.edit"), controllers.UpdateProductImagesByShop)

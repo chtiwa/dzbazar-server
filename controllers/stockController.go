@@ -52,7 +52,7 @@ func GetShopStock(c *gin.Context) {
 	}
 	if v := c.Query("perPage"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 && parsed <= 100 {
-			perPage = parsed
+			perPage = min(parsed, 100)
 		}
 	}
 

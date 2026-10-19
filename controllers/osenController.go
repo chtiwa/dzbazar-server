@@ -511,7 +511,7 @@ func CreateOsenOrder(c *gin.Context) {
 	// helper (SETNX+TTL, no explicit release — TTL just needs to outlast one
 	// carrier call). Closes the double-ship race between the IsShipped read
 	// above and the carrier call below, without a bespoke lock type.
-	if !utils.TryAcquireTickLock(shipLockKey(order.ID), shipLockTTL) {
+	if !tryShipLock(order.ID) {
 		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Expédition déjà en cours pour cette commande"})
 		return
 	}
@@ -528,7 +528,7 @@ func CreateOsenOrder(c *gin.Context) {
 		if errors.As(err, &shipErr) {
 			c.JSON(shipErr.status, gin.H{"success": false, "message": shipErr.msg})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Échec de l'expédition", err)
 		}
 		return
 	}
@@ -596,7 +596,7 @@ func BulkCreateOsenOrders(c *gin.Context) {
 			continue
 		}
 
-		if !utils.TryAcquireTickLock(shipLockKey(order.ID), shipLockTTL) {
+		if !tryShipLock(order.ID) {
 			results = append(results, bulkOsenShipResult{OrderID: idStr, Success: false, Message: "Expédition déjà en cours pour cette commande"})
 			continue
 		}
@@ -620,7 +620,7 @@ func BulkCreateOsenOrders(c *gin.Context) {
 
 		osenOrder, _, err := shipOrderToOsen(c, &order, integration, override)
 		if err != nil {
-			results = append(results, bulkOsenShipResult{OrderID: idStr, Success: false, Message: err.Error()})
+			results = append(results, bulkOsenShipResult{OrderID: idStr, Success: false, Message: shipErrMsg(err)})
 			continue
 		}
 
@@ -629,4 +629,15 @@ func BulkCreateOsenOrders(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": results})
+}
+
+// shipErrMsg is the client-safe text for a ship failure: our own osenShipError
+// messages pass through, anything else (raw DB/HTTP errors) is logged and masked.
+func shipErrMsg(err error) string {
+	var shipErr *osenShipError
+	if errors.As(err, &shipErr) {
+		return shipErr.msg
+	}
+	log.Printf("ship error: %v", err)
+	return "Échec de l'expédition"
 }

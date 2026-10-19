@@ -9,7 +9,7 @@ import (
 
 // RequirePlatformRole gates a route by the user's platform-wide role
 // (User.PlatformRole), which is orthogonal to the tenant roles checked by
-// RequireRoles/RequireShopAccess. Must run after RequireAuthentication.
+// RequireShopAccess. Must run after RequireAuthentication.
 func RequirePlatformRole(allowed ...string) gin.HandlerFunc {
 	allowedMap := map[string]bool{}
 	for _, a := range allowed {

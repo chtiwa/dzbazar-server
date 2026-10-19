@@ -12,7 +12,7 @@ func ClientsRoutes(router *gin.Engine) {
 		clients.GET("", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator", "confirmation"), controllers.GetClientsByShopID)
 		clients.GET("/search", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator", "confirmation"), controllers.GetClientsBySearch)
 		clients.POST("", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator", "confirmation"), controllers.CreateClientByShopID)
-		clients.POST("/excel", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator", "confirmation"), controllers.UploadExcelClients)
+		clients.POST("/excel", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("clients.edit"), controllers.UploadExcelClients)
 
 		clients.GET("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator", "confirmation"), controllers.IndexClientByShopID)
 		clients.PATCH("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("clients.edit"), controllers.UpdateClientByShopID)

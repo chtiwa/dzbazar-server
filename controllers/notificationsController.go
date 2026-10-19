@@ -27,7 +27,7 @@ func GetMyNotifications(c *gin.Context) {
 	}
 	if pp := c.Query("perPage"); pp != "" {
 		if parsed, parseErr := strconv.Atoi(pp); parseErr == nil && parsed > 0 {
-			perPage = parsed
+			perPage = min(parsed, 100)
 		}
 	}
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/mail"
 	"net/url"
@@ -283,42 +282,14 @@ func CreateShop(c *gin.Context) {
 
 	file, err := c.FormFile("logoImage")
 	if err == nil && file != nil {
-		src, openErr := file.Open()
+		src, contentType, openErr := openImageUpload(file, maxImageUploadBytes)
 		if openErr != nil {
-			RespondError(c, http.StatusBadRequest, "Failed to open uploaded logo image", openErr)
+			if !respondIfInvalidImage(c, openErr) {
+				RespondError(c, http.StatusBadRequest, "Failed to open uploaded logo image", openErr)
+			}
 			return
 		}
 		defer src.Close()
-
-		buffer := make([]byte, 512)
-		n, readErr := src.Read(buffer)
-		if readErr != nil && readErr != io.EOF {
-			RespondError(c, http.StatusBadRequest, "Failed to read uploaded logo image", readErr)
-			return
-		}
-
-		contentType := http.DetectContentType(buffer[:n])
-		if !strings.HasPrefix(contentType, "image/") {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "Only image files are allowed for the shop logo",
-			})
-			return
-		}
-
-		seeker, ok := src.(io.Seeker)
-		if !ok {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Failed to process uploaded logo image stream",
-			})
-			return
-		}
-
-		if _, seekErr := seeker.Seek(0, io.SeekStart); seekErr != nil {
-			RespondError(c, http.StatusInternalServerError, "Failed to process uploaded logo image", seekErr)
-			return
-		}
 
 		cleanFileName := filepath.Base(file.Filename)
 		key := fmt.Sprintf("uploads/shops/%s/%d_%s", processedSlug, time.Now().UnixNano(), cleanFileName)
@@ -664,29 +635,14 @@ func UpdateShop(c *gin.Context) {
 	var uploadedLogoURL string
 	file, err := c.FormFile("logoImage")
 	if err == nil && file != nil {
-		src, openErr := file.Open()
+		src, contentType, openErr := openImageUpload(file, maxImageUploadBytes)
 		if openErr != nil {
-			RespondError(c, http.StatusBadRequest, "Failed to open uploaded logo image", openErr)
+			if !respondIfInvalidImage(c, openErr) {
+				RespondError(c, http.StatusBadRequest, "Failed to open uploaded logo image", openErr)
+			}
 			return
 		}
 		defer src.Close()
-
-		buffer := make([]byte, 512)
-		n, _ := src.Read(buffer)
-		contentType := http.DetectContentType(buffer[:n])
-
-		if !strings.HasPrefix(contentType, "image/") {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"message": "Only image files are allowed for the shop logo",
-			})
-			return
-		}
-
-		if _, seekErr := src.Seek(0, io.SeekStart); seekErr != nil {
-			RespondError(c, http.StatusInternalServerError, "Failed to process uploaded logo image", seekErr)
-			return
-		}
 
 		targetSlug := shop.Slug
 		if slugVal, exists := updateData["slug"].(string); exists && slugVal != "" {

@@ -21,6 +21,8 @@ type Invoice struct {
 
 	ProofScreenshotURL string `json:"proofScreenshotUrl"`
 
+	DenialReason string `gorm:"not null;default:''" json:"denialReason"`
+
 	ReviewedBy *uuid.UUID `gorm:"type:uuid" json:"reviewedBy"`
 	ReviewedAt *time.Time `json:"reviewedAt"`
 }

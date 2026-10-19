@@ -104,18 +104,11 @@ func AskHelpChat(c *gin.Context) {
 
 	// Chat is no longer free on any tier: pre-flight one call's credits so a
 	// shop out of budget (trial plans have none) fails before the provider call.
-	if err := services.CheckCreditBudget(shopID, services.CreditCostChat); err != nil {
-		if errors.Is(err, services.ErrPlanLimitReached) {
-			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"message": "Not enough AI credits. Upgrade your plan for more.",
-				"code":    "PLAN_LIMIT_REACHED",
-			})
-			return
-		}
-		RespondError(c, http.StatusInternalServerError, "Failed to verify plan limits", err)
+	release, ok := reserveAICredits(c, shopID, services.CreditCostChat)
+	if !ok {
 		return
 	}
+	defer release()
 
 	answer, toolCalls, usage, err := services.AskHelpChat(history, tools)
 	if err != nil {

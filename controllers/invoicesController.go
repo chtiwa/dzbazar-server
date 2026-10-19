@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"io"
 	"math"
 	"net/http"
 	"os"
@@ -203,35 +202,14 @@ func UploadInvoiceProof(c *gin.Context) {
 		return
 	}
 
-	src, err := file.Open()
+	src, contentType, err := openImageUpload(file, maxImageUploadBytes)
 	if err != nil {
-		RespondError(c, http.StatusBadRequest, "Failed to open uploaded screenshot", err)
+		if !respondIfInvalidImage(c, err) {
+			RespondError(c, http.StatusBadRequest, "Failed to open uploaded screenshot", err)
+		}
 		return
 	}
 	defer src.Close()
-
-	buffer := make([]byte, 512)
-	n, readErr := src.Read(buffer)
-	if readErr != nil && readErr != io.EOF {
-		RespondError(c, http.StatusBadRequest, "Failed to read uploaded screenshot", readErr)
-		return
-	}
-
-	contentType := http.DetectContentType(buffer[:n])
-	if !strings.HasPrefix(contentType, "image/") {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Only image files are allowed for the payment screenshot"})
-		return
-	}
-
-	seeker, ok := src.(io.Seeker)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to process uploaded screenshot stream"})
-		return
-	}
-	if _, seekErr := seeker.Seek(0, io.SeekStart); seekErr != nil {
-		RespondError(c, http.StatusInternalServerError, "Failed to process uploaded screenshot", seekErr)
-		return
-	}
 
 	cleanFileName := filepath.Base(file.Filename)
 	key := fmt.Sprintf("uploads/invoices/%s/%d_%s", invoice.ShopID, time.Now().UnixNano(), cleanFileName)
@@ -285,4 +263,34 @@ func ListMyInvoices(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": invoices})
+}
+
+// CancelInvoice deletes a pending invoice so the shop can file a new one
+// (CreateInvoice allows only one pending invoice per shop). Reviewed
+// invoices are billing history and can't be removed.
+func CancelInvoice(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+	invoiceID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid invoice ID"})
+		return
+	}
+
+	// Status in the WHERE makes this atomic against a concurrent approve/reject.
+	res := initializers.DB.Where("id = ? AND shop_id = ? AND status = 'pending'", invoiceID, shopID).Delete(&models.Invoice{})
+	if res.Error != nil {
+		RespondError(c, http.StatusInternalServerError, "Failed to cancel invoice", res.Error)
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Invoice not found or already reviewed"})
+		return
+	}
+
+	utils.LogAudit(c, "invoice.cancel", "Invoice", &invoiceID, gin.H{"shopId": shopID})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Invoice cancelled"})
 }

@@ -393,3 +393,26 @@ func HasOrderCapacity(shopID uuid.UUID) bool {
 	_ = initializers.RClient.Set(initializers.Ctx, key, val, 60*time.Second).Err()
 	return ok
 }
+
+// ErrAIBusy: another AI call for this shop is still in flight.
+var ErrAIBusy = errors.New("ai call in flight")
+
+// ReserveCredits serialises a shop's AI calls (Redis lock) around the
+// check-then-record window, so parallel requests can't each pass the budget
+// check before any usage row exists. Release when the usage row is written.
+// ponytail: one AI call per shop at a time; fails open if Redis is down.
+func ReserveCredits(shopID uuid.UUID, need int) (func(), error) {
+	key := "lock:ai:" + shopID.String()
+	release := func() {}
+	if ok, err := initializers.RClient.SetNX(initializers.Ctx, key, 1, 2*time.Minute).Result(); err == nil {
+		if !ok {
+			return nil, ErrAIBusy
+		}
+		release = func() { initializers.RClient.Del(initializers.Ctx, key) }
+	}
+	if err := CheckCreditBudget(shopID, need); err != nil {
+		release()
+		return nil, err
+	}
+	return release, nil
+}

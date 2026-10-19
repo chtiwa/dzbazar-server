@@ -301,7 +301,7 @@ func CreateAndersonOrder(c *gin.Context) {
 		return
 	}
 
-	if !utils.TryAcquireTickLock(shipLockKey(order.ID), shipLockTTL) {
+	if !tryShipLock(order.ID) {
 		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Expédition déjà en cours pour cette commande"})
 		return
 	}
@@ -318,7 +318,7 @@ func CreateAndersonOrder(c *gin.Context) {
 		if errors.As(err, &shipErr) {
 			c.JSON(shipErr.status, gin.H{"success": false, "message": shipErr.msg})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+			RespondError(c, http.StatusInternalServerError, "Échec de l'expédition", err)
 		}
 		return
 	}
@@ -388,14 +388,14 @@ func BulkCreateAndersonOrders(c *gin.Context) {
 			continue
 		}
 
-		if !utils.TryAcquireTickLock(shipLockKey(order.ID), shipLockTTL) {
+		if !tryShipLock(order.ID) {
 			results = append(results, bulkAndersonShipResult{OrderID: idStr, Success: false, Message: "Expédition déjà en cours pour cette commande"})
 			continue
 		}
 
 		andersonOrder, err := shipOrderToAnderson(c, &order, integration)
 		if err != nil {
-			results = append(results, bulkAndersonShipResult{OrderID: idStr, Success: false, Message: err.Error()})
+			results = append(results, bulkAndersonShipResult{OrderID: idStr, Success: false, Message: shipErrMsg(err)})
 			continue
 		}
 

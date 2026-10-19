@@ -301,7 +301,7 @@ func RefreshZrGeo(c *gin.Context) {
 
 	hubs, err := loadZrHubs(shopID, integration)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+		RespondError(c, http.StatusBadGateway, "Impossible de charger les hubs ZR Express", err)
 		return
 	}
 
@@ -312,67 +312,6 @@ func RefreshZrGeo(c *gin.Context) {
 		"data": gin.H{
 			"hubsCount":        len(hubs),
 			"territoriesCount": len(territories),
-		},
-	})
-}
-
-// DebugZrGeo is a diagnostic endpoint: it calls ZR Express's hubs/search,
-// parcels/search, and delivery-pricing/rates directly (no caching, no parsing
-// into our structs) and returns the raw status + body of each, so the real
-// response shape can be inspected from the Network tab when server console
-// access isn't available.
-func DebugZrGeo(c *gin.Context) {
-	shopID, err := uuid.Parse(c.Param("shopId"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
-		return
-	}
-
-	integration, err := findZrIntegration(shopID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "ZR Express n'est pas connecté à cette boutique"})
-		return
-	}
-
-	httpClient := &http.Client{Timeout: 15 * time.Second}
-	rawCall := func(method, path string, reqBody []byte) gin.H {
-		var bodyReader io.Reader
-		if reqBody != nil {
-			bodyReader = bytes.NewBuffer(reqBody)
-		}
-		req, err := http.NewRequest(method, zrBaseURL+path, bodyReader)
-		if err != nil {
-			return gin.H{"error": err.Error()}
-		}
-		zrAuthHeaders(req, integration)
-		if reqBody != nil {
-			req.Header.Set("Content-Type", "application/json")
-		}
-		resp, err := httpClient.Do(req)
-		if err != nil {
-			return gin.H{"error": err.Error()}
-		}
-		defer resp.Body.Close()
-		respBody, _ := io.ReadAll(resp.Body)
-
-		var parsed any
-		if json.Unmarshal(respBody, &parsed) == nil {
-			return gin.H{"status": resp.StatusCode, "body": parsed}
-		}
-		return gin.H{"status": resp.StatusCode, "rawBody": string(respBody)}
-	}
-
-	// Confirmed live: ZR's generic search endpoints 500 on null optional
-	// fields and 400 on {} for advancedFilter — omitting them entirely
-	// (pagination only) is the shape that works.
-	minimalSearchBody, _ := json.Marshal(map[string]any{"pageSize": 5, "pageNumber": 1})
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"rates":   rawCall("GET", "/api/v1/delivery-pricing/rates", nil),
-			"hubs":    rawCall("POST", "/api/v1/hubs/search", minimalSearchBody),
-			"parcels": rawCall("POST", "/api/v1/parcels/search", minimalSearchBody),
 		},
 	})
 }

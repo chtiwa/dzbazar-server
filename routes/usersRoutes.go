@@ -23,6 +23,9 @@ func UsersRoutes(router *gin.Engine) {
 		users.GET("/verify", middleware.RequireAuthentication)
 	}
 
+	// Every action resolved for the caller (role default + per-member override).
+	router.GET("/v1/shops/:shopId/me/permissions", middleware.RequireAuthentication, middleware.RequireShopAccess(), controllers.GetMyPermissions)
+
 	shopUsers := router.Group("/v1/shops/:shopId/users")
 	shopUsers.Use(middleware.RequireAuthentication)
 	{

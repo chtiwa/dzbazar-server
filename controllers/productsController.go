@@ -38,10 +38,11 @@ func uploadVariantItemImage(file *multipart.FileHeader) (string, error) {
 	bucketName := os.Getenv("B2_BUCKET_NAME")
 
 	_, err = initializers.S3Client.PutObject(context.TODO(), &s3.PutObjectInput{
-		Bucket:      aws.String(bucketName),
-		Key:         aws.String(key),
-		Body:        src,
-		ContentType: aws.String(contentType),
+		Bucket:       aws.String(bucketName),
+		Key:          aws.String(key),
+		Body:         src,
+		ContentType:  aws.String(contentType),
+		CacheControl: aws.String("public, max-age=31536000, immutable"),
 	})
 	if err != nil {
 		return "", err
@@ -343,18 +344,11 @@ func GenerateProductDescription(c *gin.Context) {
 		return
 	}
 
-	if err := services.CheckCreditBudget(shopID, services.CreditCostDescription); err != nil {
-		if errors.Is(err, services.ErrPlanLimitReached) {
-			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"message": "Not enough AI credits. Upgrade your plan for more.",
-				"code":    "PLAN_LIMIT_REACHED",
-			})
-			return
-		}
-		RespondError(c, http.StatusInternalServerError, "Failed to verify plan limits", err)
+	release, ok := reserveAICredits(c, shopID, services.CreditCostDescription)
+	if !ok {
 		return
 	}
+	defer release()
 
 	html, usage, err := services.GenerateProductDescriptionHTML(description)
 	if err != nil {
@@ -502,10 +496,11 @@ func CreateProductByShop(c *gin.Context) {
 		bucketName := os.Getenv("B2_BUCKET_NAME")
 
 		_, err = initializers.S3Client.PutObject(context.TODO(), &s3.PutObjectInput{
-			Bucket:      aws.String(bucketName),
-			Key:         aws.String(key),
-			Body:        src,
-			ContentType: aws.String(contentType),
+			Bucket:       aws.String(bucketName),
+			Key:          aws.String(key),
+			Body:         src,
+			ContentType:  aws.String(contentType),
+			CacheControl: aws.String("public, max-age=31536000, immutable"),
 		})
 		src.Close()
 
@@ -745,7 +740,7 @@ func GetProductsByShopAdmin(c *gin.Context) {
 	}
 	if v := c.Query("perPage"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 && parsed <= 100 {
-			perPage = parsed
+			perPage = min(parsed, 100)
 		}
 	}
 
@@ -779,6 +774,9 @@ func GetProductsByShopAdmin(c *gin.Context) {
 
 	if search != "" {
 		words := strings.Fields(search)
+		if len(words) > 5 {
+			words = words[:5]
+		}
 		for _, w := range words {
 			like := "%" + w + "%"
 			db = db.Where("(products.title ILIKE ? OR products.description ILIKE ?)", like, like)
@@ -932,16 +930,6 @@ func GetActiveProductsBySlug(c *gin.Context) {
 		hasMaxPrice = true
 	}
 
-	cacheKey := fmt.Sprintf("products:slug:%s:client:page:%d:min:%v:max:%v", slug, page, minPrice, maxPrice)
-	val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result()
-	if err == nil {
-		var cachedResponse map[string]interface{}
-		if unmarshalErr := json.Unmarshal([]byte(val), &cachedResponse); unmarshalErr == nil {
-			c.JSON(http.StatusOK, cachedResponse)
-			return
-		}
-	}
-
 	var shop models.Shop
 	if err := initializers.DB.
 		Select("id", "slug", "is_active").
@@ -960,6 +948,21 @@ func GetActiveProductsBySlug(c *gin.Context) {
 			"message": "Shop not found",
 		})
 		return
+	}
+
+	// Only unfiltered pages are cached (arbitrary price floats would mint unbounded
+	// keys), and only after the IsActive check so a suspended shop never serves stale data.
+	cacheable := !hasMinPrice && !hasMaxPrice
+	requestedPage := page
+	cacheKey := fmt.Sprintf("products:slug:%s:client:page:%d", slug, page)
+	if cacheable {
+		if val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result(); err == nil {
+			var cachedResponse map[string]interface{}
+			if json.Unmarshal([]byte(val), &cachedResponse) == nil {
+				c.JSON(http.StatusOK, cachedResponse)
+				return
+			}
+		}
 	}
 
 	var totalRows int64
@@ -1018,7 +1021,7 @@ func GetActiveProductsBySlug(c *gin.Context) {
 		},
 	}
 
-	if jsonData, err := json.Marshal(response); err == nil {
+	if jsonData, err := json.Marshal(response); err == nil && cacheable && page == requestedPage {
 		initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute)
 		initializers.RClient.SAdd(initializers.Ctx, "cache:products", cacheKey)
 	}
@@ -1028,15 +1031,22 @@ func GetActiveProductsBySlug(c *gin.Context) {
 
 func GetProductsBySearchBySlug(c *gin.Context) {
 	search := c.Query("search")
+	if r := []rune(search); len(r) > 100 {
+		search = string(r[:100])
+	}
 	slug := c.Param("slug")
 
 	// 1. RESOLVE SLUG TO UUID (Fixes the Slug mismatch bug)
 	var shop models.Shop
-	if err := initializers.DB.Select("id").Where("slug = ?", slug).First(&shop).Error; err != nil {
+	if err := initializers.DB.Select("id", "is_active").Where("slug = ?", slug).First(&shop).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
 			"message": "Shop not found",
 		})
+		return
+	}
+	if !shop.IsActive {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Shop not found"})
 		return
 	}
 	shopID := shop.ID
@@ -1946,10 +1956,11 @@ func UpdateProductImagesByShop(c *gin.Context) {
 		key := fmt.Sprintf("uploads/products/%s/%d_%s", shopID.String(), time.Now().UnixNano(), filepath.Base(file.Filename))
 
 		_, err = initializers.S3Client.PutObject(context.Background(), &s3.PutObjectInput{
-			Bucket:      aws.String(bucketName),
-			Key:         aws.String(key),
-			Body:        src,
-			ContentType: aws.String(contentType),
+			Bucket:       aws.String(bucketName),
+			Key:          aws.String(key),
+			Body:         src,
+			ContentType:  aws.String(contentType),
+			CacheControl: aws.String("public, max-age=31536000, immutable"),
 		})
 		src.Close()
 

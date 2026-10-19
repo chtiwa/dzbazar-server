@@ -47,7 +47,6 @@ Go REST API using **Gin** (HTTP router) + **GORM** (ORM) + **PostgreSQL**. Entry
 - All shop-scoped routes follow the pattern `/api/v1/shops/:shopId/<resource>`
 - `middleware.RequireAuthentication` — validates JWT from `AccessToken` cookie, auto-rotates using `RefreshToken` cookie if expired, sets `user` and `role` in gin context
 - `middleware.RequireShopAccess("Owner")` — checks `X-Shop-ID` header against `shop_members` table, enforces role
-- `middleware.RequireRoles(...)` — checks the `role` field on the JWT claims
 
 ### Multi-tenancy model
 A `User` can belong to multiple `Shop`s via `ShopMember` (with a `role`: `owner` | `moderator` | `confirmation`). The active shop is communicated on every request via the `X-Shop-ID` header set by the frontend after login.

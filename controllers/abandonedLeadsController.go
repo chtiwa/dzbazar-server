@@ -17,7 +17,7 @@ import (
 )
 
 type CreateAbandonedLeadInput struct {
-	ShopID           string  `json:"shopId" binding:"required"`
+	ShopID           string  `json:"shopId"` // legacy; the :shopId route param is authoritative
 	ProductID        string  `json:"productId" binding:"required"`
 	ProductTitle     string  `json:"productTitle"`
 	Price            float64 `json:"price"`
@@ -43,18 +43,35 @@ func abandonedLeadKey(shopID uuid.UUID, phone string) string {
 func CreateAbandonedLead(c *gin.Context) {
 	var body CreateAbandonedLeadInput
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		RespondError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
-	parsedShopID, err := uuid.Parse(body.ShopID)
-	if err != nil {
+	parsedShopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil || (body.ShopID != "" && body.ShopID != parsedShopID.String()) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+
+	if !services.IsValidPhoneNumber(body.PhoneNumber) {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid phone number format"})
+		return
+	}
+
+	if active, err := services.IsShopActive(parsedShopID); err != nil || !active {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "This store is not currently accepting orders."})
 		return
 	}
 
 	parsedProductID, err := uuid.Parse(body.ProductID)
 	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid product ID"})
+		return
+	}
+
+	var productInShop int64
+	initializers.DB.Model(&models.Product{}).Where("id = ? AND shop_id = ?", parsedProductID, parsedShopID).Count(&productInShop)
+	if productInShop == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid product ID"})
 		return
 	}
@@ -108,7 +125,7 @@ func CreateAbandonedLead(c *gin.Context) {
 		ShopID: lead.ShopID.String(),
 		Data:   notificationPayload,
 	}:
-	case <-time.After(5 * time.Second):
+	default: // never hold the public request on hub backpressure
 		fmt.Println("ws broadcast dropped: hub backpressure")
 	}
 
@@ -133,7 +150,7 @@ func GetAbandonedLeadsByShopID(c *gin.Context) {
 	}
 	if pp := c.Query("perPage"); pp != "" {
 		if parsed, parseErr := strconv.Atoi(pp); parseErr == nil && parsed > 0 {
-			perPage = parsed
+			perPage = min(parsed, 100)
 		}
 	}
 

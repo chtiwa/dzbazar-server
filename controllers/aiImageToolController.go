@@ -101,18 +101,11 @@ func GenerateAIImage(c *gin.Context) {
 		return
 	}
 
-	if err := services.CheckCreditBudget(shopID, services.AIImageModelCredits[model]); err != nil {
-		if errors.Is(err, services.ErrPlanLimitReached) {
-			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"message": "Not enough AI credits. Upgrade your plan for more.",
-				"code":    "PLAN_LIMIT_REACHED",
-			})
-			return
-		}
-		RespondError(c, http.StatusInternalServerError, "Failed to verify plan limits", err)
+	release, ok := reserveAICredits(c, shopID, services.AIImageModelCredits[model])
+	if !ok {
 		return
 	}
+	defer release()
 
 	image, err := services.GenerateToolImage(prompt, ref, model)
 	if err != nil {

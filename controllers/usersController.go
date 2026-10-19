@@ -566,6 +566,15 @@ func DeleteUserByShop(c *gin.Context) {
 		return
 	}
 
+	if member.Role == "owner" {
+		var owners int64
+		initializers.DB.Model(&models.ShopMember{}).Where("shop_id = ? AND role = ?", member.ShopID, "owner").Count(&owners)
+		if owners <= 1 {
+			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "A shop must keep at least one owner"})
+			return
+		}
+	}
+
 	if err := initializers.DB.Delete(&member).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -622,6 +631,19 @@ func SetConfirmatriceProducts(c *gin.Context) {
 			return
 		}
 		rows = append(rows, models.ConfirmatriceProduct{ShopMemberID: member.ID, ProductID: productID})
+	}
+
+	if len(rows) > 0 {
+		ids := make([]uuid.UUID, len(rows))
+		for i, r := range rows {
+			ids[i] = r.ProductID
+		}
+		var inShop int64
+		initializers.DB.Model(&models.Product{}).Where("shop_id = ? AND id IN ?", member.ShopID, ids).Count(&inShop)
+		if int(inShop) != len(ids) {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Unknown product for this shop"})
+			return
+		}
 	}
 
 	err := initializers.DB.Transaction(func(tx *gorm.DB) error {

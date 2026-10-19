@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"html"
 	"log"
 	"os"
 	"strings"
@@ -39,6 +40,8 @@ func SendOrderEmail(
 		return fmt.Errorf("failed to initialize Resend client")
 	}
 
+	// merchant/customer-controlled strings go into HTML sent from the platform domain
+	esc := html.EscapeString
 	var itemsRows strings.Builder
 	for _, item := range items {
 		variant := item.Variant
@@ -52,7 +55,7 @@ func SendOrderEmail(
 			<td style="padding:6px;border-bottom:1px solid #eee;text-align:center;">%d</td>
 			<td style="padding:6px;border-bottom:1px solid #eee;text-align:right;">%.2f DA</td>
 			<td style="padding:6px;border-bottom:1px solid #eee;text-align:right;">%.2f DA</td>
-		</tr>`, item.ProductName, variant, item.Quantity, item.UnitPrice, item.LineTotal))
+		</tr>`, esc(item.ProductName), esc(variant), item.Quantity, item.UnitPrice, item.LineTotal))
 	}
 
 	// HTML body
@@ -167,7 +170,7 @@ func SendLowStockEmail(productName, variant string, quantity int) error {
 	</div>
 	</body>
 	</html>`,
-		productName, variant, quantity)
+		html.EscapeString(productName), html.EscapeString(variant), quantity)
 
 	params := &resend.SendEmailRequest{
 		From:    "DZ Bazar <contact@dzbazar.online>",
@@ -378,7 +381,7 @@ func SendPlanExpiryEmail(email, shopName, planName string, expiresAt time.Time) 
 			</div>
 		</div>
 	</body>
-	</html>`, planName, shopName, expiresAt.Format("02/01/2006"))
+	</html>`, html.EscapeString(planName), html.EscapeString(shopName), expiresAt.Format("02/01/2006"))
 
 	params := &resend.SendEmailRequest{
 		From:    "DZ Bazar <contact@dzbazar.online>",

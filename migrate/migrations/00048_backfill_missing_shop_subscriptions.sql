@@ -33,9 +33,6 @@ WHERE s.deleted_at IS NULL
   );
 
 -- +goose Down
--- Only remove the rows this migration itself could have created (Trial,
--- started roughly at migration time) — never touch a subscription a merchant
--- has since renewed/upgraded onto a paid plan.
-DELETE FROM public.shop_subscriptions
-WHERE plan_id = (SELECT id FROM public.plans WHERE name = 'Trial' LIMIT 1)
-  AND started_at >= now() - interval '1 day';
+-- Forward-only: the backfilled Trial rows are indistinguishable from real ones
+-- by now, so a rollback must not delete subscriptions.
+SELECT 1;

@@ -215,6 +215,16 @@ func RejectInvoice(c *gin.Context) {
 	}
 	actorUser := actor.(models.User)
 
+	// Body is optional — an empty reason is allowed.
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	_ = c.ShouldBindJSON(&body)
+	reason := strings.TrimSpace(body.Reason)
+	if len(reason) > 500 {
+		reason = reason[:500]
+	}
+
 	var invoice models.Invoice
 	if err := initializers.DB.First(&invoice, "id = ?", invoiceID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -231,7 +241,8 @@ func RejectInvoice(c *gin.Context) {
 
 	now := time.Now()
 	if err := initializers.DB.Model(&invoice).Updates(map[string]any{
-		"status":      "denied",
+		"status":        "denied",
+		"denial_reason": reason,
 		"reviewed_by": actorUser.ID,
 		"reviewed_at": now,
 	}).Error; err != nil {
