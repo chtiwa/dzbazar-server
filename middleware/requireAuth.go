@@ -28,7 +28,7 @@ func RequireAuthentication(c *gin.Context) {
 	}
 
 	// Helper to determine if cookies should be secure
-	isProduction := os.Getenv("APP_ENV") == "production"
+	isProduction := utils.SecureCookies()
 
 	// 1. Try Access Token first
 	if accessErr == nil {
@@ -109,7 +109,7 @@ func RequireAuthentication(c *gin.Context) {
 						}
 
 						// Set new access token as a cookie (Secure flag updated)
-						c.SetSameSite(http.SameSiteLaxMode)
+						c.SetSameSite(utils.CookieSameSite())
 						c.SetCookie("AccessToken", newAccessTokenString, 60*15, "/", "", isProduction, true)
 
 						// Sliding window: a fresh 7d refresh token on every rotation, so an

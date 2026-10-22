@@ -42,8 +42,8 @@ func setAuthCookies(c *gin.Context, user models.User) error {
 		return err
 	}
 
-	isProduction := os.Getenv("APP_ENV") == "production"
-	c.SetSameSite(http.SameSiteLaxMode)
+	isProduction := utils.SecureCookies()
+	c.SetSameSite(utils.CookieSameSite())
 	c.SetCookie("RefreshToken", refreshTokenString, refreshTokenTTLSeconds, "/", "", isProduction, true)
 	c.SetCookie("AccessToken", accessTokenString, 60*15, "/", "", isProduction, true)
 
@@ -568,8 +568,8 @@ func Logout(c *gin.Context) {
 		}
 	}
 
-	isProduction := os.Getenv("APP_ENV") == "production"
-	c.SetSameSite(http.SameSiteLaxMode)
+	isProduction := utils.SecureCookies()
+	c.SetSameSite(utils.CookieSameSite())
 	c.SetCookie("RefreshToken", "", -1, "/", "", isProduction, true)
 	c.SetCookie("AccessToken", "", -1, "/", "", isProduction, true)
 

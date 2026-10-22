@@ -48,8 +48,8 @@ func StartImpersonation(c *gin.Context) {
 		return
 	}
 
-	isProduction := os.Getenv("APP_ENV") == "production"
-	c.SetSameSite(http.SameSiteLaxMode)
+	isProduction := utils.SecureCookies()
+	c.SetSameSite(utils.CookieSameSite())
 	c.SetCookie("AccessToken", tokenString, impersonationTTLSeconds, "/", "", isProduction, true)
 
 	utils.LogAudit(c, "impersonation.start", "Shop", &shop.ID, gin.H{"name": shop.Name, "slug": shop.Slug})
@@ -83,8 +83,8 @@ func EndImpersonation(c *gin.Context) {
 		return
 	}
 
-	isProduction := os.Getenv("APP_ENV") == "production"
-	c.SetSameSite(http.SameSiteLaxMode)
+	isProduction := utils.SecureCookies()
+	c.SetSameSite(utils.CookieSameSite())
 	c.SetCookie("AccessToken", tokenString, 60*15, "/", "", isProduction, true)
 
 	if shopIDStr, ok := shopIDClaim.(string); ok {

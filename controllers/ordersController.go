@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -851,8 +850,8 @@ func CreateOrderByShopID(c *gin.Context) {
 	invalidateOrdersListCache(parsedShopID)
 	initializers.RClient.Del(initializers.Ctx, services.LandingPagesCacheKeyByShop(parsedShopID))
 
-	isProduction := os.Getenv("APP_ENV") == "production"
-	c.SetSameSite(http.SameSiteLaxMode)
+	isProduction := utils.SecureCookies()
+	c.SetSameSite(utils.CookieSameSite())
 	c.SetCookie(orderCooldownCookie(parsedShopID), "1", 24*60*60, "/", "", isProduction, true)
 
 	c.JSON(http.StatusOK, gin.H{
