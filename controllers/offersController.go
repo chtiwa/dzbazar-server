@@ -43,6 +43,9 @@ func validateQuantityPackages(pkgs []models.OfferQuantityPackage) error {
 		if p.Quantity < 1 {
 			return fmt.Errorf("package quantity must be at least 1")
 		}
+		if p.DiscountPercent != nil && (*p.DiscountPercent < 0 || *p.DiscountPercent >= 100) {
+			return fmt.Errorf("package discountPercent must be between 0 and 100")
+		}
 		if p.TotalPrice < 0 {
 			return fmt.Errorf("package totalPrice cannot be negative")
 		}
@@ -82,6 +85,7 @@ type offerBody struct {
 	QuantityPackages  *[]models.OfferQuantityPackage `json:"quantityPackages"`
 	TriggerProductID  *string                        `json:"triggerProductId"`
 	LandingPageID     *string                        `json:"landingPageId"` // omit or null = base offer
+	ProductPageOnly   *bool                          `json:"productPageOnly"`
 	OfferProductID    *string                        `json:"offerProductId"`
 	OfferVariantIDs   []string                       `json:"offerVariantIds"`
 	QuantityRule      *int                           `json:"quantityRule"`
@@ -651,6 +655,10 @@ func resolveOffers(shopID, productID uuid.UUID, req EvaluateOffersRequest) ([]Of
 	byPlacement := map[string]candidate{}
 
 	for _, offer := range offers {
+		if offer.ProductPageOnly && (req.PageType == "landing_page" || req.LandingPageID != nil) {
+			continue
+		}
+
 		// Apply LP override.
 		if ov, ok := overrideMap[offer.ID]; ok {
 			if !ov.Enabled {
@@ -909,6 +917,9 @@ func applyOfferBodyFields(offer *models.Offer, body offerBody) {
 	}
 	if body.QuantityPackages != nil {
 		offer.QuantityPackages = *body.QuantityPackages
+	}
+	if body.ProductPageOnly != nil {
+		offer.ProductPageOnly = *body.ProductPageOnly
 	}
 	if body.LandingPageID != nil {
 		if *body.LandingPageID == "" {

@@ -1977,6 +1977,10 @@ ALTER TABLE ONLY public.variant_items
 -- PostgreSQL database dump complete
 --
 
+-- pg_dump blanked search_path (session-level) above; restore it or goose's
+-- unqualified INSERT INTO goose_db_version fails on a fresh DB.
+SELECT pg_catalog.set_config('search_path', '"$user", public', false);
+
 
 
 -- +goose Down

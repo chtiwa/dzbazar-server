@@ -2,14 +2,26 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 const maxImageUploadBytes = 10 << 20 // 10 MiB
+
+// b2PublicURL builds the public URL for an uploaded key, honouring B2_PUBLIC_BASE_URL
+// when set and falling back to the raw Backblaze S3 URL otherwise.
+func b2PublicURL(key string) string {
+	if base := strings.TrimSpace(os.Getenv("B2_PUBLIC_BASE_URL")); base != "" {
+		return strings.TrimRight(base, "/") + "/" + key
+	}
+	return fmt.Sprintf("https://%s.s3.%s.backblazeb2.com/%s", os.Getenv("B2_BUCKET_NAME"), os.Getenv("B2_REGION"), key)
+}
 
 const errImageUploadMsg = "Only JPEG, PNG, WebP or GIF images up to 10 MB are allowed"
 

@@ -227,6 +227,10 @@ func PricedOrderItem(combo models.ProductVariantCombination, itemQuantity uint, 
 		if !found {
 			return fallback()
 		}
+		if pkg.DiscountPercent != nil {
+			unitPrice = math.Round(combo.Price * (1 - *pkg.DiscountPercent/100))
+			return unitPrice, unitPrice * float64(itemQuantity)
+		}
 		unitPrice = math.Round(pkg.TotalPrice / float64(packageQuantity))
 		if itemQuantity == packageQuantity {
 			return unitPrice, pkg.TotalPrice

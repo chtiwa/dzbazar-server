@@ -48,12 +48,7 @@ func uploadVariantItemImage(file *multipart.FileHeader) (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf(
-		"https://%s.s3.%s.backblazeb2.com/%s",
-		bucketName,
-		os.Getenv("B2_REGION"),
-		key,
-	), nil
+	return b2PublicURL(key), nil
 }
 
 // isTrustedImageURL rejects any imageUrl a client sends that isn't one we generated
@@ -509,12 +504,7 @@ func CreateProductByShop(c *gin.Context) {
 			return
 		}
 
-		url := fmt.Sprintf(
-			"https://%s.s3.%s.backblazeb2.com/%s",
-			bucketName,
-			os.Getenv("B2_REGION"),
-			key,
-		)
+		url := b2PublicURL(key)
 
 		productImages = append(productImages, models.ProductImage{
 			ProductID: product.ID,
@@ -1940,7 +1930,6 @@ func UpdateProductImagesByShop(c *gin.Context) {
 	}
 
 	bucketName := os.Getenv("B2_BUCKET_NAME")
-	region := os.Getenv("B2_REGION")
 
 	for _, file := range files {
 		src, contentType, err := openImageUpload(file, maxImageUploadBytes)
@@ -1972,7 +1961,7 @@ func UpdateProductImagesByShop(c *gin.Context) {
 
 		uploadedKeys = append(uploadedKeys, key)
 
-		url := fmt.Sprintf("https://%s.s3.%s.backblazeb2.com/%s", bucketName, region, key)
+		url := b2PublicURL(key)
 		newProductImages = append(newProductImages, models.ProductImage{
 			ProductID: productID,
 			URL:       url,

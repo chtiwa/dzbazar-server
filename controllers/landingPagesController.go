@@ -53,7 +53,6 @@ func loadLandingPageByShop(tx *gorm.DB, shopID, landingPageID uuid.UUID, landing
 
 func uploadLandingPageFiles(shopID uuid.UUID, files []*multipart.FileHeader) ([]models.LandingPageImage, []string, error) {
 	bucketName := os.Getenv("B2_BUCKET_NAME")
-	region := os.Getenv("B2_REGION")
 
 	var uploadedKeys []string
 	var images []models.LandingPageImage
@@ -87,7 +86,7 @@ func uploadLandingPageFiles(shopID uuid.UUID, files []*multipart.FileHeader) ([]
 
 		uploadedKeys = append(uploadedKeys, key)
 
-		url := fmt.Sprintf("https://%s.s3.%s.backblazeb2.com/%s", bucketName, region, key)
+		url := b2PublicURL(key)
 		images = append(images, models.LandingPageImage{
 			URL:        url,
 			OrderIndex: index,

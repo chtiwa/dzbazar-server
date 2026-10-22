@@ -29,6 +29,10 @@ type OfferPredicate struct {
 type OfferQuantityPackage struct {
 	Quantity   int     `json:"quantity"`
 	TotalPrice float64 `json:"totalPrice"`
+	// DiscountPercent non-nil (0 included) prices the tier as the selected
+	// combination's own price minus this percent, per unit; TotalPrice is then
+	// ignored. Nil = flat TotalPrice.
+	DiscountPercent *float64 `json:"discountPercent"`
 	// Description is a free-text label the merchant authors for this tier
 	// (e.g. "10% off", "best value") — display-only, never used in pricing.
 	Description string `json:"description"`
@@ -56,6 +60,9 @@ type Offer struct {
 	// nil = base offer (all LPs). Non-nil = this offer is LP-scoped directly.
 	LandingPageID *uuid.UUID   `gorm:"type:uuid;index" json:"landingPageId"`
 	LandingPage   *LandingPage `gorm:"foreignKey:LandingPageID;references:ID;constraint:OnDelete:CASCADE" json:"landingPage,omitempty"`
+
+	// true = product page only; never shown on any landing page.
+	ProductPageOnly bool `gorm:"not null;default:false" json:"productPageOnly"`
 
 	OfferProductID uuid.UUID `gorm:"not null"  json:"offerProductId"`
 	OfferProduct   *Product  `gorm:"foreignKey:OfferProductID;references:ID;constraint:OnDelete:CASCADE" json:"offerProduct,omitempty"`
