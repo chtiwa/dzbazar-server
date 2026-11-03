@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chtiwa/dzbazar-server/dto"
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/gin-gonic/gin"
@@ -94,7 +95,7 @@ func ListPublicBureaux(c *gin.Context) {
 
 	cacheKey := publicBureauxCacheKey(shopID, wilayaID)
 	if val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result(); err == nil {
-		var cached []models.Bureau
+		var cached []dto.PublicBureauResponse
 		if unmarshalErr := json.Unmarshal([]byte(val), &cached); unmarshalErr == nil {
 			c.JSON(http.StatusOK, gin.H{"success": true, "data": cached})
 			return
@@ -110,11 +111,12 @@ func ListPublicBureaux(c *gin.Context) {
 		return
 	}
 
-	if jsonData, err := json.Marshal(bureaux); err == nil {
+	out := dto.ToPublicBureaux(bureaux)
+	if jsonData, err := json.Marshal(out); err == nil {
 		_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": bureaux})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": out})
 }
 
 // CreateBureau adds one extra desk name to a shop's wilaya. Shop ownership is

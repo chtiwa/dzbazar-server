@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/chtiwa/dzbazar-server/dto"
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
 	"github.com/gin-gonic/gin"
@@ -86,7 +87,7 @@ func GetPublicDeliveryRates(c *gin.Context) {
 
 	cacheKey := publicDeliveryRatesCacheKey(shopID)
 	if val, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Result(); err == nil {
-		var cachedRates []models.DeliveryRate
+		var cachedRates []dto.PublicDeliveryRateResponse
 		if unmarshalErr := json.Unmarshal([]byte(val), &cachedRates); unmarshalErr == nil {
 			c.JSON(http.StatusOK, gin.H{"success": true, "data": cachedRates, "freeDeliveryEnabled": shop.FreeDeliveryEnabled})
 			return
@@ -99,13 +100,14 @@ func GetPublicDeliveryRates(c *gin.Context) {
 		return
 	}
 
-	if jsonData, err := json.Marshal(rates); err == nil {
+	out := dto.ToPublicDeliveryRates(rates)
+	if jsonData, err := json.Marshal(out); err == nil {
 		_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":             true,
-		"data":                rates,
+		"data":                out,
 		"freeDeliveryEnabled": shop.FreeDeliveryEnabled,
 	})
 }

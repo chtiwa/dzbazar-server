@@ -129,12 +129,22 @@ func GetMyShops(c *gin.Context) {
 		})
 	}
 
+	// ponytail: same check createShop enforces, so UI and server can't disagree
+	limitErr := services.CheckShopLimit(userData)
+	blockReason := ""
+	switch {
+	case errors.Is(limitErr, services.ErrShopContactTaken):
+		blockReason = "SHOP_CONTACT_TAKEN"
+	case limitErr != nil:
+		blockReason = "PLAN_LIMIT_REACHED"
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "User shops fetched successfully",
-		"data":    response,
-		// ponytail: same check createShop enforces, so UI and server can't disagree
-		"canCreateShop": services.CheckShopLimit(userData) == nil,
+		"success":         true,
+		"message":         "User shops fetched successfully",
+		"data":            response,
+		"canCreateShop":   limitErr == nil,
+		"shopBlockReason": blockReason,
 	})
 }
 

@@ -181,8 +181,6 @@ func IndexActivePixelByShop(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"id":             pixel.ID,
-			"shopId":         pixel.ShopID,
 			"platform":       pixel.Platform,
 			"title":          pixel.Title,
 			"pixelId":        pixel.PixelID,

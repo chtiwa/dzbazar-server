@@ -1260,7 +1260,7 @@ func UpdateOrderByShopID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Order was updated successfully",
-		"data":    updatedOrder,
+		"data":    dto.ToOrderResponse(updatedOrder),
 	})
 }
 
@@ -1314,7 +1314,7 @@ func GetOrderStatusHistory(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    logs,
+		"data":    dto.ToOrderStatusLogs(logs),
 	})
 }
 

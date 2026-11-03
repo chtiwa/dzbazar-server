@@ -244,7 +244,7 @@ type OrderResponse struct {
 
 	AssignedMemberID *uuid.UUID         `json:"assignedMemberId"`
 	AssignedAt       *time.Time         `json:"assignedAt"`
-	AssignedMember   *models.ShopMember `json:"assignedMember,omitempty"`
+	AssignedMember   *AssignedMemberResponse `json:"assignedMember,omitempty"`
 
 	Items []models.OrderItem `json:"items"`
 
@@ -293,7 +293,7 @@ func ToOrderResponse(o models.Order) OrderResponse {
 		ShippedVia:           o.ShippedVia,
 		AssignedMemberID:     o.AssignedMemberID,
 		AssignedAt:           o.AssignedAt,
-		AssignedMember:       o.AssignedMember,
+		AssignedMember:       toAssignedMember(o.AssignedMember),
 		Items:                o.Items,
 		CreatedAt:            o.CreatedAt,
 		UpdatedAt:            o.UpdatedAt,
@@ -363,4 +363,75 @@ func ToClientResponses(clients []models.Client) []ClientResponse {
 type ClientTrackRecord struct {
 	Delivered int64 `json:"delivered"`
 	Returned  int64 `json:"returned"`
+}
+
+// PublicDeliveryRateResponse / PublicBureauResponse / PublicPixelResponse are the
+// anonymous-storefront views: only what checkout and pixel init read — no row
+// IDs, shop IDs, timestamps or soft-delete columns that expose the schema.
+type PublicDeliveryRateResponse struct {
+	WilayaID     int     `json:"wilayaId"`
+	WilayaName   string  `json:"wilayaName"`
+	IsActive     bool    `json:"isActive"`
+	HasDoorstep  bool    `json:"hasDoorstep"`
+	DoorstepRate float64 `json:"doorstepRate"`
+	HasStopdesk  bool    `json:"hasStopdesk"`
+	StopdeskRate float64 `json:"stopdeskRate"`
+}
+
+func ToPublicDeliveryRates(rates []models.DeliveryRate) []PublicDeliveryRateResponse {
+	out := make([]PublicDeliveryRateResponse, len(rates))
+	for i, r := range rates {
+		out[i] = PublicDeliveryRateResponse{r.WilayaID, r.WilayaName, r.IsActive, r.HasDoorstep, r.DoorstepRate, r.HasStopdesk, r.StopdeskRate}
+	}
+	return out
+}
+
+type PublicBureauResponse struct {
+	ID       uuid.UUID `json:"id"`
+	WilayaID int       `json:"wilayaId"`
+	Name     string    `json:"name"`
+}
+
+func ToPublicBureaux(bs []models.Bureau) []PublicBureauResponse {
+	out := make([]PublicBureauResponse, len(bs))
+	for i, b := range bs {
+		out[i] = PublicBureauResponse{b.ID, b.WilayaID, b.Name}
+	}
+	return out
+}
+
+// OrderStatusLogResponse hides the audit row's actor ID and IP address from
+// shop owners; they only need who (email), when, and the from/to blob.
+type OrderStatusLogResponse struct {
+	ID         uuid.UUID `json:"id"`
+	CreatedAt  time.Time `json:"created_at"`
+	ActorEmail string    `json:"actorEmail"`
+	Metadata   string    `json:"metadata"`
+}
+
+func ToOrderStatusLogs(logs []models.AuditLog) []OrderStatusLogResponse {
+	out := make([]OrderStatusLogResponse, len(logs))
+	for i, l := range logs {
+		out[i] = OrderStatusLogResponse{l.ID, l.CreatedAt, l.ActorEmail, l.Metadata}
+	}
+	return out
+}
+
+// AssignedMemberResponse is the staff name chip on an order row — not the
+// full ShopMember/User (email, phone, role, permissions, platform role).
+type AssignedMemberResponse struct {
+	ID   uuid.UUID `json:"id"`
+	User struct {
+		FirstName string `json:"firstName"`
+		LastName  string `json:"lastName"`
+	} `json:"user"`
+}
+
+func toAssignedMember(m *models.ShopMember) *AssignedMemberResponse {
+	if m == nil {
+		return nil
+	}
+	r := &AssignedMemberResponse{ID: m.ID}
+	r.User.FirstName, r.User.LastName = m.User.FirstName, m.User.LastName
+	return r
 }
