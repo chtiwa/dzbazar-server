@@ -35,7 +35,9 @@ const (
 
 type zrParcelListItem struct {
 	ExternalID string `json:"externalId"`
-	Status     string `json:"status"`
+	State      struct {
+		Name string `json:"name"`
+	} `json:"state"`
 }
 
 // zrParcelsListResp mirrors the same {items, totalCount, ...} pagination
@@ -77,15 +79,14 @@ func syncZrOrderStatuses() {
 	}
 }
 
-// mapZrStatusToLocal maps a ZR parcel status to the local order status it
-// implies. Returns "" if the ZR status doesn't map to a local change. Seeded
-// with a best guess — ZR's real status enum wasn't visible in public docs, so
-// this is the single place to correct once real responses are observed.
+// mapZrStatusToLocal maps a ZR state slug (documented workflow slugs) to the
+// local order status it implies. Returns "" if it doesn't map to a local change.
+// ponytail: return/cancel slugs aren't in ZR's public docs — add them here once seen.
 func mapZrStatusToLocal(zrStatus string) string {
 	switch strings.ToLower(strings.TrimSpace(zrStatus)) {
-	case "delivered":
+	case "livre", "encaisse", "recouvert":
 		return "Livré"
-	case "cancelled", "canceled", "returned":
+	case "retour", "retourne", "annule", "cancelled", "canceled", "returned":
 		return "Retour"
 	default:
 		return ""
@@ -150,7 +151,7 @@ func syncShopZrOrders(shopID uuid.UUID) {
 				continue
 			}
 
-			newStatus := mapZrStatusToLocal(parcel.Status)
+			newStatus := mapZrStatusToLocal(parcel.State.Name)
 			if newStatus != "" {
 				if err := initializers.DB.Model(&models.Order{}).
 					Where("id = ?", order.ID).
