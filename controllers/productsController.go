@@ -2386,9 +2386,13 @@ func InvalidateProductCaches(productID uuid.UUID, shopID uuid.UUID) {
 			}
 		}
 
+		// Storefront list keys are keyed by slug, not shop ID.
+		var slug string
+		initializers.DB.Model(&models.Shop{}).Where("id = ?", shopID).Select("slug").Scan(&slug)
+
 		productListKeys, _ := initializers.RClient.SMembers(ctx, "cache:products").Result()
 		for _, key := range productListKeys {
-			if strings.Contains(key, shopID.String()) {
+			if strings.Contains(key, shopID.String()) || (slug != "" && strings.Contains(key, ":slug:"+slug+":")) {
 				initializers.RClient.Del(ctx, key)
 			}
 		}
