@@ -2374,7 +2374,9 @@ func UpdateProductVariantsByShop(c *gin.Context) {
 // action (controllers/superadmin/productsController.go) can bust the same
 // product + landing-page caches a merchant-initiated product edit does.
 func InvalidateProductCaches(productID uuid.UUID, shopID uuid.UUID) {
-	go func() {
+	// ponytail: synchronous on purpose — admin refetches right after the
+	// mutation response, a goroutine lost that race and served stale cache.
+	{
 		ctx := context.Background()
 
 		productKeys, _ := initializers.RClient.SMembers(ctx, "cache:product:id").Result()
@@ -2402,5 +2404,5 @@ func InvalidateProductCaches(productID uuid.UUID, shopID uuid.UUID) {
 			initializers.RClient.Del(ctx, services.PublicLandingPageCacheKeyByID(id))
 		}
 		initializers.RClient.Del(ctx, services.LandingPagesCacheKeyByShop(shopID))
-	}()
+	}
 }
