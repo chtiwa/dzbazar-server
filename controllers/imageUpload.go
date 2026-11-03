@@ -23,16 +23,13 @@ func b2PublicURL(key string) string {
 	return fmt.Sprintf("https://%s.s3.%s.backblazeb2.com/%s", os.Getenv("B2_BUCKET_NAME"), os.Getenv("B2_REGION"), key)
 }
 
-const errImageUploadMsg = "Only JPEG, PNG, WebP, AVIF or GIF images up to 10 MB are allowed"
+const errImageUploadMsg = "Only JPEG, PNG, WebP or GIF images up to 10 MB are allowed"
 
 var errInvalidImageUpload = errors.New(errImageUploadMsg)
 
 // sniffImageType returns the real content type from magic bytes (never the client header).
 func sniffImageType(head []byte) (string, bool) {
-	// ponytail: Go's sniffer doesn't know AVIF; ISO-BMFF "ftyp" box + avif/avis brand.
-	if len(head) >= 12 && string(head[4:8]) == "ftyp" && (string(head[8:12]) == "avif" || string(head[8:12]) == "avis") {
-		return "image/avif", true
-	}
+	// AVIF rejected on purpose: Cloudflare Image Resizing can't decode it (error 9520).
 	ct := http.DetectContentType(head)
 	switch ct {
 	case "image/jpeg", "image/png", "image/webp", "image/gif":

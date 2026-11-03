@@ -12,7 +12,7 @@ func TestSniffImageType(t *testing.T) {
 	}{
 		{"png", append([]byte("\x89PNG\r\n\x1a\n"), pad...), "image/png", true},
 		{"jpeg", append([]byte("\xff\xd8\xff\xe0"), pad...), "image/jpeg", true},
-		{"avif", append([]byte("\x00\x00\x00\x1cftypavif"), pad...), "image/avif", true},
+		{"avif", append([]byte("\x00\x00\x00\x1cftypavif"), pad...), "", false},
 		{"html", []byte("<html><body>x</body></html>"), "", false},
 		{"svg", []byte("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"), "", false},
 	}
