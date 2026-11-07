@@ -34,7 +34,10 @@ func zrAuthHeaders(req *http.Request, integration *models.DeliveryCompany) {
 	req.Header.Set("X-Tenant", strings.TrimSpace(integration.MerchantID))
 	req.Header.Set("X-Api-Key", strings.TrimSpace(integration.Token))
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", zrUserAgent)
 }
+
+const zrUserAgent = "DZBazare/1.0 (shipping integration)"
 
 // validateZrCredentials probes ZR with a cheap authenticated GET, since ZR has
 // no documented dedicated validate-token endpoint.
@@ -46,6 +49,7 @@ func validateZrCredentials(token, tenantID string) (bool, string) {
 	req.Header.Set("X-Tenant", strings.TrimSpace(tenantID))
 	req.Header.Set("X-Api-Key", strings.TrimSpace(token))
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", zrUserAgent)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
