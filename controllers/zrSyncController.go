@@ -81,12 +81,14 @@ func syncZrOrderStatuses() {
 
 // mapZrStatusToLocal maps a ZR state slug (documented workflow slugs) to the
 // local order status it implies. Returns "" if it doesn't map to a local change.
-// ponytail: return/cancel slugs aren't in ZR's public docs — add them here once seen.
+// Slugs are ZR's full state list. Ambiguous ones (colis_recupere,
+// en_attente_dechange) are deliberately left unmapped.
 func mapZrStatusToLocal(zrStatus string) string {
 	switch strings.ToLower(strings.TrimSpace(zrStatus)) {
 	case "livre", "encaisse", "recouvert":
 		return "Livré"
-	case "retour", "retourne", "annule", "cancelled", "canceled", "returned":
+	case "retour_sous_traitant", "reinjecte_dans_stock", "remboursement_reinjecte",
+		"attente_recuperation_fournisseur", "recupere_par_fournisseur":
 		return "Retour"
 	default:
 		return ""
@@ -152,6 +154,9 @@ func syncShopZrOrders(shopID uuid.UUID) {
 			}
 
 			newStatus := mapZrStatusToLocal(parcel.State.Name)
+			if newStatus == "" {
+				log.Printf("zr sync: order %s unmapped ZR state %q", order.ID, parcel.State.Name)
+			}
 			if newStatus != "" {
 				if err := initializers.DB.Model(&models.Order{}).
 					Where("id = ?", order.ID).

@@ -82,7 +82,7 @@ func mapOsenStatusToLocal(osenStatus string) string {
 	switch osenStatus {
 	case "DELIVERED":
 		return "Livré"
-	case "CANCELLED":
+	case "CANCELLED", "IN_RETURN", "RETURN_AWAITING_HANDOFF", "READY_TO_UNPACK", "RETURN_COLLECTED":
 		return "Retour"
 	default:
 		return ""
