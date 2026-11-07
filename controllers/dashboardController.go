@@ -10,6 +10,7 @@ import (
 	"github.com/chtiwa/dzbazar-server/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const dashboardCacheTTL = 5 * time.Minute
@@ -72,6 +73,19 @@ type DashboardData struct {
 // wrongly tanking the rate. See dashboardController deliveryRate comment.
 const deliveryRateMaturityBuffer = "3 days"
 
+// platformScope filters by ad-source; "organic" also matches empty (manual orders). Unknown value = no filter.
+func platformScope(platform string) func(*gorm.DB) *gorm.DB {
+	return func(q *gorm.DB) *gorm.DB {
+		switch platform {
+		case "organic":
+			return q.Where("(COALESCE(conversion_source, '') = '' OR conversion_source = 'organic')")
+		case "facebook", "tiktok":
+			return q.Where("conversion_source = ?", platform)
+		}
+		return q
+	}
+}
+
 func dashboardCacheKey(shopID uuid.UUID) string {
 	return fmt.Sprintf("dashboard:orders:%s", shopID)
 }
@@ -125,11 +139,12 @@ func GetOrdersDashboard(c *gin.Context) {
 		}
 	}
 	hasDeliveryCompany := deliveryCompanyID != uuid.Nil
+	platform := c.Query("platform")
 
 	cacheKey := dashboardCacheKey(shopID)
 
 	// Cache hit — only for unfiltered, unscoped (all-time, all-products, all-carriers) requests
-	if !hasDateFilter && !hasProduct && !hasDeliveryCompany {
+	if !hasDateFilter && !hasProduct && !hasDeliveryCompany && platform == "" {
 		if cached, err := initializers.RClient.Get(initializers.Ctx, cacheKey).Bytes(); err == nil {
 			var data DashboardData
 			if json.Unmarshal(cached, &data) == nil {
@@ -152,6 +167,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		dailyQ = dailyQ.Where(orderContainsProductSQL, productID)
 	}
+	dailyQ = dailyQ.Scopes(platformScope(platform))
 	if err := dailyQ.Select("DATE(created_at)::text AS label, COUNT(*) AS count").
 		Group("DATE(created_at)").Order("DATE(created_at) ASC").Scan(&daily).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error fetching daily stats", err)
@@ -168,6 +184,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		weeklyQ = weeklyQ.Where(orderContainsProductSQL, productID)
 	}
+	weeklyQ = weeklyQ.Scopes(platformScope(platform))
 	if err := weeklyQ.Select("TO_CHAR(DATE_TRUNC('week', created_at), 'IYYY-IW') AS label, COUNT(*) AS count").
 		Group("DATE_TRUNC('week', created_at)").Order("DATE_TRUNC('week', created_at) ASC").Scan(&weekly).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error fetching weekly stats", err)
@@ -184,6 +201,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		monthlyQ = monthlyQ.Where(orderContainsProductSQL, productID)
 	}
+	monthlyQ = monthlyQ.Scopes(platformScope(platform))
 	if err := monthlyQ.Select("TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS label, COUNT(*) AS count").
 		Group("DATE_TRUNC('month', created_at)").Order("DATE_TRUNC('month', created_at) ASC").Scan(&monthly).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error fetching monthly stats", err)
@@ -198,6 +216,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		totalQ = totalQ.Where(orderContainsProductSQL, productID)
 	}
+	totalQ = totalQ.Scopes(platformScope(platform))
 	if err := totalQ.Count(&totalOrders).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error counting total orders", err)
 		return
@@ -226,6 +245,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		revQ = revQ.Where(orderContainsProductSQL, productID)
 	}
+	revQ = revQ.Scopes(platformScope(platform))
 
 	// Money is always order-level (total_price: COD cash at the door, shipping,
 	// coupon and overrides included). When scoped to one product it is split by that
@@ -346,6 +366,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		statusQ = statusQ.Where(orderContainsProductSQL, productID)
 	}
+	statusQ = statusQ.Scopes(platformScope(platform))
 	if err := statusQ.Select("status, COUNT(*) AS count").Group("status").Scan(&statusStats).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error fetching status stats", err)
 		return
@@ -365,6 +386,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	if hasProduct {
 		wilayaQ = wilayaQ.Where(orderContainsProductSQL, productID)
 	}
+	wilayaQ = wilayaQ.Scopes(platformScope(platform))
 	if err := wilayaQ.Select("orders.state AS wilaya, COUNT(*) AS count").
 		Group("orders.state").Order("count DESC").Scan(&wilayaStats).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error fetching wilaya stats", err)
@@ -398,7 +420,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	}
 
 	// Store in cache — failure is non-fatal; skip for date-filtered or product/carrier-scoped requests
-	if !hasDateFilter && !hasProduct && !hasDeliveryCompany {
+	if !hasDateFilter && !hasProduct && !hasDeliveryCompany && platform == "" {
 		if b, err := json.Marshal(data); err == nil {
 			initializers.RClient.Set(initializers.Ctx, cacheKey, b, dashboardCacheTTL)
 		}
@@ -547,6 +569,7 @@ func GetOrdersByHour(c *gin.Context) {
 		}
 	}
 	hasProduct := productID != uuid.Nil
+	platform := c.Query("platform")
 
 	byHour := []HourCount{}
 	q := initializers.DB.Table("orders").Where("shop_id = ? AND deleted_at IS NULL AND is_hidden = false AND status <> 'Abandonné'", shopID)
@@ -556,6 +579,7 @@ func GetOrdersByHour(c *gin.Context) {
 	if hasProduct {
 		q = q.Where(orderContainsProductSQL, productID)
 	}
+	q = q.Scopes(platformScope(platform))
 	if err := q.Select("EXTRACT(HOUR FROM created_at)::int AS hour, COUNT(*) AS count").
 		Group("EXTRACT(HOUR FROM created_at)").Order("hour ASC").Scan(&byHour).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error fetching hourly stats", err)
