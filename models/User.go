@@ -51,6 +51,18 @@ type ShopMember struct {
 	Active bool `gorm:"not null;default:true" json:"active"`
 }
 
+// ShopInvite is a pending offer for an existing account to join a shop. The
+// invitee must accept it (SelectShop page); nothing is attached without consent.
+type ShopInvite struct {
+	BaseModel
+	ShopID    uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_shop_invites_shop_user" json:"shopId"`
+	UserID    uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_shop_invites_shop_user" json:"userId"`
+	Role      string     `gorm:"type:text;not null" json:"role"`
+	InvitedBy *uuid.UUID `gorm:"type:uuid" json:"-"`
+
+	Shop Shop `gorm:"foreignKey:ShopID" json:"shop"`
+}
+
 // PermissionAction is the source-of-truth table for gate-able action names,
 // mirroring ShopRole. Populates the admin UI's grantable-action list and
 // validates override writes. Name is "resource.action" dotted (e.g.

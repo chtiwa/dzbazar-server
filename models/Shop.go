@@ -41,6 +41,9 @@ type Shop struct {
 	// wilaya's DeliveryRate — see services.ResolveShipping.
 	FreeDeliveryEnabled bool `gorm:"not null;default:false" json:"freeDeliveryEnabled"`
 
+	// Per-browser repeat-order cooldown in hours (0 = off). See CreateOrderByShopID.
+	OrderCooldownHours int `gorm:"not null;default:24" json:"orderCooldownHours"`
+
 	Members  []ShopMember `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"members,omitempty"`
 	Products []Product    `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"products"`
 	Orders   []Order      `gorm:"foreignKey:ShopID;constraint:OnDelete:CASCADE" json:"orders"`

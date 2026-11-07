@@ -123,11 +123,14 @@ func main() {
 
 	router.Use(middleware.CORSMiddleware())
 
-	// cap non-multipart bodies (multipart uploads are bounded by their handlers)
+	// cap every body: 2 MiB for JSON etc., 50 MiB for multipart uploads
+	// (ponytail: one global multipart cap; tighten per-route if a handler needs less)
 	router.Use(func(c *gin.Context) {
-		if !strings.HasPrefix(c.ContentType(), "multipart/") {
-			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2<<20)
+		limit := int64(2 << 20)
+		if strings.HasPrefix(c.ContentType(), "multipart/") {
+			limit = 50 << 20
 		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 		c.Next()
 	})
 

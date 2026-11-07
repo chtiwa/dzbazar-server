@@ -312,6 +312,21 @@ func GetShopSubscription(c *gin.Context) {
 	}})
 }
 
+// GetShopUsage returns used-vs-cap for every plan-limited resource.
+func GetShopUsage(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid shop ID"})
+		return
+	}
+	usage, err := services.GetUsageSummary(shopID)
+	if err != nil {
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch usage", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": usage})
+}
+
 // SubscribeShopToPlan used to switch a shop's plan immediately. It now only
 // files a pending PlanSwitchRequest — a super admin has to approve it
 // (see superadmin.ApprovePlanSwitchRequest) before ShopSubscription changes.

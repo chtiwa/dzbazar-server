@@ -56,6 +56,19 @@ func CORSMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// CSRF guard: CORS headers alone don't stop "simple" cross-site POSTs
+		// (text/plain, no preflight) from running with the victim's SameSite=None
+		// cookies. Browsers always send Origin on cross-site unsafe requests, so
+		// reject any that isn't ours. No Origin (curl, server-to-server) passes.
+		if origin != "" && !allowed {
+			switch c.Request.Method {
+			case http.MethodGet, http.MethodHead:
+			default:
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "message": "origin not allowed"})
+				return
+			}
+		}
+
 		c.Next()
 	}
 }

@@ -340,6 +340,16 @@ func phoneOrderKey(shopID uuid.UUID, phone string) string {
 	return fmt.Sprintf("ratelimit:order:phone:%s:%s", shopID, phone)
 }
 
+// shopCooldownHours: 0 disables the cooldown. Falls back to the old 24h
+// default if the lookup fails so a DB blip never silently turns it off.
+func shopCooldownHours(shopID uuid.UUID) int {
+	var h int
+	if err := initializers.DB.Model(&models.Shop{}).Where("id = ?", shopID).Select("order_cooldown_hours").Scan(&h).Error; err != nil {
+		return 24
+	}
+	return h
+}
+
 func orderCooldownCookie(shopID uuid.UUID) string {
 	return "order_cd_" + shopID.String()
 }
@@ -444,7 +454,8 @@ func CreateOrderByShopID(c *gin.Context) {
 	// Per-browser, per-shop 24h cooldown. Unlike the guards below, this is an
 	// honest UX rule — tell the customer, don't fake success. Staff placing
 	// orders from the dashboard aren't the customer this guards against.
-	if !isStaffOrder {
+	cooldownHours := shopCooldownHours(parsedShopID)
+	if !isStaffOrder && cooldownHours > 0 {
 		if _, err := c.Cookie(orderCooldownCookie(parsedShopID)); err == nil {
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"success": false,
@@ -852,12 +863,17 @@ func CreateOrderByShopID(c *gin.Context) {
 
 	isProduction := utils.SecureCookies()
 	c.SetSameSite(utils.CookieSameSite())
-	c.SetCookie(orderCooldownCookie(parsedShopID), "1", 24*60*60, "/", "", isProduction, true)
+	if cooldownHours > 0 {
+		c.SetCookie(orderCooldownCookie(parsedShopID), "1", cooldownHours*60*60, "/", "", isProduction, true)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":  true,
 		"message":  "The order was created successfully",
 		"order_id": order.ID,
+		// false for shadow-hidden (fraud/duplicate) orders: the browser must not
+		// fire Purchase pixels for them, same as the server-side CAPI skip.
+		"track": !order.IsHidden,
 	})
 }
 

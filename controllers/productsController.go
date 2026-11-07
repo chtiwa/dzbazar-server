@@ -854,7 +854,7 @@ func GetProductsByShopAdmin(c *gin.Context) {
 
 	if jsonData, err := json.Marshal(response); err == nil {
 		initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute)
-		initializers.RClient.SAdd(initializers.Ctx, "cache:products", cacheKey)
+		trackProductCacheKey("cache:products:"+shopID.String(), cacheKey)
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -1013,7 +1013,7 @@ func GetActiveProductsBySlug(c *gin.Context) {
 
 	if jsonData, err := json.Marshal(response); err == nil && cacheable && page == requestedPage {
 		initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute)
-		initializers.RClient.SAdd(initializers.Ctx, "cache:products", cacheKey)
+		trackProductCacheKey("cache:products:"+shop.ID.String(), cacheKey)
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -1138,7 +1138,7 @@ func IndexProductBySlug(c *gin.Context) {
 
 	if jsonData, err := json.Marshal(response); err == nil {
 		_ = initializers.RClient.Set(initializers.Ctx, cacheKey, jsonData, 10*time.Minute).Err()
-		_ = initializers.RClient.SAdd(initializers.Ctx, "cache:product:id", cacheKey).Err()
+		trackProductCacheKey("cache:product:id:"+shop.ID.String(), cacheKey)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -2379,22 +2379,10 @@ func InvalidateProductCaches(productID uuid.UUID, shopID uuid.UUID) {
 	{
 		ctx := context.Background()
 
-		productKeys, _ := initializers.RClient.SMembers(ctx, "cache:product:id").Result()
-		for _, key := range productKeys {
-			if strings.Contains(key, productID.String()) || strings.Contains(key, shopID.String()) {
-				initializers.RClient.Del(ctx, key)
-			}
-		}
-
-		// Storefront list keys are keyed by slug, not shop ID.
-		var slug string
-		initializers.DB.Model(&models.Shop{}).Where("id = ?", shopID).Select("slug").Scan(&slug)
-
-		productListKeys, _ := initializers.RClient.SMembers(ctx, "cache:products").Result()
-		for _, key := range productListKeys {
-			if strings.Contains(key, shopID.String()) || (slug != "" && strings.Contains(key, ":slug:"+slug+":")) {
-				initializers.RClient.Del(ctx, key)
-			}
+		// Per-shop sets (TTL'd) keep this bounded; drop every cached key for the shop.
+		for _, set := range []string{"cache:product:id:" + shopID.String(), "cache:products:" + shopID.String()} {
+			keys, _ := initializers.RClient.SMembers(ctx, set).Result()
+			initializers.RClient.Del(ctx, append(keys, set)...)
 		}
 
 		// Landing pages embed the product (incl. variants/combinations) at cache-write
@@ -2409,4 +2397,11 @@ func InvalidateProductCaches(productID uuid.UUID, shopID uuid.UUID) {
 		}
 		initializers.RClient.Del(ctx, services.LandingPagesCacheKeyByShop(shopID))
 	}
+}
+
+// trackProductCacheKey records a cache key in a per-shop index set. The set
+// expires with the cached entries (10min TTL), so it can't grow without bound.
+func trackProductCacheKey(set, key string) {
+	initializers.RClient.SAdd(initializers.Ctx, set, key)
+	initializers.RClient.Expire(initializers.Ctx, set, 11*time.Minute)
 }

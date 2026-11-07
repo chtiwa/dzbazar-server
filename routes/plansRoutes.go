@@ -27,6 +27,7 @@ func PlansRoutes(router *gin.Engine) {
 	sub.Use(middleware.RequireAuthentication)
 	{
 		sub.GET("", middleware.RequireShopAccess(), middleware.RequireShopPermission("subscription.view"), controllers.GetShopSubscription)
+		sub.GET("/usage", middleware.RequireShopAccess(), middleware.RequireShopPermission("subscription.view"), controllers.GetShopUsage)
 		sub.POST("", middleware.RequireShopAccess(), middleware.RequireShopPermission("subscription.edit"), middleware.RateLimitByShop("plan-switch", 3, time.Hour), controllers.SubscribeShopToPlan)
 	}
 

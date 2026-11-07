@@ -148,8 +148,33 @@ func CheckProductLimit(shopID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	return countCap(initializers.DB.Model(&models.Product{}).
-		Where("shop_id = ? AND deleted_at IS NULL", shopID), sub.Plan.MaxProducts)
+	return countCap(productCountQuery(shopID), sub.Plan.MaxProducts)
+}
+
+// *CountQuery builders are shared by the Check* enforcement and GetUsageSummary
+// so the usage view can never drift from what is actually enforced.
+func productCountQuery(shopID uuid.UUID) *gorm.DB {
+	return initializers.DB.Model(&models.Product{}).Where("shop_id = ? AND deleted_at IS NULL", shopID)
+}
+
+func orderCountQuery(shopID uuid.UUID, sub models.ShopSubscription) *gorm.DB {
+	query := initializers.DB.Model(&models.Order{}).Where("shop_id = ? AND deleted_at IS NULL", shopID)
+	if !sub.StartedAt.IsZero() {
+		query = query.Where("created_at >= ?", sub.StartedAt)
+	}
+	return query
+}
+
+func landingPageCountQuery(shopID uuid.UUID) *gorm.DB {
+	return initializers.DB.Model(&models.LandingPage{}).Where("shop_id = ? AND deleted_at IS NULL", shopID)
+}
+
+func userCountQuery(shopID uuid.UUID) *gorm.DB {
+	return initializers.DB.Model(&models.ShopMember{}).Where("shop_id = ?", shopID)
+}
+
+func pixelCountQuery(shopID uuid.UUID, platform string) *gorm.DB {
+	return initializers.DB.Model(&models.Pixel{}).Where("shop_id = ? AND platform = ?", shopID, platform)
 }
 
 // CheckOrderLimit counts orders placed since the current subscription started,
@@ -159,11 +184,7 @@ func CheckOrderLimit(shopID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	query := initializers.DB.Model(&models.Order{}).Where("shop_id = ? AND deleted_at IS NULL", shopID)
-	if !sub.StartedAt.IsZero() {
-		query = query.Where("created_at >= ?", sub.StartedAt)
-	}
-	return countCap(query, sub.Plan.MaxOrders)
+	return countCap(orderCountQuery(shopID, sub), sub.Plan.MaxOrders)
 }
 
 func CheckLandingPageLimit(shopID uuid.UUID) error {
@@ -171,8 +192,7 @@ func CheckLandingPageLimit(shopID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	return countCap(initializers.DB.Model(&models.LandingPage{}).
-		Where("shop_id = ? AND deleted_at IS NULL", shopID), sub.Plan.MaxLandingPages)
+	return countCap(landingPageCountQuery(shopID), sub.Plan.MaxLandingPages)
 }
 
 func periodScopedCount(shopIDs []uuid.UUID, sub models.ShopSubscription, model any) (int64, error) {
@@ -294,13 +314,54 @@ func GetCreditsSummary(shopID uuid.UUID) (CreditsSummary, error) {
 	return CreditsSummary{Used: used, Total: sub.Plan.CreditsPerMonth}, nil
 }
 
+// UsageItem is one "used of max" figure; Max -1 = unlimited.
+type UsageItem struct {
+	Used int64 `json:"used"`
+	Max  int   `json:"max"`
+}
+
+type UsageSummary struct {
+	Orders         UsageItem `json:"orders"`
+	Products       UsageItem `json:"products"`
+	LandingPages   UsageItem `json:"landingPages"`
+	Users          UsageItem `json:"users"`
+	FacebookPixels UsageItem `json:"facebookPixels"`
+	TikTokPixels   UsageItem `json:"tiktokPixels"`
+}
+
+func GetUsageSummary(shopID uuid.UUID) (UsageSummary, error) {
+	var u UsageSummary
+	sub, err := shopSubscription(shopID)
+	if err != nil {
+		return u, err
+	}
+	p := sub.Plan
+	for _, it := range []struct {
+		dst *UsageItem
+		q   *gorm.DB
+		max int
+	}{
+		{&u.Orders, orderCountQuery(shopID, sub), p.MaxOrders},
+		{&u.Products, productCountQuery(shopID), p.MaxProducts},
+		{&u.LandingPages, landingPageCountQuery(shopID), p.MaxLandingPages},
+		{&u.Users, userCountQuery(shopID), p.MaxUsers},
+		{&u.FacebookPixels, pixelCountQuery(shopID, "facebook"), p.MaxFacebookPixels},
+		{&u.TikTokPixels, pixelCountQuery(shopID, "tiktok"), p.MaxTikTokPixels},
+	} {
+		if err := it.q.Count(&it.dst.Used).Error; err != nil {
+			return u, err
+		}
+		it.dst.Max = it.max
+	}
+	return u, nil
+}
+
 func CheckUserLimit(shopID uuid.UUID) error {
 	sub, err := shopSubscription(shopID)
 	if err != nil {
 		return err
 	}
-	return countCap(initializers.DB.Model(&models.ShopMember{}).
-		Where("shop_id = ?", shopID), sub.Plan.MaxUsers)
+	return countCap(userCountQuery(shopID), sub.Plan.MaxUsers)
 }
 
 func CheckPixelLimit(shopID uuid.UUID, platform string) error {
@@ -312,8 +373,7 @@ func CheckPixelLimit(shopID uuid.UUID, platform string) error {
 	if platform == "tiktok" {
 		max = sub.Plan.MaxTikTokPixels
 	}
-	return countCap(initializers.DB.Model(&models.Pixel{}).
-		Where("shop_id = ? AND platform = ?", shopID, platform), max)
+	return countCap(pixelCountQuery(shopID, platform), max)
 }
 
 // CheckShopLimit caps how many shops one owner can hold. An owner with an

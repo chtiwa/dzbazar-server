@@ -216,17 +216,29 @@ func CreateUserByShop(c *gin.Context) {
 	// create a brand-new account for a brand-new email.
 	if lookupErr == nil {
 		tx.Rollback()
-		// The shop may only learn about its own members. For an account that
-		// lives elsewhere, answer generically so this endpoint can't be used
-		// to probe which emails exist platform-wide.
 		var inShop int64
 		initializers.DB.Model(&models.ShopMember{}).
 			Where("shop_id = ? AND user_id = ?", shopID, existingUser.ID).Count(&inShop)
-		msg := "This email can't be used"
 		if inShop > 0 {
-			msg = "This user is already a member of your shop"
+			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "This user is already a member of your shop"})
+			return
 		}
-		c.JSON(http.StatusConflict, gin.H{"success": false, "message": msg})
+		// Existing account elsewhere: create/refresh a pending invite the user
+		// must accept. Response is identical whether or not an invite already
+		// existed. ponytail: 202 vs 201 still reveals "email has an account"; accepted trade-off.
+		caller := c.MustGet("user").(models.User)
+		inv := models.ShopInvite{ShopID: shopID, UserID: existingUser.ID, Role: body.Role, InvitedBy: &caller.ID}
+		if err := initializers.DB.Transaction(func(t *gorm.DB) error {
+			if err := t.Unscoped().Where("shop_id = ? AND user_id = ?", shopID, existingUser.ID).
+				Delete(&models.ShopInvite{}).Error; err != nil {
+				return err
+			}
+			return t.Create(&inv).Error
+		}); err != nil {
+			RespondError(c, http.StatusInternalServerError, "Failed to create invite", err)
+			return
+		}
+		c.JSON(http.StatusAccepted, gin.H{"success": true, "invited": true, "message": "Invite sent. The user must accept it from their shop selection page."})
 		return
 	}
 

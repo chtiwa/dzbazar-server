@@ -51,6 +51,7 @@ type UpdateShopInput struct {
 	BanDatacenterEnabled *bool `form:"banDatacenterEnabled"`
 	FreeDeliveryEnabled  *bool `form:"freeDeliveryEnabled"`
 	AutoAssignEnabled    *bool `form:"autoAssignEnabled"`
+	OrderCooldownHours   *int  `form:"orderCooldownHours"`
 }
 
 type MyShopResponse struct {
@@ -597,6 +598,14 @@ func UpdateShop(c *gin.Context) {
 	}
 	if input.FreeDeliveryEnabled != nil {
 		updateData["free_delivery_enabled"] = *input.FreeDeliveryEnabled
+	}
+	if input.OrderCooldownHours != nil {
+		h := *input.OrderCooldownHours
+		if h < 0 || h > 720 {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "orderCooldownHours must be between 0 and 720"})
+			return
+		}
+		updateData["order_cooldown_hours"] = h
 	}
 	if input.AutoAssignEnabled != nil {
 		updateData["auto_assign_enabled"] = *input.AutoAssignEnabled

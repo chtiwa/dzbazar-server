@@ -6,7 +6,7 @@ import (
 )
 
 // TrackRecordsByPhones returns platform-wide (all shops) Livré/Retour counts
-// per phone. Same terminal statuses as dashboardController's resolved*,
+// per phone. Cross-shop on purpose (product decision): shared customer reputation. Same terminal statuses as dashboardController's resolved*,
 // minus is_shipped (manual-shipping shops never set it).
 // ponytail: exact phone match — CreateOrderByShopID enforces ^0[567]\d{8}$, so stored phones are canonical; normalize here only if client CRUD/Excel imports diverge.
 func TrackRecordsByPhones(phones []string) (map[string]dto.ClientTrackRecord, error) {
