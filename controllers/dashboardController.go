@@ -41,7 +41,8 @@ type DashboardData struct {
 	DeliveredRevenue float64      `json:"deliveredRevenue"`
 	PendingRevenue   float64      `json:"pendingRevenue"`
 	DeliveredOrders  int64        `json:"deliveredOrders"`
-	AvgOrderValue    float64      `json:"avgOrderValue"`
+	ReturnedOrders   int64        `json:"returnedOrders"`
+	AvgOrderValue   float64      `json:"avgOrderValue"`
 	ShippedOrders    int64        `json:"shippedOrders"`
 	DeliveryRate     float64      `json:"deliveryRate"`
 	MaturedShipped   int64        `json:"maturedShipped"`
@@ -229,7 +230,8 @@ func GetOrdersDashboard(c *gin.Context) {
 		DeliveredNetRevenue float64
 		PendingRevenue      float64
 		DeliveredOrders     int64
-		ShippedOrders       int64
+		ReturnedOrders      int64
+		ShippedOrders      int64
 		MaturedShipped      int64
 		MaturedDelivered    int64
 		MaturedResolved     int64
@@ -295,6 +297,7 @@ func GetOrdersDashboard(c *gin.Context) {
 			COALESCE(SUM(CASE WHEN status = 'Livré'%[5]s THEN %[2]s END), 0) AS delivered_net_revenue,
 			COALESCE(SUM(CASE WHEN status NOT IN ('Livré', 'Annulé', 'Retour', 'Abandonné') THEN %[1]s END), 0) AS pending_revenue,
 			COUNT(*) FILTER (WHERE status = 'Livré'%[5]s) AS delivered_orders,
+				COUNT(*) FILTER (WHERE status = 'Retour'%[5]s) AS returned_orders,
 			COUNT(*) FILTER (WHERE is_shipped = true%[5]s) AS shipped_orders,
 			COUNT(*) FILTER (WHERE ((is_shipped = true AND shipped_at <= now() - interval '%[3]s') OR status IN ('Livré', 'Retour'))%[5]s) AS matured_shipped,
 			COUNT(*) FILTER (WHERE status = 'Livré'%[5]s) AS matured_delivered,
@@ -400,9 +403,10 @@ func GetOrdersDashboard(c *gin.Context) {
 		StatusStats:              statusStats,
 		TotalOrders:              totalOrders,
 		WilayaStats:              wilayaStats,
-		DeliveredRevenue:         rev.DeliveredRevenue,
+		DeliveredRevenue:         rev.DeliveredNetRevenue, // excl. shipping: the courier keeps its fee out of the COD it remits
 		PendingRevenue:           rev.PendingRevenue,
 		DeliveredOrders:          rev.DeliveredOrders,
+		ReturnedOrders:           rev.ReturnedOrders,
 		AvgOrderValue:            avgOrderValue,
 		ShippedOrders:            rev.ShippedOrders,
 		DeliveryRate:             deliveryRate,
