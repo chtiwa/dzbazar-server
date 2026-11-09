@@ -22,6 +22,7 @@ func OrdersRoutes(router *gin.Engine) {
 		orders.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.delete"), controllers.DeleteOrderByShopID)
 		orders.DELETE("/bulk", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.delete"), controllers.BulkDeleteOrdersByShopID)
 		orders.POST("/:id/ban-client", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ban_client"), controllers.BanOrderClient)
+		orders.POST("/:id/unban-client", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ban_client"), controllers.UnbanOrderClient)
 		orders.POST("/:id/unship", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ship"), controllers.UnshipOrder)
 	}
 }

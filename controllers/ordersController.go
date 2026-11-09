@@ -1604,6 +1604,67 @@ func BanOrderClient(c *gin.Context) {
 	})
 }
 
+// UnbanOrderClient reverses BanOrderClient for this shop: drops the fbp/ttp
+// FlaggedClient row, clears Client.Banned, and un-hides this order whatever the
+// reason it was hidden (manual ban, cussword, vpn…). Idempotent. Other hidden orders from the
+// same client stay hidden (owner can unban from each, or ship them as-is).
+func UnbanOrderClient(c *gin.Context) {
+	shopID, err := uuid.Parse(c.Param("shopId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid or missing Shop ID"})
+		return
+	}
+	orderID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid Order ID format"})
+		return
+	}
+
+	var order models.Order
+	if err := initializers.DB.First(&order, "id = ? AND shop_id = ?", orderID, shopID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Order not found or does not belong to this shop"})
+			return
+		}
+		RespondError(c, http.StatusInternalServerError, "Database error while looking up order", err)
+		return
+	}
+
+	platform, clientID := "", ""
+	switch order.ConversionSource {
+	case "facebook":
+		platform, clientID = "facebook", order.FBp
+	case "tiktok":
+		platform, clientID = "tiktok", order.TTp
+	}
+
+	err = initializers.DB.Transaction(func(tx *gorm.DB) error {
+		if clientID != "" {
+			if err := tx.Where("shop_id = ? AND platform = ? AND client_id = ?", shopID, platform, clientID).
+				Delete(&models.FlaggedClient{}).Error; err != nil {
+				return err
+			}
+		}
+		if order.ClientID != uuid.Nil {
+			if err := tx.Model(&models.Client{}).Where("id = ?", order.ClientID).Update("banned", false).Error; err != nil {
+				return err
+			}
+		}
+		if order.IsHidden {
+			return tx.Model(&models.Order{}).Where("id = ?", order.ID).
+				Updates(map[string]any{"is_hidden": false, "hidden_reason": ""}).Error
+		}
+		return nil
+	})
+	if err != nil {
+		RespondError(c, http.StatusInternalServerError, "Failed to unban client", err)
+		return
+	}
+
+	invalidateOrdersListCache(shopID)
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Client unbanned — future orders will be visible again"})
+}
+
 // UnshipOrder reverses a previously-shipped order: restores the stock that
 // was decremented at ship time, and clears shipped_at/shipped_via_id/
 // tracking_number so the order shows up as unshipped again — free to be
