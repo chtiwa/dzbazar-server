@@ -750,16 +750,12 @@ func CreateOrderByShopID(c *gin.Context) {
 			calculatedTotalPrice = *body.OverrideTotalPrice
 		}
 
-		// A banned client id never reaches this point at all (see the
-		// short-circuit above, before this transaction started). This is
-		// purely first-offense detection: a cussword name on an id that
-		// isn't banned yet gets auto-flagged for next time.
+		// A cussword name only HIDES this order for the owner to review. It must
+		// not auto-ban the browser: a ban silently drops every future order from
+		// that client with no row at all, so one false positive = a real
+		// customer's sales vanish unseen. Bans stay a manual owner action
+		// (BanOrderClient).
 		containsCussword := utils.ContainsBannedWords(body.Client.FullName)
-		if containsCussword && banClientID != "" {
-			if flagErr := tx.Create(&models.FlaggedClient{ShopID: parsedShopID, Platform: banPlatform, ClientID: banClientID}).Error; flagErr != nil {
-				return flagErr
-			}
-		}
 
 		hiddenReason := fraudHiddenReason
 		if containsCussword {
