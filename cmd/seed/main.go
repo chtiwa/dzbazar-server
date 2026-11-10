@@ -38,7 +38,7 @@ func main() {
 	var exists int64
 	db.Model(&models.User{}).Where("email = ?", "owner"+seedDomain).Count(&exists)
 	if exists > 0 {
-		log.Println("already seeded, nothing to do")
+		topUp(db)
 		return
 	}
 
@@ -55,6 +55,8 @@ func main() {
 		owner := mkUser("Demo", "Owner", "owner", "owner")
 		mod := mkUser("Demo", "Moderator", "moderator", "moderator")
 		conf := mkUser("Demo", "Confirmation", "confirmation", "confirmation")
+		sa := mkUser("Demo", "Super", "superadmin", "owner")
+		must(tx.Model(&sa).Update("platform_role", "super_admin").Error)
 
 		shop := models.Shop{Name: "Demo Shop", Slug: shopSlug, Description: "Seeded dev shop", OwnerID: owner.ID, IsActive: true, IsVerified: true}
 		must(tx.Omit("Owner", "Members", "Products", "Orders", "Clients", "LogoImage").Create(&shop).Error)
@@ -153,6 +155,7 @@ func main() {
 			must(tx.Omit("Product", "ProductVariantCombination").Create(&models.OrderItem{OrderID: o.ID, ProductID: cb.ProductID,
 				ProductVariantCombinationID: cb.ID, Quantity: qty, Price: cb.Price}).Error)
 		}
+		seedExtras(tx, shop, owner, members, products, combos, clients)
 		return nil
 	}))
 

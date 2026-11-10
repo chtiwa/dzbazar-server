@@ -625,6 +625,21 @@ func resolveOffers(shopID, productID uuid.UUID, req EvaluateOffersRequest) ([]Of
 	// packages apply to whichever variant the customer already selected — so
 	// pull those in too, for the same OOS check.
 	selectedVariantIDs, _ := parseUUIDs(req.SelectedVariants)
+
+	// The admin form never sends offerVariantIds, so an upsell/cross-sell with
+	// an empty list used to be skipped below and never shown. Default to every
+	// variant of the offer product (resolved live, so new variants are included).
+	for i := range offers {
+		o := &offers[i]
+		if len(o.OfferVariantIDs) > 0 || (o.OfferType != nil && *o.OfferType == "quantity_upsell") {
+			continue
+		}
+		var ids []uuid.UUID
+		initializers.DB.Model(&models.ProductVariantCombination{}).
+			Where("product_id = ?", o.OfferProductID).Pluck("id", &ids)
+		o.OfferVariantIDs = ids
+	}
+
 	allVariantIDs := []uuid.UUID{}
 	for _, o := range offers {
 		allVariantIDs = append(allVariantIDs, o.OfferVariantIDs...)
