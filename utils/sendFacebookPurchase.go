@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type FacebookEvent struct {
@@ -28,9 +30,14 @@ type FacebookPayload struct {
 
 // SendFacebookPurchase fires a confirmed purchase event via Conversion API,
 // using the shop's own pixel ID and access token (each shop configures its own).
-func SendFacebookPurchase(pixelID, accessToken, orderID, fullName, phone string, value float64, currency, fbc, fbp string, createdAt time.Time, clientUserAgent, clientIP, testCode, eventSourceURL string) error {
+func SendFacebookPurchase(pixelID, accessToken, orderID, fullName, phone string, value float64, currency, fbc, fbp string, createdAt time.Time, clientUserAgent, clientIP, testCode, eventSourceURL, city, state, externalID string) error {
 	if pixelID == "" || accessToken == "" {
 		return fmt.Errorf("missing pixel ID or access token")
+	}
+	// Meta rejects Purchase without event_source_url (old/dashboard orders have none).
+	// ponytail: not per-shop, add if shops get custom domains.
+	if eventSourceURL == "" {
+		eventSourceURL = os.Getenv("CLIENT_URL")
 	}
 
 	url := fmt.Sprintf("https://graph.facebook.com/v24.0/%s/events?access_token=%s", pixelID, accessToken)
@@ -71,6 +78,16 @@ func SendFacebookPurchase(pixelID, accessToken, orderID, fullName, phone string,
 	}
 	if hashedPhone != "" {
 		userData["ph"] = hashedPhone
+	}
+	userData["country"] = hashData("dz")
+	if h := hashData(alnumOnly(city)); h != "" {
+		userData["ct"] = h
+	}
+	if h := hashData(alnumOnly(state)); h != "" {
+		userData["st"] = h
+	}
+	if h := hashData(externalID); h != "" {
+		userData["external_id"] = h
 	}
 
 	customData := map[string]interface{}{
@@ -141,6 +158,16 @@ func normalizePhoneForHashing(phone string) string {
 		digits = "213" + digits
 	}
 	return digits
+}
+
+// alnumOnly strips spaces/punctuation (Meta ct/st format), keeps any-script letters.
+func alnumOnly(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return unicode.ToLower(r)
+		}
+		return -1
+	}, s)
 }
 
 // hashData computes SHA256 hash of a string and returns lowercase hex

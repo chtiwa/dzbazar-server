@@ -290,6 +290,12 @@ func sendMetaPurchaseIfEligible(order *models.Order) {
 	initializers.DB.Model(&models.Order{}).Where("id = ?", order.ID).
 		UpdateColumn("meta_purchase_attempts", gorm.Expr("meta_purchase_attempts + 1"))
 
+	// No _fbc cookie but fbclid captured: rebuild per Meta's fb.1.<ms>.<fbclid> format.
+	fbc := order.FBc
+	if fbc == "" && order.FBclid != "" {
+		fbc = fmt.Sprintf("fb.1.%d.%s", order.CreatedAt.UnixMilli(), order.FBclid)
+	}
+
 	fbErr := utils.SendFacebookPurchase(
 		px.PixelID,
 		accessToken,
@@ -298,13 +304,16 @@ func sendMetaPurchaseIfEligible(order *models.Order) {
 		order.Client.PhoneNumber,
 		order.TotalPrice,
 		"DZD",
-		order.FBc,
+		fbc,
 		order.FBp,
 		order.CreatedAt,
 		order.ClientUserAgent,
 		order.ClientIP,
 		testCode,
 		order.PageURL,
+		order.Client.City,
+		order.Client.State,
+		order.ClientID.String(),
 	)
 	if fbErr != nil {
 		log.Printf("meta capi: purchase send failed order=%s shop=%s: %v", order.ID, order.ShopID, fbErr)
