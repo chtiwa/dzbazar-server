@@ -32,24 +32,25 @@ type WilayaStat struct {
 }
 
 type DashboardData struct {
-	Daily            []TimeCount  `json:"daily"`
-	Weekly           []TimeCount  `json:"weekly"`
-	Monthly          []TimeCount  `json:"monthly"`
-	StatusStats      []StatusStat `json:"statusStats"`
-	TotalOrders      int64        `json:"totalOrders"`
-	WilayaStats      []WilayaStat `json:"wilayaStats"`
-	DeliveredRevenue float64      `json:"deliveredRevenue"`
-	PendingRevenue   float64      `json:"pendingRevenue"`
-	DeliveredOrders  int64        `json:"deliveredOrders"`
-	ReturnedOrders   int64        `json:"returnedOrders"`
-	AvgOrderValue   float64      `json:"avgOrderValue"`
-	ShippedOrders    int64        `json:"shippedOrders"`
-	DeliveryRate     float64      `json:"deliveryRate"`
-	MaturedShipped   int64        `json:"maturedShipped"`
-	MaturedDelivered int64        `json:"maturedDelivered"`
-	MaturingOrders   int64        `json:"maturingOrders"`
-	ConfirmedOrders  int64        `json:"confirmedOrders"`
-	ConfirmationRate float64      `json:"confirmationRate"`
+	Daily             []TimeCount  `json:"daily"`
+	Weekly            []TimeCount  `json:"weekly"`
+	Monthly           []TimeCount  `json:"monthly"`
+	StatusStats       []StatusStat `json:"statusStats"`
+	TotalOrders       int64        `json:"totalOrders"`
+	WilayaStats       []WilayaStat `json:"wilayaStats"`
+	DeliveredRevenue  float64      `json:"deliveredRevenue"`
+	PendingRevenue    float64      `json:"pendingRevenue"`
+	DeliveredOrders   int64        `json:"deliveredOrders"`
+	DeliveredProducts int64        `json:"deliveredProducts"`
+	ReturnedOrders    int64        `json:"returnedOrders"`
+	AvgOrderValue     float64      `json:"avgOrderValue"`
+	ShippedOrders     int64        `json:"shippedOrders"`
+	DeliveryRate      float64      `json:"deliveryRate"`
+	MaturedShipped    int64        `json:"maturedShipped"`
+	MaturedDelivered  int64        `json:"maturedDelivered"`
+	MaturingOrders    int64        `json:"maturingOrders"`
+	ConfirmedOrders   int64        `json:"confirmedOrders"`
+	ConfirmationRate  float64      `json:"confirmationRate"`
 	// Resolved = left "En attente" limbo (same definition as confirmatrices.go).
 	// Narrows the denominator to orders that were actually worked, so it isn't
 	// dragged down by orders nobody has called yet.
@@ -230,8 +231,9 @@ func GetOrdersDashboard(c *gin.Context) {
 		DeliveredNetRevenue float64
 		PendingRevenue      float64
 		DeliveredOrders     int64
+		DeliveredProducts   int64
 		ReturnedOrders      int64
-		ShippedOrders      int64
+		ShippedOrders       int64
 		MaturedShipped      int64
 		MaturedDelivered    int64
 		MaturedResolved     int64
@@ -292,11 +294,18 @@ func GetOrdersDashboard(c *gin.Context) {
 
 	// %[1]s..: carrier is ANDed into every delivery-side filter, never into the
 	// confirmation/pending ones.
+	// Units sold on delivered orders (an order can hold several items); scoped to the
+	// filtered product when one is selected. productID is a parsed uuid — safe literal.
+	itemProduct := ""
+	if hasProduct {
+		itemProduct = fmt.Sprintf(" AND oi.product_id = '%s'", productID.String())
+	}
 	revSelect := fmt.Sprintf(`
 			COALESCE(SUM(CASE WHEN status = 'Livré'%[5]s THEN %[1]s END), 0) AS delivered_revenue,
 			COALESCE(SUM(CASE WHEN status = 'Livré'%[5]s THEN %[2]s END), 0) AS delivered_net_revenue,
 			COALESCE(SUM(CASE WHEN status NOT IN ('Livré', 'Annulé', 'Retour', 'Abandonné') THEN %[2]s END), 0) AS pending_revenue,
 			COUNT(*) FILTER (WHERE status = 'Livré'%[5]s) AS delivered_orders,
+				COALESCE(SUM(CASE WHEN status = 'Livré'%[5]s THEN (SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi WHERE oi.order_id = orders.id AND oi.deleted_at IS NULL%[6]s) END), 0) AS delivered_products,
 				COUNT(*) FILTER (WHERE status = 'Retour'%[5]s) AS returned_orders,
 			COUNT(*) FILTER (WHERE is_shipped = true%[5]s) AS shipped_orders,
 			COUNT(*) FILTER (WHERE ((is_shipped = true AND shipped_at <= now() - interval '%[3]s') OR status IN ('Livré', 'Retour'))%[5]s) AS matured_shipped,
@@ -306,7 +315,7 @@ func GetOrdersDashboard(c *gin.Context) {
 			COUNT(*) FILTER (WHERE status = 'Livré'%[5]s) AS resolved_delivered,
 			COUNT(*) FILTER (WHERE %[4]s) AS confirmed_orders,
 			COUNT(*) FILTER (WHERE status <> 'En attente' OR %[4]s) AS resolved_orders
-		`, deliveredExpr, netExpr, deliveryRateMaturityBuffer, wasEverConfirmed, carrier)
+		`, deliveredExpr, netExpr, deliveryRateMaturityBuffer, wasEverConfirmed, carrier, itemProduct)
 
 	if err := revQ.Select(revSelect).Scan(&rev).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Error fetching revenue stats", err)
@@ -406,6 +415,7 @@ func GetOrdersDashboard(c *gin.Context) {
 		DeliveredRevenue:         rev.DeliveredNetRevenue, // excl. shipping: the courier keeps its fee out of the COD it remits
 		PendingRevenue:           rev.PendingRevenue,
 		DeliveredOrders:          rev.DeliveredOrders,
+		DeliveredProducts:        rev.DeliveredProducts,
 		ReturnedOrders:           rev.ReturnedOrders,
 		AvgOrderValue:            avgOrderValue,
 		ShippedOrders:            rev.ShippedOrders,

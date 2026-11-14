@@ -164,11 +164,9 @@ func countDirectProductOrdersByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID
 	return counts, nil
 }
 
-// deliveryRatesByProductIDs returns, per product, the % of shipped orders containing it that
-// currently sit at "Livré" (delivered). Nil for a product with no shipped orders yet. Only
-// shipments older than 3 days count (deliveryRateMaturityBuffer in dashboardController) — a
-// same-day shipment hasn't had time to arrive, so counting it here would tank the rate for no
-// carrier-related reason.
+// deliveryRatesByProductIDs returns, per product, the RESOLVED delivery rate (same as the
+// dashboard's resolvedDeliveryRate): Livré / (Livré + Retour). In-transit orders are ignored.
+// Nil for a product with no resolved orders yet. "shipped" below = resolved count.
 func deliveryRatesByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]*float64, error) {
 	rates := make(map[uuid.UUID]*float64, len(productIDs))
 	if len(productIDs) == 0 {
@@ -186,8 +184,8 @@ func deliveryRatesByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]*float64, 
 		Joins("JOIN orders ON orders.id = order_items.order_id").
 		Where("order_items.product_id IN ? AND orders.deleted_at IS NULL", productIDs).
 		Select(`order_items.product_id AS product_id,
-			COUNT(DISTINCT order_items.order_id) FILTER (WHERE orders.is_shipped AND orders.shipped_at <= now() - interval '3 days') AS shipped,
-			COUNT(DISTINCT order_items.order_id) FILTER (WHERE orders.status = 'Livré' AND orders.shipped_at <= now() - interval '3 days') AS delivered`).
+			COUNT(DISTINCT order_items.order_id) FILTER (WHERE orders.status IN ('Livré', 'Retour')) AS shipped,
+			COUNT(DISTINCT order_items.order_id) FILTER (WHERE orders.status = 'Livré') AS delivered`).
 		Group("order_items.product_id").
 		Scan(&rows).Error
 	if err != nil {
@@ -290,7 +288,7 @@ func confirmationRatesByProductIDs(productIDs []uuid.UUID) (map[uuid.UUID]*float
 		Joins("JOIN orders ON orders.id = order_items.order_id").
 		Where("order_items.product_id IN ? AND orders.deleted_at IS NULL AND orders.is_hidden = false AND orders.status <> 'Abandonné'", productIDs).
 		Select(`order_items.product_id AS product_id,
-			COUNT(DISTINCT order_items.order_id) AS total_orders,
+			COUNT(DISTINCT order_items.order_id) FILTER (WHERE orders.status <> 'En attente' OR ` + wasEverConfirmed + `) AS total_orders,
 			COUNT(DISTINCT order_items.order_id) FILTER (WHERE ` + wasEverConfirmed + `) AS confirmed`).
 		Group("order_items.product_id").
 		Scan(&rows).Error

@@ -209,7 +209,7 @@ func GetOrdersByShopID(c *gin.Context) {
 	baseQuery = scopeToAssignee(c, baseQuery)
 
 	if status != "" && status != "Tous" {
-		baseQuery = baseQuery.Where("status = ?", status)
+		baseQuery = baseQuery.Where("status IN ?", strings.Split(status, ",")) // comma-separated = multi-select
 	}
 
 	// A start date with no end date means "that single day only".
