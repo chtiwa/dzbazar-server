@@ -303,7 +303,7 @@ func GetOrdersDashboard(c *gin.Context) {
 	revSelect := fmt.Sprintf(`
 			COALESCE(SUM(CASE WHEN status = 'Livré'%[5]s THEN %[1]s END), 0) AS delivered_revenue,
 			COALESCE(SUM(CASE WHEN status = 'Livré'%[5]s THEN %[2]s END), 0) AS delivered_net_revenue,
-			COALESCE(SUM(CASE WHEN status NOT IN ('Livré', 'Annulé', 'Retour', 'Abandonné') THEN %[2]s END), 0) AS pending_revenue,
+			COALESCE(SUM(CASE WHEN status = 'Expedié' THEN %[2]s END), 0) AS pending_revenue,
 			COUNT(*) FILTER (WHERE status = 'Livré'%[5]s) AS delivered_orders,
 				COALESCE(SUM(CASE WHEN status = 'Livré'%[5]s THEN (SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi WHERE oi.order_id = orders.id AND oi.deleted_at IS NULL%[6]s) END), 0) AS delivered_products,
 				COUNT(*) FILTER (WHERE status = 'Retour'%[5]s) AS returned_orders,
