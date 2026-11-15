@@ -87,3 +87,11 @@ written before the deploy still has the old plaintext fields baked in until
 it naturally expires (worst case 15 minutes post-deploy). If that's not
 acceptable, run once against prod Redis: `redis-cli --scan --pattern
 "orders:list:*" | xargs redis-cli del`.
+
+### Backups & restore (owner must confirm the TODO lines)
+One Railway Postgres holds every merchant's orders + customer PII. No backup tooling lives in the repo.
+- **Primary:** Railway Postgres backups + PITR, enabled 2026-11-15 (owner-confirmed). Retention per Railway docs: scheduled snapshots daily 6d / weekly 1mo / monthly 3mo; PITR ~4 weeks (last 4 weekly full backups + WAL). Window starts at first base backup after enabling. Wiping the volume deletes its backups, so keep a periodic off-Railway `pg_dump` (below) as the only copy that survives losing the project.
+- **Off-Railway copy (recommended even with PITR)** — weekly `pg_dump` to B2 (run as a Railway cron service with `postgresql-client` + `awscli`; reuse the `B2_*` vars, use a *separate private* bucket, never the public image bucket):
+  `pg_dump "$DB_URI" -Fc | aws s3 cp - "s3://$B2_BACKUP_BUCKET/dz-$(date +%F).dump" --endpoint-url "$B2_ENDPOINT"`
+  Add a B2 lifecycle rule (e.g. keep 8 weeks). Add `B2_BACKUP_BUCKET` to `.env.example` when this is wired.
+- **Restore drill** (do once before taking money, then each quarter): create a scratch Railway Postgres → `pg_restore --no-owner -d "$SCRATCH_URI" file.dump` (or Railway's restore-to-new-service for PITR) → check `SELECT count(*) FROM orders` and the newest `created_at` against prod → delete the scratch DB. Goose migration table restores with the dump, so the server boots against it unchanged. Last drill: none yet (skipped 2026-11-15 by owner decision) — backups are unverified until one restore succeeds.

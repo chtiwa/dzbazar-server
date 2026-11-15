@@ -21,6 +21,8 @@ import (
 	"github.com/chtiwa/dzbazar-server/realtime"
 	"github.com/chtiwa/dzbazar-server/routes"
 	"github.com/chtiwa/dzbazar-server/services"
+	"github.com/getsentry/sentry-go"
+	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 )
 
@@ -116,8 +118,18 @@ func configureTrustedClientIP(router *gin.Engine) {
 }
 
 func main() {
+	// Error monitoring: no-op when SENTRY_DSN is unset. PII/bodies/cookies are not sent (SDK defaults).
+	if dsn := os.Getenv("SENTRY_DSN"); dsn != "" {
+		if err := sentry.Init(sentry.ClientOptions{Dsn: dsn, Environment: os.Getenv("APP_ENV")}); err != nil {
+			log.Printf("sentry init failed: %v", err)
+		} else {
+			defer sentry.Flush(2 * time.Second)
+		}
+	}
+
 	router := gin.New()
-	router.Use(gin.Recovery(), middleware.RequestID(), middleware.RequestLogger())
+	// sentrygin must wrap Recovery: it reports the panic, then re-panics so Recovery still returns the 500.
+	router.Use(sentrygin.New(sentrygin.Options{Repanic: true}), gin.Recovery(), middleware.RequestID(), middleware.RequestLogger())
 
 	configureTrustedClientIP(router)
 
