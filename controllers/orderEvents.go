@@ -266,6 +266,11 @@ func processOrderEvent(orderID uuid.UUID, isStaffOrder bool) {
 // retryPendingMetaPurchases (the reconciliation sweep) so both paths use the
 // exact same eligibility check and idempotency bookkeeping.
 func sendMetaPurchaseIfEligible(order *models.Order) {
+	// Ads only: organic and TikTok-sourced orders must not feed Meta's optimizer.
+	if order.ConversionSource != "facebook" && order.FBclid == "" && order.FBc == "" {
+		return
+	}
+
 	var px models.Pixel
 	pixelErr := initializers.DB.
 		Where("shop_id = ? AND platform = ? AND is_active = ?", order.ShopID, "facebook", true).
@@ -539,6 +544,7 @@ func retryPendingMetaPurchases() {
 		Where("status <> ?", "Abandonné").
 		Where("created_at < ?", cutoff).
 		Where("shop_id IN (?)", eligibleShops).
+		Where("conversion_source = ? OR COALESCE(f_bclid,'') <> '' OR COALESCE(f_bc,'') <> ''", "facebook").
 		Find(&orders).Error
 
 	if err != nil {
