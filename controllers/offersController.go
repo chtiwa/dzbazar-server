@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -200,6 +201,11 @@ func CreateOffer(c *gin.Context) {
 
 	applyOfferBodyFields(&offer, body)
 
+	if err := validateOfferBodyDiscount(&offer, body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
 	if err := validateOfferTypeConsistency(&offer); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
@@ -335,6 +341,11 @@ func UpdateOffer(c *gin.Context) {
 
 	applyOfferBodyFields(&offer, body)
 
+	if err := validateOfferBodyDiscount(&offer, body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
 	if err := validateOfferTypeConsistency(&offer); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
@@ -466,6 +477,12 @@ func UpsertOfferOverride(c *gin.Context) {
 	override.ButtonText = body.ButtonText
 	override.DiscountType = body.DiscountType
 	override.DiscountValue = body.DiscountValue
+	if body.DiscountType != nil && body.DiscountValue != nil {
+		if err := validateOfferDiscount(*body.DiscountType, *body.DiscountValue); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+			return
+		}
+	}
 	override.Placement = body.Placement
 	if body.OfferProductID != nil {
 		pid, err := uuid.Parse(*body.OfferProductID)
@@ -636,7 +653,7 @@ func resolveOffers(shopID, productID uuid.UUID, req EvaluateOffersRequest) ([]Of
 		}
 		var ids []uuid.UUID
 		initializers.DB.Model(&models.ProductVariantCombination{}).
-			Where("product_id = ?", o.OfferProductID).Pluck("id", &ids)
+			Where("product_id = ? AND retired = ?", o.OfferProductID, false).Pluck("id", &ids)
 		o.OfferVariantIDs = ids
 	}
 
@@ -650,7 +667,7 @@ func resolveOffers(shopID, productID uuid.UUID, req EvaluateOffersRequest) ([]Of
 	comboMap := map[uuid.UUID]models.ProductVariantCombination{}
 	if len(allVariantIDs) > 0 {
 		var combos []models.ProductVariantCombination
-		initializers.DB.Select("id, quantity, price, combination_string, product_id").Preload("Product", func(db *gorm.DB) *gorm.DB { return db.Select("id, track_stock") }).Where("id IN ?", allVariantIDs).Find(&combos)
+		initializers.DB.Select("id, quantity, price, combination_string, product_id").Preload("Product", func(db *gorm.DB) *gorm.DB { return db.Select("id, track_stock") }).Where("id IN ? AND retired = ?", allVariantIDs, false).Find(&combos)
 		for _, c := range combos {
 			comboMap[c.ID] = c
 		}
@@ -1105,4 +1122,37 @@ func toFloat64Slice(v interface{}) ([]float64, bool) {
 		out = append(out, f)
 	}
 	return out, true
+}
+
+// validateOfferBodyDiscount checks the offer discount only when this request
+// touched it (so unrelated edits never trip on legacy rows) and the offer is
+// not a quantity_upsell (priced via packages, discount pair unused).
+func validateOfferBodyDiscount(offer *models.Offer, body offerBody) error {
+	if body.DiscountType == nil && body.DiscountValue == nil {
+		return nil
+	}
+	if offer.OfferType != nil && *offer.OfferType == "quantity_upsell" {
+		return nil
+	}
+	return validateOfferDiscount(offer.DiscountType, offer.DiscountValue)
+}
+
+// validateOfferDiscount rejects values that would price an offer at <=0 or
+// 100%+ off.
+func validateOfferDiscount(discountType string, v float64) error {
+	switch discountType {
+	case "percent":
+		if v <= 0 || v >= 100 {
+			return errors.New("percent discount must be between 0 and 100")
+		}
+	case "fixed":
+		if v <= 0 {
+			return errors.New("fixed discount must be greater than 0")
+		}
+	case "override_price":
+		if v <= 0 {
+			return errors.New("override price must be greater than 0")
+		}
+	}
+	return nil
 }

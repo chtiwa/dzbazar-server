@@ -19,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Replace your old CreateOrderInput with this:
@@ -83,7 +84,7 @@ type OrderItemInput struct {
 	ProductID                   string  `json:"productId" binding:"required"`
 	ProductVariantCombinationID string  `json:"productVariantCombinationID" binding:"required"` // Match JSON exactly
 	Quantity                    uint    `json:"quantity" binding:"required,min=1"`
-	Price                       float64 `json:"price" binding:"required"`
+	Price                       float64 `json:"price"`
 	// OfferID is optional and only ever used to look up which published offer's
 	// discount rule applies — the resulting price is always recomputed
 	// server-side (see priceForOrderItem in ordersController.go). Price above
@@ -99,7 +100,6 @@ var validOrderStatuses = map[string]bool{
 	"En attente": true, "Confirmé": true, "Livré": true, "Annulé": true,
 	"Retour": true, "Expedié": true, "Reporté": true,
 	"Ne répond pas 1": true, "Ne répond pas 2": true, "Ne répond pas 3": true,
-	"Abandonné": true,
 }
 
 type UpdateOrderInput struct {
@@ -382,6 +382,11 @@ func shipLockKey(orderID uuid.UUID) string {
 
 var errInsufficientStock = errors.New("insufficient stock for combination")
 
+// errCheckoutConflict marks a checkout that failed because the cart no longer
+// matches the shop's data (retired SKU, wilaya without a rate...). Client
+// problem, not a server fault -> 409, never 500.
+var errCheckoutConflict = errors.New("checkout conflict")
+
 func CreateOrderByShopID(c *gin.Context) {
 	start := time.Now()
 	defer func() {
@@ -583,8 +588,15 @@ func CreateOrderByShopID(c *gin.Context) {
 					City:          body.Client.City,
 					StopdeskPoint: body.Client.StopdeskPoint,
 				}
-				if createErr := tx.Create(&client).Error; createErr != nil {
-					return createErr // This will no longer fail!
+				// Concurrent first orders from one new phone race on idx_shop_phone:
+				// DoNothing then re-select so the loser reuses the winner's row.
+				if createErr := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&client).Error; createErr != nil {
+					return createErr
+				}
+				if client.ID == uuid.Nil {
+					if selErr := tx.Where("phone_number = ? AND shop_id = ?", body.Client.PhoneNumber, parsedShopID).First(&client).Error; selErr != nil {
+						return selErr
+					}
 				}
 			} else {
 				return err
@@ -663,7 +675,7 @@ func CreateOrderByShopID(c *gin.Context) {
 		for i, item := range body.Items {
 			combo, ok := comboByID[comboIDs[i]]
 			if !ok {
-				return fmt.Errorf("combination not found for this shop: %s", item.ProductVariantCombinationID)
+				return fmt.Errorf("%w: combination not found for this shop: %s", errCheckoutConflict, item.ProductVariantCombinationID)
 			}
 
 			// ponytail: stock is authoritative here but not row-locked — two
@@ -730,10 +742,13 @@ func CreateOrderByShopID(c *gin.Context) {
 		// client's wilaya, never trusted from body.ShippingPrice.
 		wilayaID, atoiErr := strconv.Atoi(body.Client.StateCode)
 		if atoiErr != nil {
-			return fmt.Errorf("invalid or missing wilaya code: %q", body.Client.StateCode)
+			return fmt.Errorf("%w: invalid or missing wilaya code: %q", errCheckoutConflict, body.Client.StateCode)
 		}
 		var rate models.DeliveryRate
 		if err := tx.Where("shop_id = ? AND wilaya_id = ?", parsedShopID, wilayaID).First(&rate).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("%w: no delivery rate for wilaya %d", errCheckoutConflict, wilayaID)
+			}
 			return err
 		}
 		var shop models.Shop
@@ -742,7 +757,7 @@ func CreateOrderByShopID(c *gin.Context) {
 		}
 		shippingPrice, shipErr := services.ResolveShipping(rate, body.ShippingMethod, shop.FreeDeliveryEnabled)
 		if shipErr != nil {
-			return shipErr
+			return fmt.Errorf("%w: %v", errCheckoutConflict, shipErr)
 		}
 		calculatedTotalPrice += shippingPrice
 
@@ -771,7 +786,12 @@ func CreateOrderByShopID(c *gin.Context) {
 		var landingPageID *uuid.UUID
 		if trimmed := strings.TrimSpace(body.LandingPageID); trimmed != "" {
 			if parsed, parseErr := uuid.Parse(trimmed); parseErr == nil {
-				landingPageID = &parsed
+				// Must be this shop's page: a deleted or foreign id would break the FK
+				// (losing the order) or credit another shop's experiment.
+				var n int64
+				if tx.Model(&models.LandingPage{}).Where("id = ? AND shop_id = ?", parsed, parsedShopID).Count(&n).Error == nil && n > 0 {
+					landingPageID = &parsed
+				}
 			}
 		}
 
@@ -815,7 +835,10 @@ func CreateOrderByShopID(c *gin.Context) {
 		// anyway (flagged view is owner-only), so assigning it just burns a
 		// round-robin turn she never gets credit for.
 		if !order.IsHidden {
+			// Savepoint: a SQL error would otherwise abort the whole pg tx.
+			tx.SavePoint("auto_assign")
 			if assignErr := services.AutoAssignOrder(tx, parsedShopID, &order); assignErr != nil {
+				tx.RollbackTo("auto_assign")
 				fmt.Println("AutoAssignOrder: failed to auto-assign order:", assignErr)
 			}
 		}
@@ -829,7 +852,13 @@ func CreateOrderByShopID(c *gin.Context) {
 
 		// A/B test winner check — best-effort, must never fail checkout.
 		if landingPageID != nil {
+			// It swallows its own errors, so probe afterwards: if a SQL error left
+			// the pg tx aborted, roll back to the savepoint so commit still works.
+			tx.SavePoint("decide_exp")
 			services.DecideExperimentIfReady(tx, *landingPageID)
+			if tx.Exec("SELECT 1").Error != nil {
+				tx.RollbackTo("decide_exp")
+			}
 		}
 
 		return nil
@@ -846,6 +875,10 @@ func CreateOrderByShopID(c *gin.Context) {
 				"message": "One or more items no longer have enough stock available",
 				"code":    "INSUFFICIENT_STOCK",
 			})
+			return
+		}
+		if errors.Is(err, errCheckoutConflict) {
+			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Your cart or delivery selection is no longer available, please refresh and retry"})
 			return
 		}
 		RespondError(c, http.StatusInternalServerError, "Failed saving records inside database transactions securely", err)
