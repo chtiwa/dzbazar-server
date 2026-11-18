@@ -12,8 +12,8 @@ func AbandonedLeadsRoutes(router *gin.Engine) {
 	leads := router.Group("/v1/shops/:shopId/abandoned-leads")
 	{
 		leads.POST("", middleware.RateLimitByIP("abandoned-lead", 30, time.Hour), controllers.CreateAbandonedLead)
-		leads.GET("", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), controllers.GetAbandonedLeadsByShopID)
-		leads.GET("/excel", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), middleware.RequireShopPermission("orders.export"), controllers.ExportAbandonedLeadsExcel)
+		leads.GET("", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), middleware.RequirePlanFeature("abandoned"), controllers.GetAbandonedLeadsByShopID)
+		leads.GET("/excel", middleware.RequireAuthentication, middleware.RequireShopAccess("owner", "moderator"), middleware.RequirePlanFeature("abandoned"), middleware.RequireShopPermission("orders.export"), controllers.ExportAbandonedLeadsExcel)
 		leads.DELETE("/:id", middleware.RequireAuthentication, middleware.RequireShopAccess("owner"), controllers.DeleteAbandonedLead)
 	}
 }

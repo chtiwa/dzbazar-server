@@ -58,6 +58,13 @@ func CreateAbandonedLead(c *gin.Context) {
 		return
 	}
 
+	// Plan without abandoned-lead capture: accept silently, store nothing.
+	// Storefront must never see an error here (fire-and-forget beacon).
+	if ok, err := services.HasPlanFeature(parsedShopID, "abandoned"); err == nil && !ok {
+		c.JSON(http.StatusOK, gin.H{"success": true})
+		return
+	}
+
 	if active, err := services.IsShopActive(parsedShopID); err != nil || !active {
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "This store is not currently accepting orders."})
 		return

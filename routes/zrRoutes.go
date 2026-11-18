@@ -10,7 +10,7 @@ func ZrRoutes(router *gin.Engine) {
 	g := router.Group("/v1/shops/:shopId/zr")
 	g.Use(middleware.RequireAuthentication)
 	{
-		g.GET("/orders", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.track"), controllers.GetZrOrders)
+		g.GET("/orders", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.track"), middleware.RequirePlanFeature("tracking"), controllers.GetZrOrders)
 		g.POST("/orders", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ship"), controllers.CreateZrOrder)
 		g.POST("/orders/bulk", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ship"), controllers.BulkCreateZrOrders)
 		g.POST("/geo/refresh", middleware.RequireShopAccess("owner", "moderator"), controllers.RefreshZrGeo)

@@ -109,6 +109,24 @@ func HasAssistantActions(shopID uuid.UUID) (bool, error) {
 	return sub.Plan.HasAssistantActions, nil
 }
 
+// HasPlanFeature reports whether the shop's effective plan grants a boolean
+// feature flag. flag is one of "abandoned", "tracking", "clients".
+func HasPlanFeature(shopID uuid.UUID, flag string) (bool, error) {
+	sub, err := shopSubscription(shopID)
+	if err != nil {
+		return false, err
+	}
+	switch flag {
+	case "abandoned":
+		return sub.Plan.HasAbandonedOrders, nil
+	case "tracking":
+		return sub.Plan.HasOrderTracking, nil
+	case "clients":
+		return sub.Plan.HasClientTracking, nil
+	}
+	return false, fmt.Errorf("unknown plan feature %q", flag)
+}
+
 // HasOrderHourlyStats reports whether the shop's plan includes the
 // "orders by hour of day" dashboard chart.
 func HasOrderHourlyStats(shopID uuid.UUID) (bool, error) {

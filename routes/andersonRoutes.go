@@ -12,7 +12,7 @@ func AndersonRoutes(router *gin.Engine) {
 		g := router.Group("/v1/shops/:shopId/"+carrier, controllers.SetEcotrackCarrier(carrier))
 		g.Use(middleware.RequireAuthentication)
 		{
-			g.GET("/orders", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.track"), controllers.GetAndersonOrders)
+			g.GET("/orders", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.track"), middleware.RequirePlanFeature("tracking"), controllers.GetAndersonOrders)
 			g.POST("/orders", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ship"), controllers.CreateAndersonOrder)
 			g.POST("/orders/bulk", middleware.RequireShopAccess(), middleware.RequireShopPermission("orders.ship"), controllers.BulkCreateAndersonOrders)
 		}
