@@ -53,6 +53,7 @@ func CreateAbandonedLead(c *gin.Context) {
 		return
 	}
 
+	body.PhoneNumber = services.NormalizePhone(body.PhoneNumber)
 	if !services.IsValidPhoneNumber(body.PhoneNumber) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid phone number format"})
 		return

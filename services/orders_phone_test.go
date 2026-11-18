@@ -2,6 +2,21 @@ package services
 
 import "testing"
 
+func TestNormalizePhone(t *testing.T) {
+	for in, want := range map[string]string{
+		"0555 12 34 56":    "0555123456",
+		"+213555123456":    "0555123456",
+		"00213555123456":   "0555123456",
+		"213-555.12.34.56": "0555123456",
+		"٠٥٥٥١٢٣٤٥٦":       "0555123456",
+		"۰۵۵۵۱۲۳۴۵۶":       "0555123456",
+	} {
+		if got := NormalizePhone(in); got != want || !IsValidPhoneNumber(got) {
+			t.Errorf("NormalizePhone(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestIsValidPhoneNumber(t *testing.T) {
 	cases := []struct {
 		name  string

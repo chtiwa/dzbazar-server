@@ -469,6 +469,10 @@ func CreateOrderByShopID(c *gin.Context) {
 	// Server-side enforcement of the same 05/06/07 + 8-digit rule the client
 	// checks in OrderForm.tsx — hitting this endpoint directly bypasses the
 	// client entirely, so it must be re-checked here.
+	body.Client.PhoneNumber = services.NormalizePhone(body.Client.PhoneNumber)
+	if body.Client.PhoneNumber2 != "" {
+		body.Client.PhoneNumber2 = services.NormalizePhone(body.Client.PhoneNumber2)
+	}
 	if !services.IsValidPhoneNumber(body.Client.PhoneNumber) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,

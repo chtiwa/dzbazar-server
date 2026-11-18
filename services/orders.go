@@ -15,6 +15,25 @@ import (
 // same rule, since hitting the API directly bypasses client JS entirely.
 var phoneNumberPattern = regexp.MustCompile(`^(05|06|07)\d{8}$`)
 
+var phoneStrip = regexp.MustCompile(`[\s\-.()]`)
+var phoneIntlPrefix = regexp.MustCompile(`^(\+213|00213|213)`)
+
+// NormalizePhone maps Arabic-Indic/Persian digits to 0-9, strips separators and
+// rewrites +213/00213/213 to a leading 0. Mirror of normalizePhone in OrderForm.tsx.
+func NormalizePhone(raw string) string {
+	b := make([]rune, 0, len(raw))
+	for _, r := range raw {
+		switch {
+		case r >= '٠' && r <= '٩':
+			r = '0' + (r - '٠')
+		case r >= '۰' && r <= '۹':
+			r = '0' + (r - '۰')
+		}
+		b = append(b, r)
+	}
+	return phoneIntlPrefix.ReplaceAllString(phoneStrip.ReplaceAllString(string(b), ""), "0")
+}
+
 // IsValidPhoneNumber checks an Algerian mobile number against the standard
 // 05/06/07 + 8-digit format.
 func IsValidPhoneNumber(phone string) bool {
