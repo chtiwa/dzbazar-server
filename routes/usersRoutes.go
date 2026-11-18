@@ -26,6 +26,10 @@ func UsersRoutes(router *gin.Engine) {
 	// Every action resolved for the caller (role default + per-member override).
 	router.GET("/v1/shops/:shopId/me/permissions", middleware.RequireAuthentication, middleware.RequireShopAccess(), controllers.GetMyPermissions)
 
+	// separate prefix: "/users/invites" would collide with "/users/:id"
+	router.GET("/v1/shops/:shopId/invites", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("users.view"), controllers.ListShopInvites)
+	router.DELETE("/v1/shops/:shopId/invites/:inviteId", middleware.RequireAuthentication, middleware.RequireShopAccess(), middleware.RequireShopPermission("users.delete"), controllers.RevokeShopInvite)
+
 	shopUsers := router.Group("/v1/shops/:shopId/users")
 	shopUsers.Use(middleware.RequireAuthentication)
 	{

@@ -59,8 +59,10 @@ type ShopInvite struct {
 	UserID    uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_shop_invites_shop_user" json:"userId"`
 	Role      string     `gorm:"type:text;not null" json:"role"`
 	InvitedBy *uuid.UUID `gorm:"type:uuid" json:"-"`
+	ExpiresAt time.Time  `gorm:"not null" json:"expiresAt"`
 
 	Shop Shop `gorm:"foreignKey:ShopID" json:"shop"`
+	User User `gorm:"foreignKey:UserID" json:"user"`
 }
 
 // PermissionAction is the source-of-truth table for gate-able action names,

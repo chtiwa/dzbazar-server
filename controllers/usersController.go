@@ -2,7 +2,9 @@ package controllers
 
 import (
 	"errors"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/chtiwa/dzbazar-server/initializers"
 	"github.com/chtiwa/dzbazar-server/models"
@@ -227,7 +229,7 @@ func CreateUserByShop(c *gin.Context) {
 		// must accept. Response is identical whether or not an invite already
 		// existed. ponytail: 202 vs 201 still reveals "email has an account"; accepted trade-off.
 		caller := c.MustGet("user").(models.User)
-		inv := models.ShopInvite{ShopID: shopID, UserID: existingUser.ID, Role: body.Role, InvitedBy: &caller.ID}
+		inv := models.ShopInvite{ShopID: shopID, UserID: existingUser.ID, Role: body.Role, InvitedBy: &caller.ID, ExpiresAt: time.Now().Add(7 * 24 * time.Hour)}
 		if err := initializers.DB.Transaction(func(t *gorm.DB) error {
 			if err := t.Unscoped().Where("shop_id = ? AND user_id = ?", shopID, existingUser.ID).
 				Delete(&models.ShopInvite{}).Error; err != nil {
@@ -238,6 +240,16 @@ func CreateUserByShop(c *gin.Context) {
 			RespondError(c, http.StatusInternalServerError, "Failed to create invite", err)
 			return
 		}
+		// ponytail: fire-and-forget; a failed email is logged, the invite still shows on SelectShop.
+		go func(email, role string, sid uuid.UUID) {
+			var shop models.Shop
+			if initializers.DB.Select("name").First(&shop, "id = ?", sid).Error != nil {
+				return
+			}
+			if err := utils.SendShopInviteEmail(email, shop.Name, role); err != nil {
+				log.Printf("invite email failed: %v", err)
+			}
+		}(existingUser.Email, body.Role, shopID)
 		c.JSON(http.StatusAccepted, gin.H{"success": true, "invited": true, "message": "Invite sent. The user must accept it from their shop selection page."})
 		return
 	}

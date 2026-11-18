@@ -407,3 +407,28 @@ func SendPlanExpiryEmail(email, shopName, planName string, expiresAt time.Time) 
 	log.Printf("Plan expiry email sent successfully: ID %s\n", resp.Id)
 	return nil
 }
+
+// SendShopInviteEmail tells an existing account it was invited to a shop.
+func SendShopInviteEmail(email, shopName, role string) error {
+	client := resend.NewClient(os.Getenv("RESEND_API_KEY"))
+	link := os.Getenv("ADMIN_URL")
+	htmlContent := fmt.Sprintf(`<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px">
+<h2>Invitation à rejoindre %s</h2>
+<p>Vous avez été invité(e) à rejoindre la boutique <b>%s</b> (rôle : %s).</p>
+<p>Connectez-vous puis acceptez l'invitation depuis la page de sélection de boutique. Elle expire dans 7 jours.</p>
+<p><a href="%s">%s</a></p></div>`,
+		html.EscapeString(shopName), html.EscapeString(shopName), html.EscapeString(role), link, link)
+	resp, err := client.Emails.Send(&resend.SendEmailRequest{
+		From:    "DZ Bazar <contact@dzbazar.online>",
+		To:      []string{email},
+		Subject: "Invitation à rejoindre " + shopName,
+		Html:    htmlContent,
+	})
+	if err != nil {
+		return fmt.Errorf("resend error: %v", err)
+	}
+	if resp.Id == "" {
+		return fmt.Errorf("resend error: failed to send email")
+	}
+	return nil
+}

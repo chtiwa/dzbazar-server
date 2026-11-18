@@ -16,7 +16,7 @@ import (
 func ListMyInvites(c *gin.Context) {
 	user := c.MustGet("user").(models.User)
 	var invites []models.ShopInvite
-	if err := initializers.DB.Preload("Shop").Where("user_id = ?", user.ID).
+	if err := initializers.DB.Preload("Shop").Where("user_id = ? AND expires_at > now()", user.ID).
 		Order("created_at DESC").Find(&invites).Error; err != nil {
 		RespondError(c, http.StatusInternalServerError, "Failed to fetch invites", err)
 		return
@@ -29,7 +29,7 @@ func loadMyInvite(c *gin.Context) (models.ShopInvite, bool) {
 	var inv models.ShopInvite
 	id, err := uuid.Parse(c.Param("inviteId"))
 	if err == nil {
-		err = initializers.DB.Where("id = ? AND user_id = ?", id, user.ID).First(&inv).Error
+		err = initializers.DB.Where("id = ? AND user_id = ? AND expires_at > now()", id, user.ID).First(&inv).Error
 	}
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Invite not found"})
@@ -80,4 +80,30 @@ func DeclineInvite(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Invite declined"})
+}
+
+// ListShopInvites returns the shop's pending (unexpired) invites.
+func ListShopInvites(c *gin.Context) {
+	var invites []models.ShopInvite
+	if err := initializers.DB.Preload("User").Where("shop_id = ? AND expires_at > now()", c.Param("shopId")).
+		Order("created_at DESC").Find(&invites).Error; err != nil {
+		RespondError(c, http.StatusInternalServerError, "Failed to fetch invites", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": invites})
+}
+
+// RevokeShopInvite cancels a pending invite of this shop.
+func RevokeShopInvite(c *gin.Context) {
+	res := initializers.DB.Unscoped().Where("id = ? AND shop_id = ?", c.Param("inviteId"), c.Param("shopId")).
+		Delete(&models.ShopInvite{})
+	if res.Error != nil {
+		RespondError(c, http.StatusInternalServerError, "Failed to revoke invite", res.Error)
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Invite not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Invite revoked"})
 }
